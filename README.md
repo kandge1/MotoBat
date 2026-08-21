@@ -1,4 +1,4 @@
-# Battery Cell Assembly Line — Multi-Robot Inspection & Correction Project
+# MotoBat: A Battery Cell Assembly Line — Multi-Robot Inspection & Correction Project
 
 ## Project Summary
 
