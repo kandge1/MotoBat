@@ -1,0 +1,25 @@
+# ROS 2 / colcon
+build/
+install/
+log/
+
+# Cloned third-party sources — bootstrap_rviz.sh re-fetches these
+src/_vendor/
+
+# Python
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Isaac Sim
+*.usd.autosave
+.thumbs/
+
+# Experiment tracking
+wandb/
+mlruns/
+
+# Editor
+.vscode/settings.json
+*.swp

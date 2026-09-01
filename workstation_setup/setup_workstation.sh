@@ -24,12 +24,19 @@ set -Eeuo pipefail
 # Configuration
 # ---------------------------------------------------------------------------
 readonly ROS_DISTRO_NAME="jazzy"
-readonly PROJECT_ROOT="${HOME}/motobat"
+readonly PROJECT_ROOT="${HOME}/motobat"       # runtime root: venv, ros2_ws, env file
 readonly WS_DIR="${PROJECT_ROOT}/ros2_ws"
 readonly VENV_DIR="${PROJECT_ROOT}/venv"
 readonly PY_VERSION="3.11"          # Isaac Sim 5.x/6.x embed CPython 3.11
 readonly CUDA_WHEEL_INDEX="https://download.pytorch.org/whl/cu124"
-LOG_FILE="${PROJECT_ROOT}/install_$(date +%Y%m%d_%H%M%S).log"
+
+# This script lives in <repo>/workstation_setup/. Install logs belong with the
+# source tree, not in the runtime root, so resolve the repo root from here.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly SCRIPT_DIR
+readonly REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+readonly LOG_DIR="${REPO_ROOT}/logs"
+LOG_FILE="${LOG_DIR}/install_$(date +%Y%m%d_%H%M%S).log"
 readonly LOG_FILE
 
 DRY_RUN=0
@@ -127,6 +134,7 @@ should_run() { [[ -z "${ONLY_STAGE}" || "${ONLY_STAGE}" == "$1" ]]; }
 # Preflight
 # ---------------------------------------------------------------------------
 mkdir -p "${PROJECT_ROOT}"
+mkdir -p "${LOG_DIR}"
 : >"${LOG_FILE}"
 
 stage "MotoBat Environment Setup"
