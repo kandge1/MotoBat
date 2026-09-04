@@ -89,21 +89,25 @@ against the equations in §9 — write the maths down before writing the code.
 | Ubuntu 24.04 LTS + ROS 2 Jazzy | Installed, verified (talker/listener) |
 | MoveIt2, ros2_control, rqt, RViz2 | Installed |
 | Open3D, PCL, OpenCV, Python 3.11 venv | Installed |
-| PyTorch CUDA | **Broken** — see §1.1 |
+| PyTorch CUDA | **Fixed** 31 Aug 2026 — see §1.1 |
+| **Motherboard / RAM** | **REPAIRED** 31 Aug 2026 — 16 GB dual-channel, verified (§1.0) |
 | Yaskawa GP4/GP7/HC10DT descriptions | Cloned, verified |
 | `motobat_description` (4-arm line) | Written, xacro compile-tested |
-| Four arms visualized in RViz | Blocked on §1.2 (one-line fix) |
-| Isaac Sim | Deferred — hardware repair pending (§1.0) |
+| Four arms visualized in RViz | Unblocked — §1.2 fixed |
+| Repository structure | **Restructured** 31 Aug 2026 — repo root is the colcon workspace (`docs/project_structure.md`) |
+| Isaac Sim | Deferred to week 5 **by plan, not by hardware** (§3.5) |
 | MoveIt config for GP4 / HC10DT | **Next work** — §4A |
 | Sensor flange CAD | **Next work** — §4A.4 |
 | Defect generation + detection | **Next work** — §4B (prototyped, ~10 MB) |
-| Memory upgrade | Decided: 2 x 16 GB DDR5 kit, deferred — §1.0 |
+| Memory upgrade | Optional, deferred past 1 Oct — §1.0, §4.0b |
  
-> **Current plan:** Dell replaces the motherboard onsite **25 Aug 2026** under
-> warranty (§1.0), restoring 16 GB. Until Isaac Sim is viable, the active work
-> is **§4A** (RViz2 + Gazebo: arms, IK, sensor flange) and **§4B** (defect
-> generation and detection in numpy/Open3D). Both run in 8 GB today. Isaac Sim
-> (§4) resumes after the repair and the memory upgrade.
+> **Current plan:** the motherboard was replaced and the machine is back to
+> **16 GB dual-channel** (§1.0). That removes the hardware blocker, but does
+> **not** change the sequencing: the active work is still **§4A** (RViz2 +
+> Gazebo: arms, IK, sensor flange) and **§4B** (defect generation and detection
+> in numpy/Open3D). Isaac Sim stays scheduled for **week 5** because §4B is the
+> actual contribution and neither §4A nor §4B needs a simulator — not because
+> the machine cannot run it.
 >
 > **Target: 1 Oct 2026** (§3.5). The bar the work is held to is **§3.6**.
  
@@ -206,29 +210,66 @@ the table.** The realistic options:
 | **Remote/lab machine** | Full 32 GB+ capability | Free if OSU provides | Requires access; container workflow |
 | **Stay at 8 GB** | Nothing | Free | Isaac Sim not realistically usable |
  
-#### RESOLVED — Dell onsite repair approved
- 
+#### RESOLVED — Dell onsite repair approved, completed, and verified
+
 Dell approved a **free onsite motherboard replacement in the US**, despite the
 machine being purchased in India. Better than the region-bound policy predicted;
 worth noting that the documented policy is not always the outcome — it was worth
 asking.
- 
-Post-repair the machine returns to **16 GB dual-channel**. Still under Isaac
-Sim's documented 32 GB minimum, but workable for single-arm scenes with
-simplified collision geometry.
- 
-**After the technician leaves, verify the fix:**
- 
-```bash
-free -h                                              # expect ~15 Gi total
-sudo dmidecode -t memory | grep -E "Locator|Size|Serial"
+
+**The board was replaced and the fix is verified (31 Aug 2026).**
+
 ```
- 
-Both DIMM A and DIMM B should report 8 GB with distinct serials. If DIMM A
-still reads `No Module Installed`, the board swap did not resolve it — raise it
-before the case closes.
- 
-While waiting, **§4A** and **§4B** are the work plan. Neither needs Isaac Sim.
+$ free -h
+               total        used        free      shared  buff/cache   available
+Mem:            15Gi       6.8Gi       792Mi       977Mi       8.3Gi       8.5Gi
+Swap:           35Gi       380Ki        35Gi
+```
+
+15 Gi visible is the expected reading for a 16 GB machine — firmware and the
+iGPU reserve the difference. The 8 GB ceiling is gone.
+
+**Slot A confirmed alive by SMBIOS (4 Sep 2026).** `free -h` proves the
+capacity came back; only `dmidecode` proves the *socket* did:
+
+```
+$ sudo dmidecode -t memory | grep -E "Locator|Size|Serial"
+    Size: 8 GB
+    Locator: DIMM A
+    Serial Number: 442BC272
+    Size: 8 GB
+    Locator: DIMM B
+    Serial Number: 442BC255
+```
+
+Both slots populated, both reporting 8 GB, **distinct serials**. Compare
+against the fault table above: DIMM A read `No Module Installed` with *either*
+module seated in it. It now reads one.
+
+Two things this confirms:
+
+1. **The serials are the original modules.** `442BC272` and `442BC255` are the
+   same two Micron `MTC4C10163S1SC48BA1` sticks from the swap test — no new RAM
+   was fitted. The diagnosis in §1.0 was correct in full: healthy modules, dead
+   socket, motherboard fault. Buying RAM would indeed have fixed nothing.
+2. **`442BC272` is now in slot A**, and that is the module which read fine in
+   slot B before the repair. A known-good stick is what is proving the
+   previously-dead socket. That is the strongest form of this test — it cannot
+   be explained by a marginal module.
+
+Dell case closed. **Keep both 8 GB modules** if a 2 x 16 GB upgrade ever
+happens; they are the known-good fallback for exactly this diagnostic.
+
+**What this changes, and what it does not.**
+
+It removes the hardware blocker. It does **not** move Isaac Sim earlier. §3.5
+schedules Isaac Sim for week 5 because §4B is the actual research contribution
+and completes without a simulator — that ordering was never about the RAM.
+16 GB is still below Isaac Sim's documented 32 GB minimum, so §4.0b's cloud
+recommendation for weeks 5-6 stands.
+
+**§4A** and **§4B** remain the work plan, and both now have more headroom than
+they need.
  
 #### Memory upgrade — decision and slot math
  
@@ -266,42 +307,119 @@ Buying notes:
 workstation access. A lab machine with 64 GB beats any laptop configuration and
 is exactly the scenario Isaac Sim's container mode targets (§4.0).
  
-### 1.1 PyTorch is broken
- 
+### 1.1 PyTorch was broken — FIXED 31 Aug 2026
+
 The installer ran `pip install torch --index-url .../cu124` (got `2.6.0+cu124`),
 then ran `pip install stable-baselines3[extra]` **without** the index URL. Pip
 resolved torch from PyPI, found `2.13.0`, and upgraded over the CUDA build.
- 
+
 Result: `torchvision 0.21.0` and `torchaudio 2.6.0` both pin `torch==2.6.0` and
-are broken, plus ~4 GB of redundant CUDA 13 wheels alongside the cu124 ones.
- 
+were broken, plus ~4 GB of redundant CUDA 13 wheels alongside the cu124 ones.
+
 ```bash
-./fix_torch.sh
+./workstation_setup/fix_torch.sh
 ```
+
+**A second bug surfaced while running the repair, and it is the more
+interesting one.** The first version of `fix_torch.sh` tried to uninstall the
+CUDA 13 strays by name — `nvidia-cublas-cu13`, `nvidia-cudnn-cu13`, and so on.
+**Those package names do not exist.** NVIDIA publishes the CUDA 13 wheels
+*unsuffixed* (`nvidia-cublas 13.1.1.3`, `nvidia-cufft 12.0.0.61`), and keeps
+the `-cu12` suffix only on the CUDA 12 line. So every uninstall silently
+no-op'd, pip reported success, and the CUDA 13 runtime stayed exactly where it
+was.
+
+Removing them afterwards then exposed a third failure: uninstalling the
+unsuffixed wheels deleted files that the `-cu12` packages still claimed in
+their metadata. `pip list` showed `nvidia-cudnn-cu12 9.1.0.70` installed while
+`libcudnn.so.9` was absent from disk, and `import torch` failed on a library
+pip was certain it had. The same then happened with `libnccl.so.2`.
+
+The script now:
+
+- selects strays **by shape, not by guessed name** — every `nvidia-*` wheel
+  that is not `-cu12` — so it cannot silently match nothing again
+- uses `--force-reinstall` so the resolve restores every dependency's files
+  rather than trusting metadata
+- verifies with an **actual CUDA matmul**, because `torch.cuda.is_available()`
+  returns `True` against a half-installed cuDNN
+
+**Three lessons, all cheap to keep:**
+
+1. Any `pip install` that can pull `torch` transitively must either carry the
+   same `--index-url` or use `--no-deps`.
+2. `pip uninstall` on a name that is not installed **succeeds**. An uninstall
+   list built from guessed names is indistinguishable from one that worked.
+3. Installed-per-metadata is not installed-on-disk. Verify a native stack by
+   running something on it.
+
+Does not block RViz, Gazebo, or Isaac Sim work — only the Section 5.4 RL
+stretch goal.
  
-Reinstalls all four together in one resolve, removes the stray CUDA 13 runtime,
-verifies `torch.cuda.is_available()`. Does not block RViz or Isaac Sim work —
-only the Section 5.4 RL stretch goal.
- 
-**Lesson worth keeping:** any `pip install` that can pull `torch` as a transitive
-dependency must either carry the same `--index-url` or use `--no-deps`.
- 
-### 1.2 `bootstrap_rviz.sh` fails with "AMENT_TRACE_SETUP_FILES: unbound variable"
- 
+### 1.2 `bootstrap_rviz.sh` fails with "AMENT_TRACE_SETUP_FILES: unbound variable" — FIXED
+
 `set -u` collides with `/opt/ros/jazzy/setup.bash`, which reads undefined
-variables intentionally. Fixed in the current bundle — the script now uses
-`set -Eeo pipefail` without `-u`.
- 
+variables intentionally. The script uses `set -Eeo pipefail` without `-u`.
+
 **This applies to every shell script in the project that sources ROS.** Do not
-use `set -u` in anything that sources a ROS setup file.
- 
+use `set -u` in anything that sources a ROS setup file. `motobat_env.sh` at the
+repo root carries the same warning in a comment, for the same reason.
+
 ### 1.3 Minor, already handled
- 
+
 - `ros-jazzy-industrial-msgs` does not exist in apt; vcs pulls it from source.
-- protobuf version mismatch with `grpcio-tools` — only matters when generating
-  gRPC stubs. `fix_torch.sh` pins it.
-- numpy correctly held at `1.26.4`. **Do not upgrade to 2.x** — Open3D wheels
-  and several Jazzy Python packages still link the 1.x ABI.
+- numpy is held at `1.26.4`. **Do not upgrade to 2.x** — Open3D wheels and
+  several Jazzy Python packages still link the 1.x ABI. Note that a
+  `--force-reinstall` of torch *will* pull numpy 2.x as a dependency; the
+  repaired `fix_torch.sh` restores the pin afterwards and now asserts it.
+- **stable-baselines3 is pinned to 2.5.0, not 2.9.0.** SB3 2.9 requires
+  `torch>=2.8`, which conflicts with the `2.6.0+cu124` build pinned for CUDA
+  12.4. 2.5.0 is the last line that accepts torch 2.6. `gymnasium` is
+  correspondingly capped below 1.1.
+- `pip check` reports one **benign** conflict: `databricks-sdk` (a transitive
+  mlflow dependency) wants `protobuf<7`, while `grpcio-tools` needs `7.x` for
+  the inspector-to-correction stubs. The databricks backend is unused here —
+  local `mlruns/` only. Leave it.
+ 
+### 1.4 `view_line.launch.py` dies with "Unable to parse the value of parameter robot_description as yaml" — FIXED 1 Sep 2026
+
+Found by actually launching it, not by reading it. `bootstrap_rviz.sh` built
+cleanly and the xacro expanded to the expected 39 links / 38 joints, so §1.2
+looked like the last blocker. It was not.
+
+```python
+# broken — launch tries to YAML-parse an XML document
+'robot_description': Command(['xacro ', path])
+
+# correct
+'robot_description': ParameterValue(Command(['xacro ', path]), value_type=str)
+```
+
+`Command(...)` returns a substitution with no declared type. The launch system
+defaults to interpreting it as YAML, meets a URDF, and fails. The fix is the
+`ParameterValue(..., value_type=str)` wrapper from `launch_ros.descriptions`.
+
+**This applies to every `robot_description` parameter in the project** — the
+MoveIt configs in §4A.1 and §4A.2 and the Gazebo bringup in §4A.3 will each
+need it. Both `view_line.launch.py` and `view_single.launch.py` are fixed.
+
+**Verified headlessly** (no display needed, which makes it CI-able later):
+
+```bash
+ros2 launch motobat_description view_line.launch.py gui:=false rviz:=false &
+ros2 run motobat_description demo_line_motion.py &
+ros2 topic hz /joint_states                    # -> ~50 Hz
+ros2 topic echo /tf --once | grep -c child_frame_id   # -> 24 movable joints
+ros2 topic echo /tf_static --once | grep -c child_frame_id   # -> 14 fixed
+```
+
+24 dynamic frames is exactly the 4 arms x 6 joints the compile test predicted,
+so the TF tree is correct end to end and not merely syntactically valid.
+
+**Lesson worth keeping:** a clean `colcon build` says the package compiles. It
+says nothing about whether the launch files run. Launch every launch file once,
+headlessly, before calling a milestone done.
+ 
 ---
  
 ## 2. Environment
@@ -311,22 +429,39 @@ use `set -u` in anything that sources a ROS setup file.
 configuration. Jazzy is supported to May 2029 — past both project phases.
  
 ### Layout
- 
+
+**The repository root is the colcon workspace.** There is no nested `ros2_ws/`
+any more — `colcon build` runs from the repo root. Full reasoning and the
+package-naming rules are in `docs/project_structure.md`.
+
 ```
+~/projects/MotoBat/           git repo AND colcon workspace
+├── motobat_env.sh            sourced from ~/.bashrc; self-locating
+├── docs/
+│   ├── project_plan.md       this file
+│   ├── project_structure.md  layout, package rules, branch/commit practice
+│   └── status_update.md      ordered task list and where we are
+├── workstation_setup/        setup_workstation.sh, bootstrap_rviz.sh, fix_torch.sh
+├── src/
+│   ├── motobat_description/  4-arm line, launch files, RViz config
+│   └── _vendor/              cloned deps — gitignored
+├── logs/                     installer logs        (gitignored)
+└── build/ install/ log/      colcon output         (gitignored)
+
 ~/motobat/
-├── venv/                     Python 3.11 (matches Isaac Sim's interpreter)
-├── motobat_env.sh            sourced from ~/.bashrc
-└── ros2_ws/
-    └── src/
-        ├── motobat_description/   4-arm line, launch files, RViz config
-        ├── motobat_bringup/       (empty) launch composition, Isaac scene setup
-        ├── motobat_msgs/          (empty) DefectReport, ScanResult, CorrectionCmd
-        ├── motobat_stacker/       Station 1 — GP4  (MoveIt config: §4A.1)
-        ├── motobat_welder/        (empty) Station 2 — GP4
-        ├── motobat_inspector/     Station 3 — HC10DT (§4A.2, flange §4A.4)
-        ├── motobat_sealer/        (empty) Station 4 — GP7
-        └── _vendor/               cloned deps — gitignore this
+└── venv/                     Python 3.11 — deliberately OUTSIDE the repo
 ```
+
+The venv stays outside the workspace on purpose: an active venv changes which
+interpreter colcon resolves, and the resulting failures are slow to diagnose.
+`~/motobat/` now contains nothing else.
+
+Packages are created **when they are written**. The installer used to `mkdir`
+seven empty `motobat_*` directories; it no longer does, because an empty
+directory has no `package.xml`, is not a package, and only promises structure
+that does not exist.
+
+Aliases: `mb-venv` `mb-ws` `mb-build`
  
 Aliases: `mb-venv` `mb-ws` `mb-build`
  
@@ -340,19 +475,21 @@ Use `mb-venv` for Open3D/PyTorch work. Never `pip install` into system Python;
 24.04 blocks it via PEP 668 and overriding will eventually break apt.
  
 ### Hardware
- 
+
 Dell G15 5530 · i9-13900HX (24C/32T) · RTX 4060 Laptop (8 GB VRAM) ·
-driver 595.84 · 854 GB free. GPU, driver, and disk all pass.
- 
-**RAM is 8 GB against Isaac Sim's documented 32 GB minimum, and cannot be
-upgraded — slot DIMM A is dead (§1.0).** 35 GB of swap is configured, which
-prevents hard OOM kills but does not make the machine adequate.
- 
-This is *the* binding constraint on the project. §4.0 covers what it means for
-sequencing.
- 
+driver 595.84 · 789 GB free. GPU, driver, and disk all pass.
+
+**RAM is 16 GB dual-channel** as of the 31 Aug 2026 motherboard replacement
+(§1.0). The dead-slot ceiling is gone. 35 GB of swap remains configured.
+
+That is still **below Isaac Sim's documented 32 GB minimum**, so §4.0 and
+§4.0b remain live: 16 GB is workable for a single arm with simplified collision
+geometry, and the cloud path stays the recommendation for weeks 5-6. What
+changed is that RAM is no longer *the binding constraint* — it is now a
+week-5 sizing question rather than a blocker on all work.
+
 The CPU is excellent (24 cores) and the GPU meets the 8 GB VRAM minimum — this
-is a memory-capacity problem specifically, not a weak machine.
+was a memory-capacity problem specifically, not a weak machine.
  
 ---
  
@@ -370,16 +507,33 @@ distinct prefix so they share one TF tree without name collisions.
 | 3 | Inspector | HC10DT | `s3_` | `motoman_hc10dt` |
 | 4 | Can Sealer | GP7 | `s4_` | `motoman_gp7` |
  
-**Verified by compile test:** 39 links, 38 joints, 24 movable (4 × 6), single
+**Verified by compile test:** 39 links, 38 joints, 24 movable (4 x 6), single
 `world` root, no missing joint limits.
- 
+
+**Verified running, on screen, 4 Sep 2026.** All four arms render in RViz with
+correct meshes. The `joint_state_publisher_gui` sliders drive all 24 joints,
+and each arm responds **independently** — no cross-talk between stations, which
+is the real test of the `s1_`/`s2_`/`s3_`/`s4_` prefixing. The GUI's *centre*
+and *randomise* buttons both behave.
+
+That is the four-station description signed off end to end: xacro expands, TF
+tree is single-rooted, prefixes isolate the arms, and the meshes load.
+
+Verified headlessly too, which makes this CI-able later without a display:
+
+| Check | Result |
+|---|---|
+| `/joint_states` rate | ~50 Hz |
+| Dynamic TF frames (`/tf`) | **24** = 4 arms x 6 joints |
+| Static TF frames (`/tf_static`) | 14 |
+| Launch errors | none |
+
 ```bash
-tar xzf motobat_rviz_bundle.tar.gz
-./bootstrap_rviz.sh
- 
+./workstation_setup/bootstrap_rviz.sh    # vendor deps, colcon build, verify
+
 # sliders for all 24 joints
 ros2 launch motobat_description view_line.launch.py
- 
+
 # or scripted motion (terminal 1, then terminal 2)
 ros2 launch motobat_description view_line.launch.py gui:=false
 ros2 run motobat_description demo_line_motion.py

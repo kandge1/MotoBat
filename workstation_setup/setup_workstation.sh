@@ -24,18 +24,23 @@ set -Eeuo pipefail
 # Configuration
 # ---------------------------------------------------------------------------
 readonly ROS_DISTRO_NAME="jazzy"
-readonly PROJECT_ROOT="${HOME}/motobat"       # runtime root: venv, ros2_ws, env file
-readonly WS_DIR="${PROJECT_ROOT}/ros2_ws"
-readonly VENV_DIR="${PROJECT_ROOT}/venv"
 readonly PY_VERSION="3.11"          # Isaac Sim 5.x/6.x embed CPython 3.11
 readonly CUDA_WHEEL_INDEX="https://download.pytorch.org/whl/cu124"
 
-# This script lives in <repo>/workstation_setup/. Install logs belong with the
-# source tree, not in the runtime root, so resolve the repo root from here.
+# This script lives in <repo>/workstation_setup/, and the repo root IS the
+# colcon workspace — src/, build/, install/, log/ all live there. Resolve it
+# from this file so a clone to any path needs no edits.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR
 readonly REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+readonly WS_DIR="${REPO_ROOT}"
 readonly LOG_DIR="${REPO_ROOT}/logs"
+
+# The Python venv deliberately lives OUTSIDE the repo. An active venv perturbs
+# the interpreter colcon picks up, and mixing 6 GB of torch wheels into the
+# workspace tree invites exactly that mistake. See docs/project_structure.md.
+readonly PROJECT_ROOT="${HOME}/motobat"
+readonly VENV_DIR="${PROJECT_ROOT}/venv"
 LOG_FILE="${LOG_DIR}/install_$(date +%Y%m%d_%H%M%S).log"
 readonly LOG_FILE
 
@@ -651,98 +656,27 @@ fi
 if should_run ws; then
   stage "7/7  Workspace scaffold and shell configuration"
 
-  info "creating colcon workspace at ${WS_DIR}"
+  info "colcon workspace is the repo itself: ${WS_DIR}"
   run mkdir -p "${WS_DIR}/src"
 
-  # Station-per-package mirrors the four-station line from the proposal, so
-  # each robot's nodes stay independently buildable and testable.
-  for pkg in motobat_bringup motobat_stacker motobat_welder \
-             motobat_inspector motobat_sealer motobat_msgs motobat_description; do
-    run mkdir -p "${WS_DIR}/src/${pkg}"
-  done
+  # NOTE: this stage used to mkdir seven empty motobat_* package directories.
+  # It no longer does, deliberately. An empty directory under src/ is not a
+  # package -- it has no package.xml -- and it clutters `colcon list` while
+  # promising structure that does not exist. Packages are created when they
+  # are written. See docs/project_structure.md.
 
-  if ! (( DRY_RUN )); then
-    cat > "${WS_DIR}/README.md" <<'WS_EOF'
-# MotoBat ROS 2 Workspace
-
-Four-station simulated battery cell assembly line.
-
-    motobat_msgs         Custom interfaces: DefectReport, ScanResult, CorrectionCmd
-    motobat_description  URDF/Xacro for the four Yaskawa arms + cell/fixture geometry
-    motobat_bringup      Launch files that compose the full line
-    motobat_stacker      Station 1  — Yaskawa GP4
-    motobat_welder       Station 2  — Yaskawa GP4
-    motobat_inspector    Station 3  — Yaskawa HC10DT(P) + 4-sensor array
-    motobat_sealer       Station 4  — Yaskawa GP7
-
-Build:
-
-    cd ~/motobat/ros2_ws
-    rosdep install --from-paths src --ignore-src -r -y
-    colcon build --symlink-install
-    source install/setup.bash
-
-## Interface discipline (read this before writing a control node)
-
-Arms are commanded ONLY through control_msgs/FollowJointTrajectory actions.
-State is read ONLY from /joint_states.
-
-Never call Isaac Sim's Python articulation API from a control node. That
-boundary is the entire reason this project can claim a sim-to-hardware path:
-MotoROS2 on a real YRC1000 exposes the same FollowJointTrajectory server, so
-migrating means swapping the controller, not rewriting the stack.
-
-    sim:   MoveIt2 -> FollowJointTrajectory -> Isaac Sim controller
-    real:  MoveIt2 -> FollowJointTrajectory -> micro-ROS Agent
-                                            -> MotoROS2 -> arm
-
-Isaac-Sim-specific code belongs in motobat_bringup (scene setup, sensor
-spawning, defect injection) -- never in the per-station packages.
-WS_EOF
-  fi
 
   # --- Environment file ----------------------------------------------------
-  # Kept as a separate sourced file rather than dumped into .bashrc so it can be
-  # edited, version-controlled, and disabled in one place.
-  ENV_FILE="${PROJECT_ROOT}/motobat_env.sh"
+  # motobat_env.sh is VERSION-CONTROLLED at the repo root and self-locating.
+  # This stage used to generate it into ${HOME}/motobat/ -- it must not, or a
+  # re-run would silently clobber a tracked file. All we do now is hook it.
+  ENV_FILE="${REPO_ROOT}/motobat_env.sh"
   if ! (( DRY_RUN )); then
-    cat > "${ENV_FILE}" <<ENV_EOF
-# MotoBat environment — sourced from ~/.bashrc
-# Edit here, not in .bashrc.
+    if [[ ! -f "${ENV_FILE}" ]]; then
+      warn "no motobat_env.sh at ${ENV_FILE} -- is this a complete checkout?"
+    fi
 
-source /opt/ros/${ROS_DISTRO_NAME}/setup.bash
-
-# Cyclone DDS per Section 5.3 of the proposal.
-# NOTE: NVIDIA recommends FastDDS (the default) for single-machine Isaac Sim,
-# because it uses shared memory for large PointCloud2 traffic. If you see
-# dropped point clouds between Isaac Sim and your nodes, comment the next line
-# out and re-test on FastDDS before debugging anything else.
-export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-
-# Isolate this project's DDS traffic from anything else on the LAN.
-export ROS_DOMAIN_ID=42
-export ROS_LOCALHOST_ONLY=0
-
-# Colourised, timestamped node output.
-export RCUTILS_COLORIZED_OUTPUT=1
-export RCUTILS_CONSOLE_OUTPUT_FORMAT='[{severity}] [{time}] [{name}]: {message}'
-
-# Overlay workspace, once it has been built at least once.
-if [ -f "${WS_DIR}/install/setup.bash" ]; then
-  source "${WS_DIR}/install/setup.bash"
-fi
-
-# Python venv activation helper: run 'mb-venv' to enter it.
-alias mb-venv='source ${VENV_DIR}/bin/activate'
-alias mb-ws='cd ${WS_DIR}'
-alias mb-build='cd ${WS_DIR} && colcon build --symlink-install && source install/setup.bash'
-
-# Isaac Sim launcher — set ISAAC_SIM_PATH after installing Isaac Sim.
-# export ISAAC_SIM_PATH="\${HOME}/isaacsim"
-# alias isaac='\${ISAAC_SIM_PATH}/isaac-sim.sh'
-ENV_EOF
-
-    # Idempotent .bashrc hook — guarded by a marker so re-runs don't stack up.
+    # Idempotent .bashrc hook -- guarded by a marker so re-runs don't stack up.
     MARKER="# >>> motobat env >>>"
     if ! grep -qF "${MARKER}" "${HOME}/.bashrc" 2>/dev/null; then
       {
@@ -866,7 +800,7 @@ Next steps
 
     First launch compiles shaders and takes 10-30 minutes. It is not hung.
 
-    Then uncomment ISAAC_SIM_PATH in ~/motobat/motobat_env.sh.
+    Then uncomment ISAAC_SIM_PATH in motobat_env.sh at the repo root.
 
 4.  Isaac Sim + ROS 2 bridge: enable the isaacsim.ros2.bridge extension and
     source /opt/ros/jazzy/setup.bash BEFORE launching isaac-sim.sh, so it uses
@@ -883,7 +817,7 @@ Three things worth knowing
   * MotoROS2 does not run on this machine, and cannot. It is a MotoPlus
     application that runs ON a physical Yaskawa controller (DX200 / YRC1000).
     There is no PC build and no simulation mode. What is staged in
-    ros2_ws/src/_vendor/ is the CLIENT side: the message/service/action
+    src/_vendor/ is the CLIENT side: the message/service/action
     definitions your nodes use to speak the real MotoROS2 interface, plus the
     micro-ROS Agent that would bridge to hardware.
 

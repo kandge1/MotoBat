@@ -2,11 +2,11 @@
 # =============================================================================
 #  MotoBat — get four arms moving in RViz
 #
-#  Run from wherever you unpacked motobat_description/:
-#      ./bootstrap_rviz.sh
+#  Run from anywhere:
+#      ./workstation_setup/bootstrap_rviz.sh
 #
-#  Installs the description package into your workspace, resolves the Yaskawa
-#  vendor deps, builds, and tells you what to run. Idempotent.
+#  Resolves the Yaskawa vendor deps into src/_vendor, builds, and tells you
+#  what to run. Idempotent.
 # =============================================================================
 # NOTE: deliberately NOT using -u here.
 # /opt/ros/jazzy/setup.bash reads AMENT_TRACE_SETUP_FILES and other variables
@@ -14,18 +14,20 @@
 # Every ROS 2 script that sources setup.bash has to live without -u.
 set -Eeo pipefail
 
-WS="${HOME}/motobat/ros2_ws"
+# This script lives in <repo>/workstation_setup/, and the repo root is the
+# colcon workspace. Resolve it from here so a clone to any path just works.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WS="$(cd "${SCRIPT_DIR}/.." && pwd)"
 SRC="${WS}/src"
 VENDOR="${SRC}/_vendor"
-PKG_SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/motobat_description"
 
 info() { printf '\033[34m::\033[0m %s\n' "$*"; }
 ok()   { printf '\033[32m ok\033[0m %s\n' "$*"; }
 warn() { printf '\033[33m  ! \033[0m%s\n' "$*"; }
 die()  { printf '\033[31m  x \033[0m%s\n' "$*"; exit 1; }
 
-[[ -d "${WS}" ]] || die "No workspace at ${WS}. Run setup_motobat.sh first."
-[[ -d "${PKG_SRC}" ]] || die "motobat_description/ not found next to this script."
+[[ -d "${SRC}/motobat_description" ]] \
+  || die "src/motobat_description not found — is ${WS} really the repo root?"
 
 # shellcheck disable=SC1091
 source /opt/ros/jazzy/setup.bash
@@ -61,13 +63,9 @@ for p in micro-ROS-Agent micro_ros_msgs; do
 done
 ok "vendor tree trimmed to the three arms"
 
-# --- 2. Install our package -------------------------------------------------
-info "installing motobat_description"
-rm -rf "${SRC}/motobat_description"
-cp -r "${PKG_SRC}" "${SRC}/motobat_description"
-ok "package staged"
-
-# --- 3. Deps and build ------------------------------------------------------
+# --- 2. Deps and build ------------------------------------------------------
+# motobat_description is versioned in src/ — nothing to stage. This script
+# used to copy it in from a tarball; the package is now first-class source.
 info "resolving dependencies (rosdep)"
 rosdep install --from-paths "${SRC}" --ignore-src -r -y >/dev/null 2>&1 \
   || warn "rosdep reported issues — continuing; check output if the build fails"
@@ -80,7 +78,7 @@ else
   die "build failed — see the log above"
 fi
 
-# --- 4. Verify --------------------------------------------------------------
+# --- 3. Verify --------------------------------------------------------------
 # shellcheck disable=SC1091
 source "${WS}/install/setup.bash"
 

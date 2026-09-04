@@ -18,6 +18,7 @@ from launch.actions import DeclareLaunchArgument
 from launch.substitutions import Command, LaunchConfiguration, PathJoinSubstitution
 from launch.conditions import IfCondition
 from launch_ros.actions import Node
+from launch_ros.descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
 
@@ -34,11 +35,18 @@ def generate_launch_description():
 
     # xacro is expanded at launch time, so editing the .xacro and relaunching
     # is all it takes -- no rebuild needed for description-only changes.
+    # ParameterValue(..., value_type=str) is REQUIRED, not optional style.
+    # Without it launch tries to parse the expanded URDF as YAML and dies with
+    # "Unable to parse the value of parameter robot_description as yaml".
+    # Every robot_description parameter in this project needs this wrapper.
     robot_description = {
-        'robot_description': Command([
-            'xacro ',
-            PathJoinSubstitution([pkg, 'urdf', 'motobat_line.urdf.xacro'])
-        ])
+        'robot_description': ParameterValue(
+            Command([
+                'xacro ',
+                PathJoinSubstitution([pkg, 'urdf', 'motobat_line.urdf.xacro'])
+            ]),
+            value_type=str,
+        )
     }
 
     return LaunchDescription([
