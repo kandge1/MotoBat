@@ -1,16 +1,49 @@
-# Node rules:
-## Grunt intermediate storage (http://gruntjs.com/creating-plugins#storing-task-files)
-.grunt
+# =============================================================================
+#  MotoBat
+#  The repo root IS the colcon workspace, so colcon's output lands here.
+# =============================================================================
 
-## Dependency directory
-## Commenting this out is preferred by some people, see
-## https://docs.npmjs.com/misc/faq#should-i-check-my-node_modules-folder-into-git
-node_modules
+# ROS 2 / colcon build output
+build/
+install/
+log/
 
-# Book build output
+# Cloned third-party sources — workstation_setup/bootstrap_rviz.sh re-fetches
+# these. ~200 MB of vendor code that is not ours; never commit it.
+src/_vendor/
+
+# Installer logs (note: singular log/ above is colcon's, plural logs/ is ours)
+logs/
+
+# Python
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Generated datasets — commit the generator and the seed, not the output.
+# See docs/project_structure.md.
+data/
+*.ply
+*.npy
+*.pcd
+
+# Isaac Sim
+*.usd.autosave
+.thumbs/
+
+# Experiment tracking
+wandb/
+mlruns/
+
+# Editor
+.vscode/
+*.swp
+
+# Book / eBook build output
 _book
-
-# eBook build output
 *.epub
 *.mobi
 *.pdf

@@ -1,0 +1,58 @@
+<?xml version="1.0"?>
+<!--
+  MotoBat — four-station battery cell assembly line
+
+  Station 1  Stacker    GP4      prefix s1_
+  Station 2  Welder     GP4      prefix s2_
+  Station 3  Inspector  HC10DT   prefix s3_
+  Station 4  Sealer     GP7      prefix s4_
+
+  Every arm is instantiated from the Yaskawa xacro macros with a distinct
+  prefix, so all four coexist in one TF tree without link-name collisions.
+  Each is mounted to a world frame at its station position.
+
+  Layout is a straight line along +X at 1.2 m pitch, matching the process
+  order stack -> weld -> inspect -> seal. The Inspector sits back on -Y and
+  higher, reflecting the HC10's larger reach envelope and its role of
+  scanning across stations rather than working one tight cell.
+-->
+<robot name="motobat_line" xmlns:xacro="http://ros.org/wiki/xacro">
+
+  <xacro:include filename="$(find motoman_gp4_support)/urdf/gp4_macro.xacro"/>
+  <xacro:include filename="$(find motoman_gp7_support)/urdf/gp7_macro.xacro"/>
+  <xacro:include filename="$(find motoman_hc10_support)/urdf/hc10dt_macro.xacro"/>
+
+  <!-- Station pitch along the line. Change here, not in each mount below. -->
+  <xacro:property name="pitch"        value="1.2"/>
+  <xacro:property name="table_height" value="0.0"/>
+
+  <link name="world"/>
+
+  <!-- Helper: bolt an arm's base_link to world at a given pose. -->
+  <xacro:macro name="station_mount" params="prefix x y z yaw">
+    <joint name="${prefix}mount" type="fixed">
+      <parent link="world"/>
+      <child  link="${prefix}base_link"/>
+      <origin xyz="${x} ${y} ${z}" rpy="0 0 ${yaw}"/>
+    </joint>
+  </xacro:macro>
+
+  <!-- Station 1 — Stacker (GP4) -->
+  <xacro:motoman_gp4 prefix="s1_"/>
+  <xacro:station_mount prefix="s1_" x="0"           y="0" z="${table_height}" yaw="0"/>
+
+  <!-- Station 2 — Tab Welder (GP4) -->
+  <xacro:motoman_gp4 prefix="s2_"/>
+  <xacro:station_mount prefix="s2_" x="${pitch}"    y="0" z="${table_height}" yaw="0"/>
+
+  <!-- Station 3 — Inspector (HC10DT).
+       Set back on -Y and raised: the HC10's 2400 mm vertical reach lets it
+       scan across neighbouring stations from a central position. -->
+  <xacro:motoman_hc10dt prefix="s3_"/>
+  <xacro:station_mount prefix="s3_" x="${pitch*1.5}" y="-0.9" z="0.3" yaw="${pi/2}"/>
+
+  <!-- Station 4 — Can Sealer (GP7) -->
+  <xacro:motoman_gp7 prefix="s4_"/>
+  <xacro:station_mount prefix="s4_" x="${pitch*2}"  y="0" z="${table_height}" yaw="0"/>
+
+</robot>
