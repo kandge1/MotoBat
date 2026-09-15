@@ -921,12 +921,32 @@ planned.
   ray-cast models in `defectgen/scan.py` *are* the sensor models.
 - *"We need an LJ-X8040."* Keyence's current table has no 8040. The 16 mm /
   0.4 µm head is the **LJ-X8030**.
+- *"Put a small X-ray sensor on the HC10DT to see inside the cell."* **Rejected
+  for the wrist, kept as future work.** Transmission X-ray needs the source and
+  detector on **opposite sides** of the part, so a single wrist cannot do it.
+  Single-sided backscatter exists, but its resolution is around 0.3 mm to
+  millimetres, too coarse for 20–90 µm layers. Ionising radiation also needs a
+  shielded, interlocked enclosure, which defeats the point of a collaborative
+  arm sharing space with people. X-ray is the right physics for cell internals.
+  Industry uses 2D radiography of the four corners, where anode and cathode
+  show up as distinct grey zones, and CT for full volume. But it belongs at
+  the cell factory, in a shielded cabinet, before cells ever reach a module
+  line. The robotic version is real: Fraunhofer's **RoboCT** uses two
+  cooperating industrial robots, one carrying the source and one the
+  detector, at ~50 µm resolution. It is also simulable with the open-source
+  **gVirtualXray** (`pip install gvxr`; Beer–Lambert projection through
+  triangle meshes). That makes it a candidate for the cell-level
+  collaboration (§3.7.7), not for this line.
 
 ### 3.7.9 Open items before results are claimed
 
 1. **Module geometry defaults.** Cell: VDA PHEV2 format, 148 × 91 × 26.5 mm.
-   Terminal size and height, busbar thickness, and cell-to-cell gap are
-   *assumed* until sourced.
+   Terminal spacing 66 mm and the 12-cell / ~3 kN module come from a
+   laser-vendor guide and batterydesign.net
+   ([VDA guide](https://www.huiyaolaser.com/vda-prismatic-cell-standard-ev1-ev2-dimensions-assembly-line-2026),
+   [VDA formats](https://www.batterydesign.net/vda-prismatic-cells/)). Confirm
+   against a manufacturer datasheet if one can be found. Terminal size and
+   height, busbar thickness, and cell-to-cell gap are *assumed* until sourced.
 2. **Tolerances.** 0.1 mm adjacent-terminal height difference (MDPI
    *Batteries* 6(3):47 via search; confirm from the paper). Cell placement,
    busbar gap and weld seam limits: *to source*.
@@ -1162,8 +1182,11 @@ Parametric module, defects off by default. Everything a variable:
 cell             VDA PHEV2 prismatic, 148 x 91 x 26.5 mm  (W x H x D)
 cells            12 in series, 1 row                      → ~318 mm + end plates
 cell gap         variable (compression pads)              — assumed, source it
-terminals        2 per cell on the cap, +/- distinguishable by geometry
+terminals        2 per cell on the cap, 66 mm centre-to-centre (PHEV2),
+                 +/- distinguishable by geometry
                  (size, height above cap — assumed, source it)
+can              aluminium, ~1.1 mm wall
+module preload   ~3 kN on the end plates for a 12-cell PHEV2 module
 busbars          flat strips joining adjacent terminals, thickness variable
 laser weld       seam geometry on each busbar–terminal joint (post-weld state)
 housing          end plates + side plates (+ optional adhesive bead on floor)
