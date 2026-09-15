@@ -1,195 +1,184 @@
-# MotoBat: A Battery Cell Assembly Line — Multi-Robot Inspection & Correction Project
+# MotoBat: A Battery Module Assembly Line — Robotic Multi-View Inspection & Correction
 
 ## Project Summary
 
-A simulated four-station robotic battery cell assembly line built in Isaac Sim, modeling the real
-industrial process for prismatic/cylindrical lithium-ion cell manufacturing: **stack → weld → inspect
-→ seal**. The project's core technical contribution is a **closed-loop defect detection and correction
-system** — an inspection robot scans the cell stack after assembly and welding, detects geometric
-misalignment against the real documented fault mode (electrode overhang crossing the insulating
-member boundary), and feeds a correction signal back into the line *before* the irreversible can-sealing
-step, rather than catching defects only after the fact via post-seal X-ray (the real industry's current
-approach).
+A simulated robotic battery **module** assembly line built around four Yaskawa arms and ROS 2,
+modeled on the real industrial process: **place cells → place busbars → inspect → laser weld**.
+The core technical contribution is a **closed-loop, multi-view inspection system**. A
+collaborative HC10DT carries a 3D sensor suite around the module, measures documented defect
+classes (cell placement, terminal height, busbar fit, weld seams) against reference geometry,
+and corrects the next placement *before* the irreversible laser weld.
 
-The project is explicitly designed to demonstrate a **generalizable architecture**: the same
-scan-detect-correct pipeline built here is intended to be reapplied in a follow-up project to a
-different material domain (carbon fiber composite layup inspection), to prove the approach isn't
-overfit to one material or defect type.
+The project asks one question that practitioners actually argue about:
+
+> **Does a robot-mounted, multi-view sensor find defects that a fixed line-scan sensor misses —
+> and what does it cost in cycle time?**
+
+Both approaches are built, both are measured by coverage, recall per defect class and seconds per
+module, and the answer is reported whichever way it falls.
 
 ### Why this problem matters
-A single defective cell reaching a finished battery pack can cost well over $10,000 in warranty and
-recall exposure. Real production lines run extremely fast (roughly 1.5–2.5 seconds per unit on a
-prismatic cell winder), meaning a positional error of even half a millimeter at that speed becomes a
-serious quality risk. Catching misalignment *before* the can is sealed — rather than relying on
-downstream X-ray and helium leak tests — is a genuine, underexplored opportunity: it prevents defective
-cells from ever being sealed shut around a scrap electrode stack.
+EV battery modules are joined by laser-welding busbars to cell terminals. That weld is
+**irreversible**, and it is sensitive to geometry: a height difference of more than about
+**0.1 mm between adjacent terminals** can produce a flawed joint. A cell placed off-position
+shifts where the weld lands. A busbar that lifts off leaves an air gap under the laser. Catching
+these *before* welding — and correcting the next placement rather than scrapping a module — is
+the difference between a rework and a reject.
 
 ### The real process this project is modeled on
-Industrial cell assembly generally follows this sequence:
-1. **Stacking** — electrodes and separators are alternately stacked (or Z-folded) into a "jelly stack"
-2. **Tab welding** — a metal strip is ultrasonically or laser-welded to the stacked foil layers,
-   forming the current-collector tab for each electrode
-3. **Insertion & sealing** — the stack is inserted into the can/casing, and the can-lid joint is sealed
-   via ultrasonic or laser welding to make it airtight
-4. **Inspection** — traditionally performed *after* sealing, via X-ray (checking stack position within
-   the can) and a helium leak test (checking weld integrity)
+A prismatic module line runs roughly: cell loading and electrical test → cleaning → pad and adhesive
+application → **cell stacking into the module** → strapping → **terminal cleaning and camera
+positioning** → **busbar placement** → **laser welding** → end-of-line test. MotoBat models the
+stations in bold, with inspection placed between busbar placement and welding (and again after
+welding), where defects are still correctable.
 
-This project moves inspection **earlier**, inserting it between welding and sealing, so defects are
-caught while the stack is still accessible and correctable.
+### Why the scope is the module, not the inside of the cell
+MotoBat began as electrode-stack inspection inside a single cell. A feasibility study, run before
+any code, showed why that could not work with external optical sensing: the critical defect
+(a cathode shifting inside the anode's outline) is buried under anode and separator layers.
+Even a sub-micron laser profilometer has the resolution but not the line of sight, which is why
+industry inspects each sheet during stacking and X-rays the result. That study, and the two
+other sensing findings it produced, are recorded in
+[`docs/project_plan.md` §3.7](docs/project_plan.md) and form the motivation for this scope.
 
 ---
 
 ## The Four Robots
 
-| Station | Robot | Payload | Reach (Vert / Horiz) | Class |
+| Station | Robot | Payload | Class | Job |
 |---|---|---|---|---|
-| 1. Stacker | Yaskawa **GP4** | 4 kg | 1008 mm / 550 mm | Industrial (GP-series) |
-| 2. Tab Welder | Yaskawa **GP4** | 4 kg | 1008 mm / 550 mm | Industrial (GP-series) |
-| 3. Inspector / Scanner | Yaskawa **HC10DTP** | 10 kg | 2400 mm / 1200 mm | Collaborative (HC-series) |
-| 4. Can-Sealer | Yaskawa **GP7** | 7 kg | 1693 mm / 927 mm | Industrial (GP-series) |
+| 1. Cell Placer | Yaskawa **GP7** | 7 kg | Industrial (GP-series) | Picks prismatic cells (vision-located) and places them into the module |
+| 2. Busbar Placer / Welder | Yaskawa **GP4** | 4 kg | Industrial (GP-series) | Places busbars on terminals; performs the simulated laser weld pass |
+| 3. Inspector | Yaskawa **HC10DTP** | 10 kg | Collaborative (HC-series) | Multi-view 3D inspection before and after welding |
+| — | Fixed line-scan station | — | Sensor, no robot | The baseline the Inspector has to beat |
 
 ### Why these specific robots
 
-**GP4 (Stacker + Tab Welder) — precision over payload.** Battery cell components at 21700
-cylindrical-cell scale are small and require tight, repeatable tolerances, not brute strength. The GP4's
-4 kg payload and compact ~550 mm horizontal reach are well matched to tabletop-scale, high-precision,
-programmed-path work. Two identical GP4 units also keep the ROS2 control and motion-planning code
-consistent across both stations rather than juggling two different control paradigms.
+**GP7 (Cell Placer) — payload and reach for the heaviest part.** Prismatic cells are the heaviest
+items handled on the line. The GP7 gives payload headroom for a cell plus gripper and enough reach
+to span a 12-cell module, while staying in the same GP-series programming model as the GP4.
 
-**GP7 (Can-Sealer) — a little more working envelope.** Sealing requires manipulating the can and lid
-together, which benefits from slightly more reach and payload headroom than pure stacking work, without
-jumping to an oversized industrial arm. Staying in the same GP-series family keeps the same
-programming/control approach as the other two industrial stations.
+**GP4 (Busbar Placer / Welder) — precision over payload.** Busbars are light, and placing them
+is a short, repeatable, programmed-path task. The GP4's compact envelope and closed-form (OPW)
+inverse kinematics suit exactly that.
 
-**HC10DTP (Inspector/Scanner) — a deliberately different robot class.** This was the key design
-decision in the project: rather than using a fourth GP-series arm for inspection, the project uses a
-**collaborative** robot with a much larger reach envelope (2400 mm vertical vs. the GP4's 1008 mm).
-Traditional industrial arms like the GP-series are built for repeatable, pre-programmed paths — not for
-the kind of flexible, exploratory, multi-angle sweeping motion a scanning/inspection task benefits from.
-The HC10's larger reach also means it can physically oversee or scan across multiple stations from a
-central position, rather than being confined to one tight cell like the GP4/GP7. This mirrors a real
-integration pattern: choosing hardware by *behavioral fit to task* (repeatable path-following vs.
-flexible sensing) rather than defaulting to identical arms everywhere.
+**HC10DTP (Inspector) — a deliberately different robot class.** Traditional industrial arms are
+built for repeatable, pre-programmed paths. Inspection of a large part with occluded features
+benefits from flexible, multi-angle viewpoints — the same reason car-body lines use robot-mounted
+3D sensors from ZEISS, Hexagon and Perceptron. As a collaborative arm, the HC10 can also share
+space with people under speed-and-separation monitoring. Choosing hardware by *behavioral fit to
+task* (repeatable path-following vs flexible sensing) is itself part of the design argument —
+and the fixed line-scan baseline keeps that argument honest.
 
-**Explicitly not chosen: a palletizer.** Yaskawa's PL-series palletizers (80–800 kg payload) are built
-for high-speed, heavy case/box stacking — the wrong tool entirely for sub-millimeter electrode
-alignment work. Precision, not payload, is what this project needs.
+**Explicitly not chosen: a palletizer.** Yaskawa's PL-series palletizers (80–800 kg payload) are
+built for heavy, high-speed case stacking — the wrong tool for sub-millimeter placement work.
 
 ### Rejected/considered alternative: FANUC
-Considered FANUC (ROBOGUIDE + KAREL) as an alternative platform. Chose Yaskawa/Motoman instead because:
-- Yaskawa publishes **MotoROS2**, a real open-source ROS2 driver, allowing control of a simulated
-  Yaskawa controller through genuine ROS2 messages rather than staying inside a proprietary,
-  non-ROS ecosystem
-- FANUC's ROBOGUIDE remains a useful *secondary* tool to learn separately (see Software Tools below)
-  for comparison/breadth, but isn't the primary platform for this build
+Considered FANUC (ROBOGUIDE + KAREL). Chose Yaskawa/Motoman because Yaskawa publishes
+**MotoROS2**, a real open-source ROS 2 driver, so the simulated arms are commanded through genuine
+ROS 2 interfaces rather than a proprietary ecosystem. ROBOGUIDE remains a useful secondary tool to
+learn separately.
 
 ---
 
-## Project Architecture: Scan → Detect → Correct
+## Sensors — each one where it belongs
 
-1. **Stacker (GP4)** places alternating electrode/separator layers on a build stage, following the
-   real documented geometry (overhang regions, insulating member placement) from prismatic cell patents
-2. **Tab Welder (GP4)** performs a simulated ultrasonic weld pass, bonding the stacked foil layers into
-   a current-collector tab
-3. **Inspector (HC10DTP)** sweeps a simulated depth/vision sensor over the completed stack, builds a
-   point cloud, and registers it against a known-good reference geometry
-4. **Defect detection** — flags the real documented fault mode: positive electrode overlapping the
-   insulating member/overhang region, or stack thickness deviating from expected tolerance
-5. **Correction loop** — rather than blind open-loop stacking, the next layer's placement offset is
-   adjusted based on the Inspector's feedback, closing the loop before the **Can-Sealer (GP7)**
-   performs the final, irreversible seal
-6. **Logging** — every defect (type, location, severity, corrective action taken) is logged like a real
-   QA system, along with before/after point clouds
+A four-sensor wrist was the original plan. Checking datasheets against the defect sizes showed that
+most of those sensors are the wrong class for measurement, so each sensor now has the role its
+specifications support (full analysis: `docs/project_plan.md` §3.7.3).
+
+| Where | Sensor (class) | Why |
+|---|---|---|
+| HC10DT wrist | Structured-light snapshot 3D camera (Zivid 2+ M60 class) | Coverage: stop-and-shoot views of the whole module |
+| HC10DT wrist | Laser line profilometer (Keyence LJ-X8200 class) | Precision: two adjacent terminals in one profile, µm-level height |
+| HC10DT wrist | 2D camera (SICK midiCam2) | Polarity, weld appearance |
+| Over the conveyor | 3D laser-triangulation camera (SICK Ranger3) | The fixed-sensor baseline |
+| Overhead, Station 1 | 2D camera (SICK midiCam2) | Locates cells for the GP7 pick |
+| Cell perimeter | Safety laser scanner (SICK microScan3) | Speed-and-separation monitoring for the collaborative Inspector |
+
+All sensors are simulated, with parameters pinned to their datasheets.
+
+---
+
+## Project Architecture: Place → Inspect → Correct → Weld
+
+1. **Cell Placer (GP7)** picks each cell, located by the overhead camera, and places it into the
+   module housing
+2. **Inspector (HC10DTP)** captures the module from a planned set of viewpoints; each critical
+   measurement (e.g. adjacent terminal heights) is taken *within a single capture*, so the arm's
+   path accuracy never enters a 0.1 mm measurement — **the arm provides coverage, the sensor
+   provides metrology**
+3. **Defect detection** — registration against the reference module, then per-feature measurement:
+   cell pose, terminal height and tilt, missing or reversed cells, busbar pose and gap, weld seam
+   continuity and width
+4. **Correction loop** — the measured placement error of cell *k* offsets the placement of cell
+   *k+1*, with a derived stability bound (`0 < K < 2/g`); defects that placement cannot fix
+   (terminal height) trigger reject/rework *before* welding
+5. **Busbar Placer / Welder (GP4)** places busbars; the Inspector checks them; the weld runs only on
+   a module that passed
+6. **Logging** — every defect (type, location, severity, action taken) is logged like a real QA
+   system, with before/after point clouds
 
 ### Defect simulation approach
-Defects are injected **geometrically**, not through real material physics simulation — this keeps the
-project tractable while still being realistic, since the actual fault mode (layer misalignment/overhang
-violation) is fundamentally a geometric deviation problem, which is exactly what point-cloud-vs-
-reference-mesh comparison is built to catch.
+Defects are injected **geometrically** into a procedurally generated, mesh-native module (twelve
+VDA PHEV2-format prismatic cells, terminals, busbars, weld seams, housing). Every generated module
+carries ground-truth labels, which is what makes precision and recall measurable. The generator
+lives in `defectgen/`, a standalone Python package with no ROS dependency.
 
-### Performance targets to measure and report
-- Detection + correction latency, benchmarked against real industry cycle time (~1.5–2.5 sec/unit)
-- Defect rate: simulated open-loop (blind stacking) vs. closed-loop (corrected) misalignment rate
-- Throughput under the full 4-station pipeline
+### What gets measured
+- **Precision / recall per defect class**, with confidence intervals
+- **Gage R&R (%GRR)** for measured characteristics — terminal height, cell position, busbar gap
+- **Fixed vs robot-mounted inspection** — coverage %, recall per class, cycle time per module
+- **Minimum detectable defect** per class, and sensitivity to sensor noise, point spacing and standoff
+- **Correction-loop stability** — a gain sweep showing convergence, critical damping and divergence;
+  open-loop vs closed-loop placement defect rate
+- **Latency** — sensor publish → registration → correction command
 
 ---
 
 ## Software Tools
 
 ### Simulation & Robot Control
-- **Isaac Sim** — primary simulation environment for all four robots, sensors, and the physical cell
-- **Isaac Lab** — for the stretch-goal RL correction policy (built on Isaac Sim, adds RL training
-  infrastructure like PPO out of the box)
-- **ROS2** — core middleware for all inter-node and inter-robot communication
-- **MotoROS2** — Yaskawa's official open-source ROS2 driver; study its source/docs to understand how
-  ROS2 control commands map to real Motoman controllers, even when only controlling simulated arms
-- **MoveIt2** — motion planning for each arm (trajectory generation, collision checking); directly
-  reuses prior MoveIt experience
-- **RViz2** — visualization of robot state, planned trajectories, and point cloud data during
-  development/debugging
-- **Gazebo** — optional secondary simulator; useful if any component benefits from Gazebo's physics
-  engine or if comparing sim fidelity against Isaac Sim
+- **Gazebo (Harmonic)** — primary simulator for the line, with `ros2_control`
+- **Isaac Sim** — optional higher-fidelity path, adopted only if Gazebo's rendering limits a result
+- **ROS 2 Jazzy** — middleware for all nodes and robots
+- **MoveIt 2** — motion planning; closed-form OPW IK for the GP-series arms, KDL for the HC10DT
+  (its wrist axes do not intersect)
+- **MotoROS2** — Yaskawa's open-source ROS 2 driver; the control boundary is kept identical to it
+  so the simulated line maps onto real controllers
+- **RViz2** — visualization of robot state, plans and point clouds
 
-### Point Cloud & Computer Vision
-- **Open3D** — point cloud registration (ICP), filtering, downsampling; core library for the
-  scan-vs-reference comparison pipeline. Also directly relevant since it's named explicitly in real
-  robotics-company perception job postings
-- **PCL (Point Cloud Library)** — alternative/complementary to Open3D, particularly if working in C++
-  rather than Python for performance-critical portions
-- **OpenCV** — general image processing, camera calibration utilities, useful alongside point cloud
-  work for any RGB-based inspection steps
+### Geometry, Point Clouds & Vision
+- **trimesh / numpy** — procedural, mesh-native module generation and defect injection
+- **Open3D** — ray-cast sensor models, ICP registration, per-feature measurement
+- **OpenCV** — 2D camera processing (cell location, polarity)
+- **PCL** — C++ alternative where performance demands it
 
 ### Communication & Data
-- **Cyclone DDS** — set as the ROS2 RMW implementation (`RMW_IMPLEMENTATION`) instead of defaulting to
-  FastRTPS, and tune its QoS settings; directly closes a named skill gap
-- **Protobuf / gRPC** — worth introducing for the Inspector→Correction data pipeline as a structured,
-  versioned schema, mirroring how real perception platforms wrap ML/sensor outputs into fleet-deployable
-  services rather than passing loosely-typed ROS messages everywhere
+- **DDS** — Cyclone DDS vs FastDDS is an open decision (MotoROS2 requires FastDDS)
+- **rosbag2** — record and replay sessions; latency measured from timestamps
+- **Foxglove Studio** — visualization of recordings for demos
 
-### Machine Learning / RL
-- **PyTorch** — primary ML framework for any learned components (defect classification, RL policy)
-- **Isaac Lab (RL)** — PPO/SAC training for the stretch-goal correction policy
-- **Stable-Baselines3** — a simpler, well-documented alternative/supplement to Isaac Lab's built-in RL
-  if a lighter-weight RL prototyping loop is useful before committing to full Isaac Lab training
-  infrastructure
+### Machine Learning (stretch)
+- **PyTorch**, **Stable-Baselines3**, **Isaac Lab** — only if a learned component outperforms the
+  geometric pipeline on a measured result
 
-### CAD / Geometry Pipeline
-- **URDF / Xacro** — robot description format for all four Yaskawa arms in Isaac Sim/ROS2
-- **Blender** or **FreeCAD** — for building the custom battery cell, stack, and mold-surface geometry
-  (electrode layers, can, lid) that doesn't come as an off-the-shelf robot description; free and
-  scriptable, useful for procedurally generating defect geometry variations
-- **OnShape** (free tier) — alternative to Blender/FreeCAD if a more traditional parametric CAD
-  workflow is preferred for the cell casing/fixture geometry
-
-### Logging, Experiment Tracking & MLOps
-- **Weights & Biases (W&B)** or **MLflow** — track training runs if the RL/ML stretch goals are
-  pursued; also useful for logging defect-rate metrics across pipeline runs in a structured,
-  comparable way rather than ad hoc print statements
-- **rosbag2** — record and replay full ROS2 sessions (sensor data, robot state, detected defects) for
-  debugging and for generating demo material later without needing to re-run the full sim live
-- **Foxglove Studio** — modern alternative/complement to RViz2 for visualizing rosbag2 recordings,
-  particularly nice for producing clean demo videos and shareable visualizations of point cloud data
+### CAD & Robot Description
+- **URDF / Xacro** — all arms and the inspector flange; sensor frames derived numerically from CAD
+- **FreeCAD / Blender** — parametric sensor flange and fixtures
 
 ### Version Control & Documentation
-- **Git / GitHub** — standard version control; commit history itself becomes evidence of the
-  development and debugging process for portfolio purposes
-- **GitHub Actions** — CI to catch build breakage across ROS2 nodes as the project grows, especially
-  useful once four robots' worth of packages exist in one repo
-
-### Secondary / Comparison Tools (breadth, not core path)
-- **FANUC ROBOGUIDE** — free (with registration) offline programming/simulation tool; worth exploring
-  separately from this project purely to build comparative fluency between Yaskawa's and FANUC's
-  programming paradigms (INFORM/MotoROS2 vs. KAREL/ROBOGUIDE)
-- **TwinCAT (Beckhoff)** — free EtherCAT master; useful for conceptual, hands-on exposure to industrial
-  fieldbus configuration, even though this project's simulation doesn't require real EtherCAT hardware
+- **Git / GitHub**, **GitHub Actions** — history is part of the development record
+- **`docs/`** — the plan, the mathematics behind each subsystem, and the current task list
 
 ---
 
 ## Relationship to Future Work
 
-This project is the first of two planned builds. The scan→detect→correct architecture, Isaac Sim
-setup, ROS2/MotoROS2 integration, and Open3D-based point cloud pipeline developed here are intended to
-be directly reused — not rebuilt — for a follow-up **carbon fiber composite layup inspection and
-correction project**, applying the same core architecture to a structurally different defect domain
-(wrinkles, gaps, overlaps, and bridging in automated fiber placement) as a deliberate test of whether
-the approach generalizes across materials and industries, rather than being a one-off, overfit solution.
+- **Cell internals, with a battery-technology collaborator.** The feasibility study left a concrete
+  hypothesis: during stacking, the anode's edge may leave a measurable step in the separator laid
+  over it, which would let a profilometer measure cathode-to-anode overhang *through* the separator.
+  Testing it needs real materials and domain expertise.
+- **Carbon-fibre composite layup.** The same scan → detect → correct architecture applied to a
+  structurally different domain (gaps, overlaps, wrinkles in automated fibre placement), as a test of
+  whether the approach generalizes across materials and industries.

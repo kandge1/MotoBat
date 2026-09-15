@@ -1,8 +1,15 @@
 # MotoBat — Project Start
  
-**Battery Cell Assembly Line: Multi-Robot Inspection & Correction System**
-A simulated closed-loop defect detection and correction system for lithium-ion
-battery cell manufacturing, built in NVIDIA Isaac Sim.
+**Battery Module Assembly Line: Robotic Multi-View Inspection & Correction**
+A simulated battery-module line. A GP7 places prismatic cells, a GP4 places and
+welds busbars, and an HC10DT inspects from several angles before the
+irreversible laser weld and corrects the next placement. It is benchmarked
+against a fixed line-scan station.
+
+> **Scope changed 15 Sep 2026: from inspecting the inside of a cell to
+> inspecting a module assembly line.** The reasons are measured. See **§3.7**.
+> Older sections still describe cell-stack inspection. Where a section
+> conflicts with §3.7, §3.7 wins.
  
 Rhishikesh Kandge — M.S. Electrical and Computer Engineering, The Ohio State University
  
@@ -15,10 +22,13 @@ The Ohio State University. Graduating late August 2026.
  
 MotoBat is a self-directed research and engineering project — not coursework,
 not lab work. Its purpose is a defensible result: a simulated multi-sensor
-inspection cell that detects documented structural defect classes in
-lithium-ion cell assembly and closes a correction loop before the irreversible
-sealing step, with measured detection performance and a characterised
-stability boundary.
+inspection cell on a battery module assembly line that detects documented
+defect classes (cell placement, terminal height, busbar fit, weld seams),
+closes a correction loop before the irreversible laser weld, and measures
+whether a robot-mounted multi-view sensor beats a fixed one. The results
+carry measured detection performance and a characterised stability boundary.
+(Originally scoped to cell-internal electrode stacks; §3.7 records why that
+changed.)
  
 **§3.6 states the claims this project must defend** and what separates a
 research artifact from a demo. That section is the standard the work is held
@@ -72,7 +82,9 @@ Practically, that means every module gets:
  
 The handoff from environment setup to actual development. It records what is
 built and verified, the decisions made and why, and the concrete next milestone:
-**one HC10DT arm, planned in RViz via MoveIt2, moving in Isaac Sim.**
+**the HC10DT, planned via MoveIt2, inspecting a generated battery module
+from several viewpoints in Gazebo**, with the fixed line-scan baseline alongside
+(§3.7.6).
  
 Read this first if you are picking the project up cold — including Claude Code.
  
@@ -95,10 +107,11 @@ against the equations in §9 — write the maths down before writing the code.
 | `motobat_description` (4-arm line) | Written, xacro compile-tested |
 | Four arms visualized in RViz | Unblocked — §1.2 fixed |
 | Repository structure | **Restructured** 31 Aug 2026 — repo root is the colcon workspace (`docs/project_structure.md`) |
-| Isaac Sim | Deferred to week 5 **by plan, not by hardware** (§3.5) |
-| MoveIt config for GP4 / HC10DT | **Next work** — §4A |
-| Sensor flange CAD | **Next work** — §4A.4 |
-| Defect generation + detection | **Next work** — §4B (prototyped, ~10 MB) |
+| **Domain** | **Battery module assembly line** as of 15 Sep 2026 (§3.7) |
+| Defect generation + detection | **Current work**: §4B, module generator, mesh-native |
+| MoveIt configs | HC10DT first (§4A.2), then GP7 cell placement, then GP4 busbars |
+| Sensor flange | Snapshot 3D + line profilometer + 2D camera (§3.7.3) |
+| Isaac Sim | Deferred, not cut: Gazebo first (§4) |
 | Memory upgrade | Optional, deferred past 1 Oct — §1.0, §4.0b |
  
 > **Current plan:** the motherboard was replaced and the machine is back to
@@ -558,6 +571,11 @@ proposal so it does not read as a spec mismatch.
 ---
  
 ## 3.5 Timeline to a portfolio-ready result — target 1 Oct 2026
+
+> **No longer binding (15 Sep 2026).** There is no fixed deadline. Work is
+> sequenced by dependency, not by date: §4B (numpy) → HC10DT inspection in
+> Gazebo → GP7/GP4 line and the closed loop → optional Isaac Sim. The original
+> table is kept below for the record.
  
 **Scoped goal:** simulated structural defects in a battery cell stack, plus one
 HC10DT carrying a sensor suite that scans them and reports what it found.
@@ -572,7 +590,7 @@ a working single-station system demonstrates more than a half-built line.
 | 1 | Aug 21–27 | §4B.1–4B.3 stack generator, defect injection, simulated scan | nothing — pure numpy, runs on 8 GB today |
 | 2 | Aug 28–Sep 3 | §4B.4–4B.5 Open3D detection + labelled validation set | week 1 |
 | 3 | Sep 4–10 | §4A.1–4A.2 GP4 and HC10DT MoveIt configs, marker IK in RViz | 16 GB (post-repair) |
-| 4 | Sep 11–17 | §4A.4 flange CAD, sensor placement study, URDF frames | week 3 + §4B.0 scan-window requirement |
+| 4 | Sep 11–17 | §4A.4 flange CAD, sensor placement study, URDF frames | week 3 + §3.7.2 scan-window requirement |
 | 5 | Sep 18–24 | Isaac Sim install, HC10DT import, OmniGraph, MoveIt bridge | **RAM — see risk below** |
 | 6 | Sep 25–Oct 1 | Integration, results, README, demo video | all above |
  
@@ -625,12 +643,26 @@ carefully. A single arm with a defensible quantitative claim does.
 The currency is: **a claim someone could disagree with, defended with numbers.**
  
 ### The claims MotoBat can actually defend
- 
+
+> **Updated 15 Sep (§3.7).** The claims now read:
+>
+> 1. **Three findings about sensing, each from building rather than assuming**
+>    (§3.7.2–3.7.4): height maps miss lateral error; most of the proposal's
+>    sensors are the wrong class for measurement; cell-internal defects are an
+>    optical-access problem, not a resolution problem.
+> 2. **Arm vs fixed sensor, measured** (§3.7.6): coverage, recall per class
+>    and cycle time for multi-view HC10DT inspection against a fixed Ranger3
+>    line-scan. Either outcome is a result.
+> 3. **Closed-loop stability**, with *k* = cell index: the K-sweep and
+>    open-loop vs closed-loop placement defect rate.
+>
+> The original battery-cell text follows.
+
 Three, all reachable within the §3.5 timeline:
  
 **1. A negative result, already found.**
 Top-down height mapping is insufficient for lateral electrode misalignment —
-the primary defect class and the Nissan 26V188 fault mode. Measured in §4B.0:
+the primary defect class and the Nissan 26V188 fault mode. Measured in §3.7.2 (formerly §4B.0):
 a 0.8 mm layer shift produced a −2.3 µm max-Z change and **zero** footprint
 change, while lateral envelope deviation gave a clean monotonic signal
 (+200 µm at 0.2 mm shift, rising linearly to +2000 µm at 2.0 mm).
@@ -709,6 +741,222 @@ project. Done properly and written honestly, it competes.
  
 ---
  
+## 3.7 Domain decision — the resolution gate (15 Sep 2026)
+
+> **Decision: MotoBat inspects a battery *module* assembly line, not the inside
+> of a single cell.** A GP7 places prismatic cells into a module. A GP4 places
+> busbars and performs a simulated laser weld. The HC10DT inspects from several
+> angles before and after the weld. A fixed line-scan station is the baseline
+> it has to beat.
+>
+> Two alternatives were set aside, each for a measured reason: electrode-stack
+> inspection inside the cell (§3.7.4) and carbon-fibre layup (§3.7.5). Nothing
+> is discarded. The cell-level findings motivate the whole project, cell
+> internals continue later with a battery-technology collaborator (§3.7.7),
+> and carbon fibre stays the follow-up that tests generality.
+
+### 3.7.1 Why the domain was re-opened
+
+The original plan assumed an arm-mounted sensor could see the defect, and no
+one had checked. The check is datasheet arithmetic, and whatever it shows is a
+result. So it ran before any Phase 1 code. The project's purpose was also made
+explicit at this point: **work that a controls and automation practitioner
+would recognise as a real line, solving a real problem, with the robot doing a
+job only a robot does well.** That is the standard every choice below was
+held to.
+
+### 3.7.2 Finding A — height maps miss lateral misalignment
+
+*(Originally §4B.0. Kept verbatim; it stays a valid result.)*
+
+While probing feasibility, the first detector measured **stack height** and was
+nearly blind to lateral misalignment: a 0.8 mm layer shift produced a −2.3 µm
+max-Z change and **zero** footprint change. Obvious in hindsight — shifting
+layers sideways does not change how tall the stack is.
+
+Switching the metric to **lateral envelope deviation** produced a clean,
+monotonic signal:
+
+| Layer shift | Scanned X-extent | Δ vs reference | Protruding points |
+|---|---|---|---|
+| 0.0 mm | 66.450 mm | +0 µm | 0 |
+| 0.2 mm | 66.650 mm | +200 µm | 3,840 |
+| 0.5 mm | 66.950 mm | +500 µm | 9,600 |
+| 0.8 mm | 67.250 mm | +800 µm | 15,360 |
+| 1.2 mm | 67.650 mm | +1200 µm | 23,040 |
+| 2.0 mm | 68.450 mm | +2000 µm | 38,400 |
+
+*(24 layer-pairs, 66.5 × 48.0 mm footprint, 1.5 mm cathode inset, defect
+injected from layer 12 onward, 50 µm scan pitch.)*
+
+Two consequences carry into the module line:
+
+1. **Choose the metric to match the defect's dominant direction.** A cell
+   placed off-position in a module is a lateral error. A terminal standing
+   proud is a height error. One metric does not serve both.
+2. **The scan window must extend beyond the nominal envelope.** Material that
+   has moved outside the expected footprint is invisible to a scan covering
+   only that footprint.
+
+**Caveat found at the gate:** the prototype shifted *whole layer pairs*,
+anode included, far enough to protrude. That case is real, but it is not the
+dangerous one. See Finding C.
+
+### 3.7.3 Finding B — sensor roles: most of the proposal's sensors cannot measure a defect
+
+**Rule of thumb used:** to detect a defect of size *D*, the sensor needs noise
+σ ≲ *D*/3 and sample spacing ≲ *D*/2.
+
+| Sensor | What it is | Key figures (datasheet) | Can it measure a 0.1–0.5 mm defect? | Role in MotoBat |
+|---|---|---|---|---|
+| Keyence LJ-X8020 / 8030 | laser line profilometer | 2.5–5 µm pitch, 0.3–0.4 µm Z, 8–16 mm width, 20–28 mm standoff | ✅ | Too narrow and too close for an arm working around a module. Relevant only to cell-level work. |
+| **Keyence LJ-X8200 class** | laser line profilometer | 72 mm width at 245 mm reference distance, 50 µm pitch, 1 µm Z | ✅ | **Wrist, precision:** covers two adjacent terminals in one profile, at a safe standoff |
+| **Zivid 2+ M60 class** | structured-light snapshot 3D camera | 0.24 mm spatial resolution at 60 cm, 58 × 47 cm field of view, 1 kg, ~100 ms capture | ✅ lateral / ⚠️ fine Z | **Wrist, coverage:** stop-and-shoot views of the whole module |
+| **SICK Ranger3** (or calibrated Ruler3000) | 3D laser-triangulation camera | 2560 points/profile, up to 46 k profiles/s | ✅ | **Fixed over the conveyor: the baseline station** |
+| **SICK midiCam2** | 2D GigE Vision camera, raw frames | 1–12 MP, global shutter | ✅ in-plane | Fixed overhead: locate cells for the GP7 pick. Wrist: polarity, weld appearance. |
+| SICK Inspector83x | 2D smart camera, processes onboard | no depth | ⚠️ in-plane | Superseded by midiCam2: the pipeline needs raw images |
+| Stereolabs ZED 2i | passive stereo | < 1 % of range, ≳ 3 mm at best | ❌ | Not used for measurement |
+| SICK multiScan136 | 3D lidar | statistical error ≤ 20 mm | ❌ | Not used |
+| SICK multiScan165S | 3D lidar, safety-rated **PL b / Cat. B** for mobile machinery | systematic ±35 mm | ❌ | Not used: PL b is not enough to guard a robot cell |
+| SICK picoScan150 LOC | 2D lidar with mobile-robot localisation | systematic ±20 mm; not a safety component | ❌ | Only if a mobile robot delivers parts |
+| **SICK microScan3** | safety laser scanner (machine guarding) | — | n/a | **Cell safety:** speed and separation monitoring for the collaborative HC10DT (ISO/TS 15066) |
+
+The consequence: the wrist carries a **snapshot 3D camera for coverage and a
+line profilometer for precision**, plus a 2D camera. That is about 3 kg with
+the flange, well inside the HC10DT's 10 kg. Four sensors on one wrist was
+never the right question. The right question is which sensor belongs *where*.
+
+### 3.7.4 Finding C — cell-internal defects cannot be seen from outside
+
+This is why the project does not inspect the inside of a cell. It is about
+geometry, not sensor specs.
+
+From the outside in, a stacked cell is separator (largest), then anode, then
+cathode (inset 1.5 mm). A cathode that shifts 0.8 mm still sits **inside** the
+anode footprint. The overhang margin drops from 1.5 mm to 0.7 mm. That is the
+overhang violation behind the Nissan 26V188 fault mode, and **no external
+surface scan can observe it**.
+
+**Even the best profilometer does not help.** An LJ-X8020 viewing the stack's
+side has the resolution: its 2.5 µm pitch resolves 20–90 µm layers. What it
+lacks is line of sight. The separators protrude as fins about 185 µm apart,
+with the electrodes recessed ~1 mm between them and the cathode a further
+1.5 mm back. A triangulation sensor, with laser and camera at an angle, cannot
+see to the bottom of slots that deep and narrow. In a Z-fold stack the
+continuous separator also wraps two of the four faces. **This is an
+optical-access limit, not a resolution limit.**
+
+Industry agrees. It inspects **each sheet during stacking**, typically with
+four synchronised cameras, one per corner, and uses X-ray/CT afterwards.
+
+**It also exposed a contradiction in the old plan.** The README placed
+inspection after the stack was complete. §9.9's loop, `u_{k+1} = −K·e_k`,
+corrects the *next* item, and a finished stack has no next layer. **The loop
+only makes sense with in-process inspection.** In the module line it is
+natural: *k* is the cell index. Cell *k* is measured before cell *k*+1 is
+placed.
+
+### 3.7.5 The candidates compared
+
+| | Cell internals (electrode stack) | Carbon-fibre AFP layup | **Battery module line** |
+|---|---|---|---|
+| Defects visible to an external optical sensor? | **No** (Finding C) | Yes | **Yes**: cell position, terminal height, busbars, welds, beads |
+| Real tolerance with a mechanism | 0.2 mm stacker spec | gap/overlap limits (to source) | **> 0.1 mm height difference between adjacent terminals can cause a flawed laser weld** |
+| Does the arm have a job? | Weak: 66 mm part, 1.5 s/unit, a fixed sensor is the obvious design | Yes: curved tool | **Yes**: large part, features on several faces, busbars block terminal edges |
+| Is it an assembly line? | Yes, but inspection must sit inside the stacker | No: one process, one robot | **Yes**: four robots, each with a real job |
+| Irreversible step to inspect before | can sealing | next ply | **laser welding** |
+| Audience (controls and automation) | niche | aerospace niche | **mainstream integrator work** |
+
+Carbon fibre was chosen first on detection grounds alone. The module line
+replaced it once the project's purpose (§3.7.1) was part of the comparison.
+
+### 3.7.6 Arm versus fixed sensor: the rule, and the question MotoBat answers
+
+Industry's rule of thumb: **fixed sensors or gantries** for small, flat,
+identical parts at high rate; **robot-mounted sensors** for large 3D parts with
+occluded features and many variants. On car-body lines, systems from ZEISS
+(AIMax), Hexagon (360 SIMS) and Perceptron measure 150–300 features per body
+within a 60–90 s cycle.
+
+A module sits between the two cases. That makes it the right place to ask:
+
+> **Does a robot-mounted multi-view sensor find defects that a fixed line-scan
+> sensor misses, and at what cost in cycle time?**
+
+Measured as coverage (% of required surfaces observed), recall per defect
+class, and seconds per module, for Ranger3-on-conveyor vs HC10DT-multi-view.
+If the fixed sensor wins for some classes, that is still a result, and it is
+the question an automation engineer asks first.
+
+**Design principle:** *use the arm for coverage and the sensor for measurement.*
+Critical comparisons (e.g. the height of adjacent terminals) happen **within
+one capture**, so the arm's path accuracy never enters a 0.1 mm measurement.
+The arm decides *where* to look. The sensor frame does the metrology.
+
+### 3.7.7 What carries over
+
+**Carries over unchanged:** the scan simulator approach, ICP registration, the
+residual metric, the precision/recall harness, `motobat_interfaces`, the §9.9
+loop and its stability bound, the four-arm description, and the Gazebo
+control path.
+
+**Cell internals → future work with a battery-technology collaborator.**
+A specific hypothesis to take to her: **after each layer is placed, the
+anode's 90 µm edge should leave a step in the 20 µm separator laid over it.
+A profilometer might measure cathode-to-anode overhang *through* the
+separator.** If it works, it is a 3D alternative to today's 2D corner cameras.
+Testing it needs real separators and cells: whether the separator conforms,
+and how the foil and coating reflect the laser.
+
+**Carbon fibre → the follow-up generality project**, as the README originally
+planned.
+
+### 3.7.8 Corrections recorded so they are not re-made
+
+- *"CF defects are visible to a decent depth camera."* Wrong for gaps and
+  overlaps (a ~0.15 mm step against the ZED's ≳ 3 mm).
+- *"Isaac Sim cannot render 205 µm layers."* Imprecise. Any ray-cast sensor
+  returns geometry at profilometer precision. What a simulator cannot
+  reproduce is the optics: specular reflection, speckle, multi-bounce. Our own
+  ray-cast models in `defectgen/scan.py` *are* the sensor models.
+- *"We need an LJ-X8040."* Keyence's current table has no 8040. The 16 mm /
+  0.4 µm head is the **LJ-X8030**.
+
+### 3.7.9 Open items before results are claimed
+
+1. **Module geometry defaults.** Cell: VDA PHEV2 format, 148 × 91 × 26.5 mm.
+   Terminal size and height, busbar thickness, and cell-to-cell gap are
+   *assumed* until sourced.
+2. **Tolerances.** 0.1 mm adjacent-terminal height difference (MDPI
+   *Batteries* 6(3):47 via search; confirm from the paper). Cell placement,
+   busbar gap and weld seam limits: *to source*.
+3. **Cycle-time benchmark** for a module line: *to source*. Search found the
+   process sequence but no takt figure.
+4. **Reporting convention.** Measured characteristics (terminal height, cell
+   position) get a **Gage R&R / %GRR** in automotive MSA form, which is the
+   language automotive quality engineers use. Attribute defects get
+   precision/recall with confidence intervals.
+
+**Sources for this section:**
+[Keyence LJ-X8000 specs](https://www.keyence.com/products/measure/laser-2d/lj-x8000/specs/) ·
+[Zivid 2+ M60](https://www.zivid.com/zivid-2-plus-m60) ·
+[SICK Ranger3 datasheet](https://www.sick.com/media/pdf/7/47/947/dataSheet_V3DR3-60NE31111_1091560_en.pdf) ·
+[SICK midiCam2](https://www.sick.com/br/en/catalog/products/machine-vision-and-identification/machine-vision/midicam2/c/g541250) ·
+[SICK multiScan165S datasheet](https://www.sick.com/media/pdf/8/98/398/dataSheet_MULS1AAS-114322-multiScan165S_1143873_en.pdf) ·
+[SICK picoScan150 LOC datasheet](https://www.sick.com/media/pdf/1/71/471/dataSheet_PICS150-01000-LOC-Prime_1141396_en.pdf) ·
+[SICK multiScan136 datasheet](https://www.sick.com/media/pdf/2/32/032/dataSheet_MULS1AA-112211-multiScan136_1140133_en.pdf) ·
+[ZED 2i datasheet](https://www.mouser.com/datasheet/2/1520/StereoLabs_ZED_2i_Datasheet-3401402.pdf) ·
+[Basler — stacking QA, per-corner cameras](https://www.baslerweb.com/en/use-cases/stacking-battery-assembly/) ·
+[Optical measuring in laser-welded EV battery modules (MDPI Batteries 6(3):47)](https://www.mdpi.com/2313-0105/6/3/47) ·
+[LMI — 3D smart sensors for inline EV battery inspection](https://chargedevs.com/whitepapers/3d-smart-sensors-for-inline-ev-battery-inspection/) ·
+[ZEISS AIMax](https://www.zeiss.com/metrology/products/systems/process-control-and-inspection/car-body-solutions/aimax.html) ·
+[Robot-mounted gap & flush](https://metrology.news/inline-dual-sensor-automotive-gap-flush-robotic-inspection/) ·
+[VDA prismatic cell formats](https://www.batterydesign.net/vda-prismatic-cells/) ·
+[Prismatic module line process sequence](https://www.linkedin.com/pulse/prismatic-ev-lithium-battery-module-pack-assembly-line-sam-lau) ·
+[Electroimpact AFP inspection (CF comparison)](https://www.electroimpact.com/whitepapers/2017-01-2150.pdf)
+
+---
+
 ## 4A. ACTIVE WORK PLAN — RViz2 + Gazebo (no Isaac Sim)
  
 **This is what to work on now.** Everything here runs in 8 GB and none of it is
@@ -721,6 +969,12 @@ swapping Gazebo for Isaac Sim is a **hardware-interface change, not a rewrite**
 first de-risks Isaac Sim rather than delaying it.
  
 ### 4A.1 — GP4 with MoveIt2 in RViz (start here)
+
+> **Re-sequenced (15 Sep).** The GP4's job is busbar placement plus the
+> simulated weld pass (§4B). It comes **after** the HC10DT (§4A.2), which
+> carries the inspection contribution. The GP7 places cells. No OPW file ships
+> for the GP7 (verified), so derive its OPW parameters from the URDF joint
+> origins and check them against forward kinematics before trusting them.
  
 Goal: drag the interactive marker in RViz, hit Plan & Execute, watch the GP4
 follow.
@@ -793,6 +1047,15 @@ changes (`GazeboSimSystem` → `JointStateTopicSystem`, §4.2).
 One arm at a time. Gazebo with a single arm is comfortable in 8 GB.
  
 ### 4A.4 — Custom sensor flange for the HC10DT
+
+> **Redefined by §3.7.3 (15 Sep).** The wrist carries a **snapshot 3D camera
+> (Zivid 2+ M60 class) for coverage, a line profilometer (LJ-X8200 class) for
+> precision, and a 2D camera (midiCam2)**, about 3 kg with the flange. The
+> SICK lidars are not wrist sensors: microScan3 guards the cell, and the
+> others have no inspection role. The design questions become: occlusion
+> between the three fields of view, standoff compatibility (the snapshot
+> camera at ~60 cm, the profilometer at ~245 mm), and cable routing through
+> the wrist. The URDF-from-CAD warning below applies in full.
  
 The highest-value design work available right now, because it converts a
 Section 4 *assertion* into a verified result.
@@ -864,141 +1127,175 @@ genuinely novel engineering is.
 ---
  
 ## 4B. ACTIVE WORK PLAN — defect generation and detection (no simulator)
- 
-Runs entirely in numpy/Open3D on the current laptop. **Prototyped and measured:
-a 96-layer stack with defect injection plus a simulated profilometer sweep uses
-~10 MB and 0.23 s.** Nothing here is blocked by RAM, Gazebo, or Isaac Sim.
- 
-This is the project's actual contribution (Section 3 of the proposal). Building
-it first — against synthetic scans, before any simulator exists — means the
-detector is already validated when Isaac Sim arrives, and the simulator becomes
-a *rendering* problem rather than an algorithm problem.
- 
-### 4B.0 — A finding from the prototype: height maps do not work
- 
-While probing feasibility, the first detector measured **stack height** and was
-nearly blind to lateral misalignment: a 0.8 mm layer shift produced a −2.3 µm
-max-Z change and **zero** footprint change. Obvious in hindsight — shifting
-layers sideways does not change how tall the stack is.
- 
-Switching the metric to **lateral envelope deviation** produced a clean,
-monotonic signal:
- 
-| Layer shift | Scanned X-extent | Δ vs reference | Protruding points |
-|---|---|---|---|
-| 0.0 mm | 66.450 mm | +0 µm | 0 |
-| 0.2 mm | 66.650 mm | +200 µm | 3,840 |
-| 0.5 mm | 66.950 mm | +500 µm | 9,600 |
-| 0.8 mm | 67.250 mm | +800 µm | 15,360 |
-| 1.2 mm | 67.650 mm | +1200 µm | 23,040 |
-| 2.0 mm | 68.450 mm | +2000 µm | 38,400 |
- 
-*(24 layer-pairs, 66.5 × 48.0 mm footprint, 1.5 mm cathode inset, defect
-injected from layer 12 onward, 50 µm scan pitch.)*
- 
-**Two consequences, both load-bearing:**
- 
-1. **A top-down height map is insufficient for the primary defect class.**
-   Misalignment — the Nissan 26V188 fault mode and the project's main target —
-   must be detected by comparing the lateral envelope against reference
-   geometry. This is precisely what point-cloud-versus-mesh registration does,
-   and it sharpens the Section 1.2 argument for geometric inspection over
-   electrical test.
-2. **The scan window must extend beyond the nominal part envelope.** Material
-   that has moved outside the expected footprint is invisible to a scan
-   covering only the expected footprint. This is a hard sensor-placement
-   requirement and feeds directly into the flange design (§4A.4): FOV and
-   standoff must cover **part + tolerance band**, not just the part.
-Point 2 is why §4B should run before or alongside §4A.4 — it converts a flange
-design guess into a derived requirement.
- 
-### 4B.1 — Procedural stack generator
- 
-A parametric electrode stack, defects off by default. Realistic dimensions from
-the prismatic-cell literature cited in the proposal:
- 
+
+**Domain: battery module assembly line, per §3.7.** Runs entirely in numpy /
+trimesh / Open3D. No ROS, no simulator. The battery prototype showed the scale
+is trivial (96 layers plus a sweep: ~10 MB, 0.23 s). A 12-cell module is
+smaller still.
+
+This is the core of the contribution. Built first, against synthetic scans,
+the detector and the fixed-vs-arm comparison already work when the simulator
+arrives. The simulator's job is then motion, reachability and plumbing.
+
+**Design rules, decided 15 Sep:**
+
+1. **Mesh-native from line one.** The generator builds real, watertight 3D
+   solids (`trimesh`) and exports STL/PLY immediately. The same mesh is the
+   reference (defect-free seed) and the scan target, and Gazebo imports it
+   unchanged.
+2. **A narrow `Part` seam.** The generator returns `(mesh, labels)`. Scan,
+   detection and evaluation never learn which domain they are looking at.
+   Write only the module domain now.
+3. **Arm for coverage, sensor for metrology** (§3.7.6). Every critical
+   measurement is taken within a single capture.
+
+### 4B.0 — Prior findings
+
+The feasibility findings (height maps vs envelope, sensor roles,
+observability of cell internals) now live in **§3.7**.
+
+### 4B.1 — Procedural module generator
+
+Parametric module, defects off by default. Everything a variable:
+
 ```
-footprint        66.5 x 48.0 mm
-layer pairs      24 (anode / sep / cathode / sep)
-anode thickness  90 um
-cathode          75 um
-separator        20 um
-cathode inset    1.5 mm  (anode overhang, per Section 1.4)
-stack height     ~4.92 mm
+cell             VDA PHEV2 prismatic, 148 x 91 x 26.5 mm  (W x H x D)
+cells            12 in series, 1 row                      → ~318 mm + end plates
+cell gap         variable (compression pads)              — assumed, source it
+terminals        2 per cell on the cap, +/- distinguishable by geometry
+                 (size, height above cap — assumed, source it)
+busbars          flat strips joining adjacent terminals, thickness variable
+laser weld       seam geometry on each busbar–terminal joint (post-weld state)
+housing          end plates + side plates (+ optional adhesive bead on floor)
 ```
- 
-Everything a variable, nothing hard-coded — the generator is also the reference
-geometry source, so "known good" and "scanned part" come from one model.
- 
+
+Emitted states: **pre-busbar**, **pre-weld** (busbars placed) and
+**post-weld**, so each inspection point has its own ground truth. Per-feature
+ground truth covers every cell pose, terminal top plane, busbar pose and weld
+seam path. The labels are computed from these, never inferred back from the
+mesh.
+
 ### 4B.2 — Defect injection
- 
-One function per fault class from the Section 1.4 taxonomy, each with a
-severity parameter so datasets sweep rather than sample:
- 
-| Defect | Parameter | In scope |
-|---|---|---|
-| Electrode misalignment (transfer) | `shift_x`, `shift_y`, `from_layer` | **primary** — Nissan 26V188 |
-| Overhang violation | cathode inset per layer | **primary** |
-| Stack thickness / layer count | add, drop, or duplicate layers | **primary** |
-| Wrinkle / uneven pressure | sinusoidal Z perturbation | partial |
- 
-Every generated stack carries its ground-truth label — defect type, magnitude,
-affected layers. **That label set is what makes precision/recall measurable**,
-which Section 3.2 promises and cannot deliver without it.
- 
-### 4B.3 — Simulated scan
- 
-Convert stack geometry to a point cloud the way the Inspector's sensors would:
- 
-- Configurable scan pitch (50–200 µm) to match profilometer resolution
-- Gaussian sensor noise (~5 µm σ) so the detector is not tuned to clean data
-- Scan window sized to **part + tolerance band** (see §4B.0)
-- Optional occlusion and grazing-angle dropout for realism
-Output plain `.ply` / numpy arrays — the same format Isaac Sim's RTX Lidar will
-publish via `sensor_msgs/PointCloud2`. **When the simulator arrives, only the
-point-cloud source changes; the detector does not.**
- 
+
+One function per class, each with a severity parameter so datasets sweep
+rather than sample:
+
+| Defect | Parameters | Stage | Why it matters | Scope |
+|---|---|---|---|---|
+| Cell placement error | `dx, dy, dθ` per cell | pre-busbar | busbar fit, weld position; **the correction-loop target** | **primary** |
+| Terminal height / tilt | `dz`, tilt per cell | pre-busbar | **> 0.1 mm adjacent difference → weld flaw** | **primary** |
+| Missing cell | index | pre-busbar | — | primary |
+| Reversed polarity | index | pre-busbar | short circuit through the busbar | primary |
+| Busbar misplacement | `dx, dy, dθ` | pre-weld | weld lands off-joint | **primary** |
+| Busbar lift-off (gap) | gap height | pre-weld | air gap under the laser | **primary** |
+| Weld seam | missing / short / width deviation / spatter | post-weld | joint resistance, strength | primary |
+| Adhesive bead | break, width deviation | pre-cell | thermal path | secondary |
+| FOD | size, location | any | — | secondary |
+
+Every generated module carries its ground truth: class, magnitude, location
+and stage. **That label set is what makes precision/recall measurable.**
+
+### 4B.3 — Sensor models (these are the real sensor models)
+
+Per §3.7.8, fidelity lives here. The simulator will not improve on it. Three
+models, all ray-cast against the mesh (Open3D `RaycastingScene`):
+
+| Model | Stands for | Mount | Parameters pinned to |
+|---|---|---|---|
+| Fixed line-scan | Ranger3 + laser line | over the conveyor; the module moves under it | Ranger3 datasheet + chosen optics |
+| Snapshot 3D | Zivid 2+ M60 class | HC10DT wrist, stop-and-shoot | Zivid datasheet |
+| Line profilometer | LJ-X8200 class | HC10DT wrist, short sweeps | Keyence datasheet |
+
+For all three:
+
+- **Model both occlusions.** A point is returned only if the projector or laser
+  reaches it *and* the camera can see it. That is what produces real shadowing
+  beside busbars and terminals.
+- **Mandatory, not optional:** Gaussian noise, grazing-angle dropout,
+  specular dropout on bare aluminium and copper, and quantisation.
+- **Freeze the parameters before looking at any detection result.** Store their
+  hash in the dataset metadata.
+- Output: N×3 arrays / `.ply` in the sensor frame, plus the sensor pose. That
+  is the shape `sensor_msgs/PointCloud2` carries later.
+
+The 2D camera (midiCam2) is deferred. Polarity is detected from terminal
+geometry first; image rendering comes later, if it is needed at all.
+
 ### 4B.4 — Detection pipeline (Open3D)
- 
-1. Load scan, load reference geometry from the same generator
-2. Coarse align, then ICP refinement
-3. Envelope deviation per §4B.0 — not height
-4. Classify: defect type, magnitude, affected layers
-5. Emit a `DefectReport` (see §7 — define `motobat_msgs` alongside this)
-Runs in the Python 3.11 venv (`mb-venv`), not system Python.
- 
-### 4B.5 — Validation: the numbers the proposal needs
- 
-Generate a labelled dataset — a few hundred stacks across defect types and
-severities — and measure:
- 
-- **Precision / recall per defect class**, benchmarked against the 62.07 %
-  Hi-Pot-alternative recall and 93.82 % YOLOv4 accuracy cited in Section 1.2
-- **Minimum detectable defect** per class, versus the 0.5 mm positional error
-  Section 1.1 identifies as production-critical
-- **Detection latency**, against the 1.5–2.5 s/unit cycle time (Section 3.2)
-- **Sensitivity to scan pitch and noise** — which directly informs which
-  sensors the flange actually needs
-> These are real, defensible results produced without a simulator. If Isaac Sim
-> were to slip further, §4B alone still constitutes a substantive contribution.
- 
-### 4B.6 — How this meets the simulator later
- 
-Once Isaac Sim is running, the generator emits **USD/mesh** instead of only
-point clouds, so defective stacks are importable as scene geometry and the
-HC10DT scans them with RTX Lidar. The detector is unchanged — it was written
-against `PointCloud2`-shaped data from the start.
- 
-Gazebo is the intermediate step: import a generated stack as a mesh, mount a
-depth camera on the arm, and confirm the pipeline works on simulator-produced
-clouds before Isaac Sim's higher-fidelity sensors.
- 
-**Order of fidelity:** synthetic scan → Gazebo depth camera → Isaac Sim RTX
-Lidar. The detector is written once.
- 
+
+1. Coarse align: module pose from the fixture, or from the overhead camera
+2. ICP refinement against the reference module for that stage
+3. Per-feature measurement, each **within a single capture**: fit cell pose
+   (x, y, θ), fit terminal top planes → adjacent Δh and tilt, fit busbar
+   pose and gap, trace the weld seam
+4. Residual segmentation for missing parts and FOD
+5. Classify, measure, emit a `DefectReport` (§7)
+
+Runs in `mb-venv`, not system Python.
+
+### 4B.5 — Coverage and view selection (no kinematics yet)
+
+Define the **required inspection surfaces** per stage: terminal tops and
+edges, busbar edges, weld seams, cell-to-cell gaps. A surface element counts
+as covered when it gets ≥ *N* points at an incidence angle below θ_max, in a
+single capture.
+
+- **Fixed baseline:** coverage from the Ranger3 line-scan in one pass
+- **Arm:** candidate viewpoints on a hemisphere around the module, then greedy
+  set cover over the required surfaces, which yields a view sequence
+- Reachability, collision and motion time are added in Phase 2 with MoveIt.
+  Phase 1 establishes the coverage ceiling each approach can reach.
+
+### 4B.6 — Validation: the numbers the write-up needs
+
+Generate a labelled dataset with several seeds per (class × severity) cell,
+so every number has an error bar. Then measure:
+
+- **Precision / recall per defect class**, with confidence intervals (Wilson
+  or bootstrap)
+- **Gage R&R (%GRR)** for measured characteristics: terminal height, cell
+  position, busbar gap
+- **Minimum detectable defect per class** (the POD 50 % and 90 % points)
+- **Fixed vs arm:** coverage %, recall per class, captures per module. Cycle
+  time comes in Phase 2.
+- **Sensitivity** to noise, point spacing and standoff. This tells the flange
+  which sensor class is actually required.
+- **Detection latency** per capture and per module
+
+### 4B.7 — Correction loop, in numpy
+
+§9.9 needs no arm, so it runs here. *k* is the cell index. *e_k* is the
+measured placement error of cell *k*. The GP7 offsets the next cell by
+`u_{k+1} = −K·e_k` through a plant of gain *g* with placement noise and a
+**systematic drift** (gripper offset, fixture wear), which is why integral
+action matters. Deliverables:
+
+- **K-sweep:** convergence → critical damping → divergence, against the derived
+  `0 < K < 2/g`
+- **Open-loop vs closed-loop placement defect rate.** This is the headline
+  control result.
+- Terminal height cannot be corrected by placement. Its decision is
+  **reject / rework before the weld**, and that logic is part of the report.
+
+### 4B.8 — How this meets the simulator
+
+**Gazebo first.** Import module meshes at each stage. Model the snapshot
+camera as a depth camera and the profilometer as a narrow-fan `gpu_lidar`.
+Run the same detector on Gazebo-produced clouds. Be honest about what this
+proves: Gazebo returns the same geometry as our ray-caster. Its value is the
+ROS plumbing, the TF chain, reachability and real motion time.
+
+Isaac Sim is deferred, not cut (§4). It returns if Gazebo's rendering becomes
+the limiting factor.
+
 ---
- 
+
 ## 4. Isaac Sim milestone — HC10DT planned from RViz (after repair)
+
+> **Deferred, not cut (15 Sep).** Gazebo comes first for the whole line. Per
+> §3.7.8, sensor fidelity lives in `defectgen/scan.py`, not in the renderer,
+> so Isaac Sim returns only if Gazebo's rendering becomes the limiting factor.
+> This section stays valid for when it does.
  
 The target: open RViz, drag the MoveIt interactive marker to a pose, hit Plan &
 Execute, and watch the HC10DT move in Isaac Sim. This is the first real
@@ -1329,7 +1626,8 @@ simulation may be rejected outright by a YRC1000.
  
 ## 7. Roadmap after the Isaac Sim milestone
  
-*(§4A is the current work. This is what follows once Isaac Sim is running.)*
+*(Written before the 15 Sep scope change. Superseded by §3.7 and §4B. The
+sensor roles in item 1 are revised in §3.7.3.)*
  
 1. **Sensor array on the HC10DT** — SICK microScan3 / multiScan136 / Inspector83x,
    ZED 2i, mounted on the flange from §4A.4. RTX Lidar OmniGraph →
@@ -1574,7 +1872,7 @@ performed against features known to be unaffected.
  
 ### 9.8 Defect metric — envelope deviation
  
-From §4B.0, the empirical finding: height maps are blind to lateral
+From §3.7.2 (formerly §4B.0), the empirical finding: height maps are blind to lateral
 misalignment. The metric that works:
  
 ```
@@ -1587,10 +1885,34 @@ Two thresholds, both requiring justification in the writeup: **τ** from sensor
 noise (roughly 3σ, so ~15 µm for a 5 µm-σ profilometer) and **A_min** from the
 smallest defect that matters physically.
  
-Per-class specialisations:
- 
+Per-class specialisations. **Battery module (current scope, §4B)**, with every
+measurement taken within a single capture (§3.7.6):
+
 ```
-  Misalignment      Δextent = extent(scan) − extent(reference)      [§4B.0]
+  Cell placement     (Δx, Δy, Δθ) = fitted cell pose − nominal pose
+  Terminal height    Δh_i = z_i − z_{i+1}  between adjacent terminal top planes
+                     (fitted by least-squares planes); flag |Δh_i| > 0.1 mm
+  Terminal tilt      angle between fitted terminal plane normal and cap normal
+  Busbar gap         g = min distance, busbar underside → terminal top plane
+  Weld seam          continuity along the nominal path; width w(s) against spec
+  Missing / FOD      connected residual regions |r| > τ, area > A_min
+```
+
+**Coverage** (§4B.5): a required surface element *j* is covered when some single
+capture *c* returns ≥ *N* points on it with incidence angle below θ_max.
+
+```
+  Coverage = |{ j : ∃ c, n_{c,j} ≥ N and θ_{c,j} < θ_max }| / |required|
+```
+
+Measured characteristics are also reported as **%GRR** (Gage R&R, automotive
+MSA).
+
+*Cell-internal metrics (original; §3.7.4: the overhang metric needs the cathode
+edge, which an external scan cannot see):*
+
+```
+  Misalignment      Δextent = extent(scan) − extent(reference)      [§3.7.2]
   Overhang          w_over = min distance, cathode edge → anode edge
   Thickness         Δh = h_measured − N·(t_anode + t_cath + 2·t_sep)
 ```
@@ -1621,6 +1943,11 @@ With integral action across layers, if error accumulates systematically:
   u_{k+1} = −Kp·e_k − Ki · Σⱼ₌₀..k e_j
 ```
  
+*In the module line (§4B.7), "layer" means **cell**: e_k is the measured
+placement error of cell k, and u_{k+1} offsets the GP7's placement of the next
+cell. Measuring before the next placement is what makes the loop physically
+meaningful (§3.7.4).*
+
 **Stability condition.** This is a discrete-time loop indexed by layer, not
 time. With plant gain *g* (commanded offset → achieved offset), the error
 recursion is `e_{k+1} = (1 − gK)·e_k`, so convergence requires:
@@ -1664,6 +1991,22 @@ exactly §9.1–9.4 above.
   survey covering coarse-to-fine pipelines and where each method fails
 - **PCL tutorials** — even when using Open3D, the PCL docs explain the
   algorithms well
+### 10.3a Battery module assembly and inline 3D inspection — current scope
+
+- **MDPI *Batteries* 6(3):47, optical digital measuring in laser-welded EV
+  battery modules.** Pre- and post-weld measurement needs and tolerances,
+  including the 0.1 mm terminal height difference.
+- **LMI, *3D smart sensors for inline EV battery inspection*.** How
+  terminal height, gap and flush are measured on real module lines.
+- **ZEISS AIMax / Hexagon 360 SIMS.** The reference for robot-based inline 3D
+  inspection; read for how they split coverage from measurement.
+- **Zivid, Keyence LJ-X, SICK Ranger3 datasheets.** The parameters the sensor
+  models in §4B.3 are pinned to.
+- **ISO/TS 15066 and ISO 13849-1.** Collaborative-robot speed and separation
+  monitoring, and the performance levels behind the microScan3's role.
+- **AIAG MSA manual.** Gage R&R, the form automotive quality engineers expect
+  measurement results in.
+
 ### 10.3 Battery manufacturing — start here
  
 - **PEM RWTH Aachen & VDMA, *Production Process of a Lithium-Ion Battery Cell***
