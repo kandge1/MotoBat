@@ -941,12 +941,12 @@ planned.
 ### 3.7.9 Open items before results are claimed
 
 1. **Module geometry defaults.** Cell: VDA PHEV2 format, 148 × 91 × 26.5 mm.
-   Terminal spacing 66 mm and the 12-cell / ~3 kN module come from a
-   laser-vendor guide and batterydesign.net
-   ([VDA guide](https://www.huiyaolaser.com/vda-prismatic-cell-standard-ev1-ev2-dimensions-assembly-line-2026),
-   [VDA formats](https://www.batterydesign.net/vda-prismatic-cells/)). Confirm
-   against a manufacturer datasheet if one can be found. Terminal size and
-   height, busbar thickness, and cell-to-cell gap are *assumed* until sourced.
+   Now fully specified in [`module_spec.md`](module_spec.md): VDA 355
+   envelope, 3P4S, and a 1.5 mm Al busbar on a 4 mm Al terminal, all sourced.
+   The Huiyao Laser page is **unreliable**: it labels 148 × 91 × 26.5 as
+   "EV1", contradicting batterydesign.net. Its 66 mm terminal spacing is
+   discarded. Terminal spacing, pad size and vent are to be measured from
+   photos (module_spec §6).
 2. **Tolerances.** 0.1 mm adjacent-terminal height difference (MDPI
    *Batteries* 6(3):47 via search; confirm from the paper). Cell placement,
    busbar gap and weld seam limits: *to source*.
@@ -1176,15 +1176,16 @@ observability of cell internals) now live in **§3.7**.
 
 ### 4B.1 — Procedural module generator
 
-Parametric module, defects off by default. Everything a variable:
+Parametric module, defects off by default. Everything a variable. **The full
+part-by-part geometry, with each number tagged sourced / derived / assumed /
+measure, is in [`module_spec.md`](module_spec.md).** Summary:
 
 ```
 cell             VDA PHEV2 prismatic, 148 x 91 x 26.5 mm  (W x H x D)
-cells            12 in series, 1 row                      → ~318 mm + end plates
+module           VDA 355 envelope, 355 x 151 x 108 mm, 12 cells, 3P4S
 cell gap         variable (compression pads)              — assumed, source it
-terminals        2 per cell on the cap, 66 mm centre-to-centre (PHEV2),
-                 +/- distinguishable by geometry
-                 (size, height above cap — assumed, source it)
+terminals        laser-weld pads, ~4 mm thick, ~6 mm above cap (derived);
+                 spacing and pad size measured from photos (module_spec §6)
 can              aluminium, ~1.1 mm wall
 module preload   ~3 kN on the end plates for a 12-cell PHEV2 module
 busbars          flat strips joining adjacent terminals, thickness variable

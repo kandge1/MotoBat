@@ -16,9 +16,12 @@ Section references like §4B.1 point into `project_plan.md`.
 ## ▶ CURRENT TASK
 
 > **§4B.1 — Procedural battery-module generator, mesh-native.** Pure numpy +
-> trimesh, no ROS, no simulator. Twelve VDA PHEV2 prismatic cells
-> (148 × 91 × 26.5 mm), terminals with polarity told apart by geometry,
-> busbars, weld seams, and end and side plates. It emits three stages
+> trimesh, no ROS, no simulator. A VDA 355 module (355 × 151 × 108 mm):
+> twelve PHEV2 cells (148 × 91 × 26.5 mm) in 3P4S, laser-weld terminals,
+> busbars, weld seams, end and side plates, cooling plate, carrier, CMC and
+> cover. **Geometry reference: [`module_spec.md`](module_spec.md).** In
+> parallel: measure the terminal spacing, pad size and vent from photos in
+> Fusion (module_spec §6). It emits three stages
 > (pre-busbar, pre-weld, post-weld) as watertight solids with STL/PLY export.
 > The generator returns `(mesh, labels)`, and the same mesh is both the
 > reference and the scan target.
