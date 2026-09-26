@@ -662,7 +662,9 @@ Three, all reachable within the §3.5 timeline:
  
 **1. A negative result, already found.**
 Top-down height mapping is insufficient for lateral electrode misalignment —
-the primary defect class and the Nissan 26V188 fault mode. Measured in §3.7.2 (formerly §4B.0):
+the primary defect class. (This sentence originally also credited NHTSA
+26V188; that attribution was wrong — see §3.7.10.) Measured in §3.7.2
+(formerly §4B.0):
 a 0.8 mm layer shift produced a −2.3 µm max-Z change and **zero** footprint
 change, while lateral envelope deviation gave a clean monotonic signal
 (+200 µm at 0.2 mm shift, rising linearly to +2000 µm at 2.0 mm).
@@ -701,7 +703,8 @@ system is understood.
 The single highest-leverage hour in this project is spent on the README and
 results write-up, not on code. Structure it as a paper:
  
-1. **Problem** — pre-seal geometric inspection, grounded in NHTSA 26V188
+1. **Problem** — in-process geometric inspection before irreversible steps,
+   grounded in NHTSA 26V188 as read from the report itself (§3.7.10)
 2. **Method** — architecture, the maths from §9, the detection pipeline
 3. **Results** — the tables above, with plots
 4. **Limitations** — simulation-only, geometric defects only, single station
@@ -826,6 +829,28 @@ line profilometer for precision**, plus a 2D camera. That is about 3 kg with
 the flange, well inside the HC10DT's 10 kg. Four sensors on one wrist was
 never the right question. The right question is which sensor belongs *where*.
 
+**Which sensor makes which measurement.** Zivid 2+ M60 datasheet figures:
+point precision 80 µm (1σ), local planarity precision 100 µm, global planarity
+trueness < 0.10 mm, spatial resolution 0.24 mm at 600 mm. A terminal pad is
+~21.5 × 17.5 mm, so a plane fitted to it averages hundreds of points and the
+*local* comparison of two adjacent pads (27 mm apart, same capture) is far
+better than the single-point figure. But the 0.1 mm tolerance is the same size
+as the camera's global trueness, so the snapshot camera **screens** and the
+profilometer (1 µm) **adjudicates**:
+
+| Measurement | Fixed line-scan | Wrist snapshot 3D | Wrist profilometer |
+|---|---|---|---|
+| Terminal height, adjacent Δh (0.1 mm) | **primary** — flat, top-down, part moves under it | screen only | **adjudicates** marginal cases |
+| Cell pose (x, y, θ) | **primary** | yes | no (too narrow) |
+| Busbar pose and lift-off gap | **primary** | yes | yes |
+| Weld seam width, undercut, spatter | partial (top-down only) | screen | **primary** |
+| Cell-to-cell gaps, side-plate welds, module flanks | **blind** | **primary** | with reorientation |
+| Busbar side walls, shadowed terminal edges | **blind** | **primary** | with reorientation |
+| Polarity, markings, discolouration | no | partial | no (2D camera's job) |
+
+This table *is* the fixed-vs-arm hypothesis (§3.7.6) written as predictions.
+§4B.6 measures whether it holds.
+
 ### 3.7.4 Finding C — cell-internal defects cannot be seen from outside
 
 This is why the project does not inspect the inside of a cell. It is about
@@ -834,7 +859,7 @@ geometry, not sensor specs.
 From the outside in, a stacked cell is separator (largest), then anode, then
 cathode (inset 1.5 mm). A cathode that shifts 0.8 mm still sits **inside** the
 anode footprint. The overhang margin drops from 1.5 mm to 0.7 mm. That is the
-overhang violation behind the Nissan 26V188 fault mode, and **no external
+overhang violation, and **no external
 surface scan can observe it**.
 
 **Even the best profilometer does not help.** An LJ-X8020 viewing the stack's
@@ -956,6 +981,44 @@ planned.
    position) get a **Gage R&R / %GRR** in automotive MSA form, which is the
    language automotive quality engineers use. Attribute defects get
    precision/recall with confidence intervals.
+
+### 3.7.10 NHTSA 26V188, read from the report — what it actually says
+
+Earlier drafts described 26V188 as an electrode-overhang violation. **That was
+wrong**, and it mattered, because the real cause is closer to this project than
+the invented one. From the Part 573 report
+([PDF](https://static.nhtsa.gov/odi/rcl/2026/RCLRPT-26V188-8548.pdf)), filed
+31 Mar 2026 by Nissan North America, 51 MY2026 LEAF vehicles, 78 kWh packs,
+cells by Automotive Energy Supply Corporation:
+
+> "damage to the edges of the battery cell cathode material in the subject
+> batteries may have occurred during the supplier's manufacturing process. If a
+> cathode with a torn edge is assembled into a battery cell, the damaged portion
+> of the cathode may fold onto itself, potentially resulting in an internal short
+> circuit within the battery module."
+
+And the mechanism, from the chronology:
+
+> "after the cathode is cut to shape, a **misalignment during transfer** to a
+> subsequent production step may allow the cathode to **contact manufacturing
+> equipment**, which can result in a **torn cathode edge**."
+
+Three things follow, and all three support the project's thesis:
+
+1. **The root cause is a handling misalignment, not an electrochemical fault.**
+   A part was placed inaccurately, touched equipment, and was damaged. That is
+   precisely the failure mode a placement-correction loop (§9.9) addresses.
+2. **The defect is optically observable at the moment it is created** — a torn
+   edge on a flat, exposed cathode sheet, before stacking. Unlike the buried
+   overhang of §3.7.4, this one *can* be inspected geometrically.
+3. **It was caught electrically, at end of line, after two thermal events.** The
+   remedy included revising the end-of-line Charge-Discharge Check. That is the
+   "inspect after the irreversible step" pattern this project argues against.
+
+**Consequence for scope.** The station that would have prevented 26V188 is
+cathode-sheet transfer in the cell plant, not module assembly. The module line
+stays the primary build (§3.7.5), and §4B.9 adds a small, honest experiment
+that replicates the recall mechanism itself in the same numpy pipeline.
 
 **Sources for this section:**
 [Keyence LJ-X8000 specs](https://www.keyence.com/products/measure/laser-2d/lj-x8000/specs/) ·
@@ -1204,17 +1267,51 @@ mesh.
 One function per class, each with a severity parameter so datasets sweep
 rather than sample:
 
-| Defect | Parameters | Stage | Why it matters | Scope |
-|---|---|---|---|---|
-| Cell placement error | `dx, dy, dθ` per cell | pre-busbar | busbar fit, weld position; **the correction-loop target** | **primary** |
-| Terminal height / tilt | `dz`, tilt per cell | pre-busbar | **> 0.1 mm adjacent difference → weld flaw** | **primary** |
-| Missing cell | index | pre-busbar | — | primary |
-| Reversed polarity | index | pre-busbar | short circuit through the busbar | primary |
-| Busbar misplacement | `dx, dy, dθ` | pre-weld | weld lands off-joint | **primary** |
-| Busbar lift-off (gap) | gap height | pre-weld | air gap under the laser | **primary** |
-| Weld seam | missing / short / width deviation / spatter | post-weld | joint resistance, strength | primary |
-| Adhesive bead | break, width deviation | pre-cell | thermal path | secondary |
-| FOD | size, location | any | — | secondary |
+| # | Defect | Parameters | Stage | Optically detectable? | Scope |
+|---|---|---|---|---|---|
+| 1 | Cell placement error | `dx, dy, dθ` per cell | pre-busbar | yes | **primary — loop target** |
+| 2 | Terminal height / tilt | `dz`, tilt | pre-busbar | yes | **primary — 0.1 mm** |
+| 3 | Missing cell | index | pre-busbar | yes | primary |
+| 4 | Reversed polarity | index | pre-busbar | yes (geometry + 2D) | primary |
+| 5 | Busbar misplacement | `dx, dy, dθ` | pre-weld | yes | **primary** |
+| 6 | Busbar lift-off gap | gap height | pre-weld | yes | **primary** |
+| 7 | Weld seam geometry | see weld table below | post-weld | partly | **primary** |
+| 8 | Spatter, landed | count, size, location | post-weld | yes | primary |
+| 9 | Handling damage (dent / scratch / torn edge) | depth, area, location | any | yes | **primary — the 26V188 mechanism, §4B.9** |
+| 10 | Gap-filler bead | break length, width deviation | pre-cell | yes | secondary |
+| 11 | Compression pad missing / misplaced | index, offset | pre-busbar | yes | secondary |
+| 12 | Insulation film tear / wrinkle | size, location | any | yes (geometry + 2D) | secondary |
+| 13 | FOD (metal particle, debris) | size, location | any | yes if on a visible surface | secondary |
+| 14 | Carrier not fully seated | `dz`, tilt | pre-weld | yes | secondary |
+| 15 | Cover misalignment | `dx, dy, dθ` | final | yes | secondary |
+| 16 | Weld porosity / cracks / lack of fusion | — | post-weld | **no — internal** | **out of scope, stated as a limitation** |
+| 17 | Weld penetration depth | — | during weld | **no — needs inline OCT/ICI** | **out of scope, stated as a limitation** |
+
+**Weld seam sub-classes (defect 7).** Surface geometry only, which is what a
+profilometer can see:
+
+| Sub-class | Measured as |
+|---|---|
+| Missing or short weld | seam length vs nominal |
+| Seam deviation from the joint | lateral offset of seam centreline from the busbar–terminal edge |
+| Width deviation | w(s) along the seam vs spec band |
+| Excess reinforcement / sagging | bead height vs parent surface |
+| Undercut | groove depth at the seam toe |
+| Burn-through / hole | through-thickness void |
+| Humping | periodic bead height variation |
+| Crater at the end | depression at seam termination |
+
+Acceptance limits come from **ISO 13919-2** (laser-beam welds in aluminium and
+copper), which defines quality levels B, C and D with dimensional limits per
+imperfection. Using a published standard rather than invented thresholds is
+what makes the pass/fail defensible.
+
+**On defects 16 and 17.** Porosity, cracks and lack of fusion are internal;
+penetration depth is measurable only *during* welding, by inline coherent
+imaging / OCT (e.g. IPG's LDD-700) looking down the beam axis. No post-weld
+surface scan reaches them. Saying so plainly — and citing what industry
+actually uses instead — is stronger than pretending the profilometer covers
+the whole taxonomy.
 
 Every generated module carries its ground truth: class, magnitude, location
 and stage. **That label set is what makes precision/recall measurable.**
@@ -1311,6 +1408,32 @@ ROS plumbing, the TF chain, reachability and real motion time.
 
 Isaac Sim is deferred, not cut (§4). It returns if Gazebo's rendering becomes
 the limiting factor.
+
+### 4B.9 — The 26V188 replication experiment
+
+A small, self-contained experiment that targets the actual recall mechanism
+(§3.7.10), reusing the same pipeline. It is not a second robot cell.
+
+**Setup.** A flat cathode sheet, cut to shape, is transferred into a nest. A
+placement error `e_k` is drawn per sheet. **If |e_k| exceeds the nest
+clearance, the sheet contacts the tooling and acquires a torn edge** — damage
+depth and length scaling with the overtravel. That coupling is the point: the
+defect is *caused by* the placement error, exactly as the report describes.
+
+**Measured:**
+
+- Detection of the torn edge by a fixed line-scan model (edge straightness and
+  burr height along the cut edge) — precision/recall vs tear size
+- **Defect rate vs loop gain K**: open loop, then the §9.9 correction applied to
+  the next sheet. The claim is that closing the placement loop reduces the
+  *damage* rate, not merely the placement error.
+- Comparison against the recall's real detection path: an end-of-line
+  electrical check that caught it only after cells were built, and after two
+  thermal events.
+
+This gives the write-up a documented, recent, safety-critical case with an
+official root cause, and shows the method addressing that cause rather than a
+hypothetical one.
 
 ---
 

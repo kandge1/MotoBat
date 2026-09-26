@@ -174,7 +174,107 @@ Reject/rework decisions happen at 6 and 8, **before the irreversible weld at 9**
 
 ---
 
-## 9. Still open
+## 9. What to model in CAD, and at what fidelity
+
+**The rule: model a thing if it can be hit, can block a sensor's view, or gets
+measured. Everything else is a box, or is left out.**
+
+Occlusion is the project's central question (§3.7.6 of the plan), so anything
+that casts a shadow into a sensor's field of view has to exist in the scene —
+but only as a shape, not as detail.
+
+| Thing | Visual mesh | Collision | Notes |
+|---|---|---|---|
+| Module parts (§3–5) | your CAD, decimated | convex boxes | the only parts that get *measured* |
+| Fixture / nest / pallet | simple CAD | boxes | defines where the part is; sets the 26V188-style contact damage |
+| Conveyor | boxes | boxes | a frame, two side rails, a belt surface |
+| Sensor bodies (Zivid, profilometer, Ranger3, cameras) | **box at datasheet outline** | same box | must exist: they occlude and they collide |
+| Sensor bridge over the conveyor | boxes / extrusion profile | boxes | a fixed frame, **not** a motorised gantry |
+| Robot grippers and weld head | simple CAD | convex hull | these occlude the arm's own view — the classic reason a view plan fails |
+| End stops, clamps, cabling | omit or box | boxes | only where they intrude on a view |
+| Robots | vendor URDF meshes | vendor collision | already in `src/_vendor` |
+
+**Do not** put CAD-quality meshes in collision geometry. MoveIt and Gazebo both
+want convex primitives; a raw STEP tessellation there will make planning crawl.
+Keep triangle counts modest in visual meshes too (decimate in Blender or
+`trimesh.simplify`), since the ray-cast sensor models in `defectgen` intersect
+against them.
+
+**Sensors: model the body, not the optics.** A floating frame would render
+faster, but it would silently remove the housing that blocks a view, and
+"where can the sensor actually see from" is the result we are after. A box with
+the datasheet's outline and the optical origin placed correctly is enough.
+
+---
+
+## 10. Fixture, datums and pick features
+
+This is the part that makes the line read as real automation rather than a
+render. Worth modelling properly, and it is cheap.
+
+**Locating scheme — 3-2-1 on the pallet.** Three pads define the primary plane
+(Z, tip, tilt), two dowel pins define X/Y and rotation (one round pin, one
+diamond pin so the part is not over-constrained), and one stop defines the last
+translation. Every measurement in `defectgen` is expressed in the **pallet
+datum frame**, not the world, which mirrors how a real cell reports results.
+
+**Pick features to add to your parts:**
+
+| Part | Pick method | Feature to model |
+|---|---|---|
+| Prismatic cell | vacuum on the 148 × 91 face, backed up by side clamping | flat, unobstructed pad area; keep the label/vent clear |
+| Compression pad | vacuum, small pads | flat top face |
+| End plate | vacuum or magnetic (if steel) | flat outer face |
+| Side plate | vacuum, two pads | flat outer face |
+| Busbar carrier (CCS) | vacuum on the frame's flat ribs + 2 locating pin holes | **2 pin holes**, Ø 6 (A), so the gripper repeats |
+| Cover | vacuum, four pads | flat top |
+| Cooling plate | vacuum | flat top, clear of the bead path |
+
+Also define, per part, a **TCP offset** (where the gripper's tool point sits
+relative to the part origin) and a **grip approach direction**. Both go in the
+same YAML as the geometry, so the generator, MoveIt and your CAD agree.
+
+**Why this matters beyond realism:** the nest clearance and the pin engagement
+set the threshold at which a mis-placed part *touches tooling* — the mechanism
+behind NHTSA 26V188 (plan §3.7.10, experiment §4B.9). Without a modelled nest,
+that coupling has no geometry behind it.
+
+---
+
+## 11. Line layout: stations, conveyor, and why the part must move
+
+**The module rides a pallet on a conveyor and indexes between stations.**
+This is not decoration:
+
+1. **The fixed line-scan baseline needs relative motion.** A Ranger3 builds a
+   3D surface from successive profiles; with a stationary part it measures one
+   line. Without a conveyor there is no fixed-sensor baseline, and the central
+   comparison of §3.7.6 cannot be run.
+2. **Cycle time needs a takt.** "Seconds per module" only means something if
+   transport is in the budget alongside capture and motion.
+3. It is how real prismatic module lines work.
+
+**Simulate it cheaply.** Do not attempt friction-driven belt physics in Gazebo —
+it is a well-known time sink. Attach the pallet to a **prismatic joint** along
+the line and drive it with a position controller, or script the pose directly.
+The belt surface is visual only.
+
+**Station layout (matches the assembly sequence in §8):**
+
+| Station | Contents | Sensors |
+|---|---|---|
+| S1 Cell placing | GP7, cell magazine/tray, pallet nest | overhead 2D camera (cell locating) |
+| S2 Line-scan gate | a fixed bridge the pallet passes under | **Ranger3 + laser** (the baseline) |
+| S3 Inspection cell | HC10DT, pallet stop, safety scanner | wrist: snapshot 3D + profilometer + 2D |
+| S4 Busbar + weld | GP4, carrier magazine, weld head | (weld monitoring out of scope, §4B.2) |
+| S5 Final | cover placing, EOL test stub | 2D camera |
+
+S2 and S3 inspect the **same** module at the same stage, which is what makes
+the fixed-vs-arm comparison a controlled experiment rather than two anecdotes.
+
+---
+
+## 12. Still open
 
 - Terminal spacing, pad size, vent size: **measure (§6)**.
 - The 0.1 mm adjacent-terminal tolerance: confirm from MDPI *Batteries* 6(3):47 directly.
