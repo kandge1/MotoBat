@@ -13,7 +13,8 @@ Every dimension is tagged:
 | **A** | Assumed — a reasonable engineering value; replace when a better source appears |
 | **M** | Measure — take it from a real-cell photo in Fusion (method in §6) |
 
-Units: millimetres. Last updated 26 Sep 2026.
+Units: millimetres. Last updated 22 Oct 2026 — wall height and busbar corrections, see §5
+"Corrections made 22 Oct 2026".
 
 ---
 
@@ -131,18 +132,20 @@ every tilt drag the contact point sideways, injecting two defects where one was 
 
 | Part | Key dimensions | Tag | Notes |
 |---|---|---|---|
-| **End plates** (×2, finned — "passive cooling structure") | **148 W × 91 H × 10.25 T** incl. fins | D | see stack-up below. Shallow for fins — budget ≈ 4 base + 6 fin. Structurally ample: 3 kN over the 148 × 91 face is only 0.22 MPa. |
+| **End plates** (×2, finned — "passive cooling structure") | **148 W × 101.5 H × 10.25 T** incl. fins | D | Raised from 91.5 on 22 Oct 2026 (see corrections below): top at z = 105.5, 3 mm above the busbar tops, so the cover closes over everything. Shallow for fins — budget ≈ 4 base + 6 fin. Structurally ample: 3 kN over the 148 × 101.5 face is only 0.20 MPa. |
 | **Interface pads** (×11, between cells) | 148 × 91, **1.5** thick | A | Set by the 28.0 cell pitch (below). Also the better number on its own merits: real modules use compressible foam pads of 1–2 mm+ to take cell swelling; the earlier 0.8 was pure arithmetic. |
-| **Side plates** (×2) | **355 L × 91 H × 1.5 T** | D | lap over the *outboard* faces of the end plates; welded after compression |
+| **Side plates** (×2) | **355 L × 101.5 H × 1.5 T** | D | Raised from 91.5 on 22 Oct 2026, same height as the end plates. Lap over the *outboard* faces of the end plates; welded after compression. |
 | **Bottom cooling plate** ("liquid cooling structure") | 355 × 151, ≈ 3–5 thick, internal channels | A | channels matter only visually; the thermal gap-filler bead on top of it is a defect class |
 | **Thermal gap filler bead** | bead width ≈ 5–8, height ≈ 2 before compression | A | adhesive-bead defect target. **Not a CAD part — generated geometry (§7).** |
 | **Busbar carrier** ("support structure", CCS frame) | **333 L × 146.5 W × 6.5 H**, windows over each terminal | A | as built, 27 Sep 2026. Terminals span 14.25 → 340.75, so 333 centred covers them with ≈ 3 spare each end. The 146.5 leaves 0.75 clearance to each side plate — tight on purpose: that is the threshold at which a mis-placed carrier contacts a side plate, which §10 wants geometry behind. Industry supplies carrier + busbars + sense wiring as **one subassembly** (cell contacting system). |
 | **Busbars** | 1060 Al, **1.5 thick** | S | weld study above |
 | — busbar pattern (3P4S) | end busbars span 3 terminals; series busbars span 6 terminals (3 + 3) | D | computed from config by the generator |
-| — busbar width | ≈ 20–25 (≥ pad width) | A | |
-| **Laser weld seams** | one seam per busbar–terminal joint; pattern: closed loop or 2–3 linear stitches ≈ 10–15 long, ≈ 1–1.5 wide | A | post-weld inspection target |
+| — busbar width | **11** | A | as built, 22 Oct 2026. Replaces "≈ 20–25 (≥ pad width)", which had no basis: a busbar narrower than the 22 mm pad sits entirely on aluminium, so the weld cannot miss. Leaves ≈ 5.5 of bare pad each side, which the step-8 gap check uses as a direct height step. |
+| — busbar lengths | short (end, 3 terminals) **63.5**; long (series, 6 terminals) **147.5** | A | as built, 22 Oct 2026 |
+| — electrical sizing | not modelled | — | 11 × 1.5 is thin for 150 A real current. Deliberate: this spec serves welds and scans, not current capacity. |
+| **Laser weld seams** | one seam per busbar–terminal joint; pattern: closed loop or 2–3 linear stitches ≈ 10–15 long, ≈ 1–1.5 wide | A | post-weld inspection target. Lap (penetration) weld: beam fires down through the busbar into the terminal. On an 11 mm busbar, linear stitches run along X. |
 | **Cell module controller** (PCB) | **333 × 45 × 1.6** + components | A | as built, 27 Sep 2026. Runs the carrier's length, seated in the central channel between the two busbar rows at ±57.5, so no clash. Sense tabs to each busbar. |
-| **Cover** | 355 × 151, ≈ 1.5–2 | A | plastic or Al |
+| **Cover** | 355 × 151 × **2** | A | plastic or Al. Rests on the wall tops: z 105.5 → 107.5. |
 
 ### Stack-up — nothing adds to the envelope
 
@@ -153,7 +156,7 @@ plates and side plates sit **on top of it**, not beside it.
 |---|---|---|
 | X (355) | 10.25 + (12 × 26.5) + (11 × 1.5) + 10.25 | **355.0** ✓ |
 | Y (151) | 1.5 + 148 + 1.5 | **151.0** ✓ |
-| Z (108) | cooling 4, cage/cells 4 → 95, then terminals, carrier, cover | **108** ✓ |
+| Z (108) | cooling 4 + walls 101.5 + cover 2 = 107.5 (cells, terminals, carrier, busbars, CMC all inside the walls) | **107.5** ✓, 0.5 spare |
 
 ### Cell pitch = 28.0 — the number the carrier is built to
 
@@ -178,6 +181,31 @@ single busbar*, and no placement of that busbar puts all six pads under it.
 twice over: 151 wide collides with the side plates that already claim 1.5 mm per side, and 108
 tall overflows the envelope once it sits on the 4 mm cooling plate. Now **148 × 91**, making the
 end plates and side plates a *cell-height cage* consistent with the side plates' ~90.
+*(Height superseded 22 Oct 2026 — see below. The width fix stands.)*
+
+**Corrections made 22 Oct 2026.**
+
+1. **Walls too short for the cover.** The cell-height cage (91.5 as built) left everything above
+   the cell cap outside it: cell 91 + terminal 6 + busbar 1.5 = **98.5** above the cell bottom,
+   7 mm proud of the walls, so a flat cover resting on the walls could not close. End plates and
+   side plates are now **101.5** tall (+10), giving **3 mm relief** above the busbar tops. The
+   envelope still closes: 4 + 101.5 + 2 = 107.5 of 108. No X/Y clash: the carrier and CMC
+   (333 long) fit the 334.5 between end plates, and the busbar rows (Y ≤ ±63 at 11 wide) sit
+   inside the side plates at ±74.
+2. **Busbar width.** "≈ 20–25 (≥ pad width)" replaced by the as-built **11**, with the as-built
+   lengths 63.5 / 147.5. The "≥ pad width" rule had the weld-placement argument backwards.
+   Electrical sizing is explicitly out of scope.
+
+**Consequence for inspection — taller walls are occluders.** This follows from §9's rule and
+belongs in the view-plan results:
+
+| Target | Horizontal distance to side-plate inner face | Wall height above target | Blocked from outboard below |
+|---|---|---|---|
+| Terminal pad outer edge (Y = ±68.5, z = 101) | 5.5 | 4.5 | **≈ 39° elevation** |
+| Busbar outer edge / exposed pad (Y = ±63) | 11 | 4.5 above pad, 3 above busbar | ≈ 22° (pad), ≈ 15° (busbar) |
+
+So step 6 views of the outer terminal edges must come from within ≈ 50° of vertical, or from
+inboard. The step-8 gap check is barely affected.
 
 **Why the side plates are outermost in Y.** They lap over the end plates' outboard faces, which
 is the only arrangement where the step-5 weld is physically makeable — two parts cannot be welded
@@ -213,10 +241,20 @@ carrier 4 + …`) implied the carrier stacked above the terminals and under-budg
 | 95 → 101 | terminals (6) — through the carrier windows |
 | 95 → 101.5 | carrier (6.5) — overlaps the terminal zone |
 | 101 → 102.5 | busbars (1.5), on the terminal tops |
-| 102.5 → 104.1 | CMC (1.6) |
-| 106 → 108 | cover (2) |
+| 102.5 → 104.1 | CMC (1.6) — bare board; see caveat |
+| 4 → 105.5 | end plates and side plates (101.5), on the cooling plate |
+| 105.5 → 107.5 | cover (2), resting on the wall tops |
 
-Closes at **108** with ≈ 1.9 mm headroom. Consistent with the VDA 355 envelope.
+Closes at **107.5**, 0.5 under the 108 envelope. Clearance under the cover: 3.0 above the busbars,
+**1.4 above the bare CMC board**.
+
+> **CMC caveat.** The CMC, not the busbars, is now the tallest part under the cover. Its
+> components (connectors, capacitors, thermistor headers) must stay under **≈ 1.4 mm**, or the
+> cover needs a local recess over the CMC. Raising the walls further breaks the VDA 355 height.
+> Open item — §12.
+
+*(Before 22 Oct 2026 this table listed the cover at 106 → 108 with ≈ 1.9 headroom, but had no
+row for the walls; with 91.5 walls, the cover had nothing at that height to rest on.)*
 
 ---
 
@@ -438,8 +476,11 @@ the fixed-vs-arm comparison a controlled experiment rather than two anecdotes.
   outer-edge-to-outer-edge, giving c-to-c ≈ 93, was wrong: it was argued from a symmetry that in
   fact holds under *both* readings, so it decided nothing.)
 - The 0.1 mm adjacent-terminal tolerance: confirm from MDPI *Batteries* 6(3):47 directly.
-- Busbar width, weld seam pattern, carrier and CMC dimensions: assumed, refine from photos of real
-  VDA 355 modules if useful.
+- ~~Wall height vs cover~~ — **resolved 22 Oct 2026**: end and side plates raised to 101.5 (§5).
+- ~~Busbar width~~ — **resolved 22 Oct 2026**: as-built 11 × 1.5, lengths 63.5 / 147.5 (§5).
+- CMC component height: must stay under ≈ 1.4 mm, or recess the cover locally (§5 height check).
+- Weld seam pattern, carrier and CMC dimensions: assumed, refine from photos of real VDA 355
+  modules if useful.
 - A module-line cycle time for the fixed-vs-arm comparison: not found yet.
 
 **Not found anywhere free:** a CAD model of a PHEV2 cell or VDA 355 module. batterydesign.net's
