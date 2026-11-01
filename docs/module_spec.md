@@ -364,33 +364,36 @@ uses its own box primitives … so code does not wait on CAD." The parts now exi
 
 ### The CAD as exported — 1 Nov 2026
 
-Committed under `src/battery_description/models/`: **STEP + STL for 10 distinct components**,
-plus **STEP + STL of the assembled reference module** (`PHEV Pack`). 22 files.
+**Filenames are the body names above.** STEP archives live in `cad/module/`; the STL the
+generator and Gazebo load lives in `src/motobat_description/meshes/module/`. One name per body,
+so a filename, a Fusion User Parameter prefix and a generator config key all read the same —
+that is the one-source-of-truth rule applied to paths.
 
-| §7 body (12 listed) | CAD file | Status |
+| §7 body | File stem | |
 |---|---|---|
-| cell can | `VDA PHEV2 Prismatic Cell` | ⚠️ see below |
-| terminal (+) | — | ⚠️ inside the cell file |
-| terminal (−) | — | ⚠️ inside the cell file |
-| pad | `Interface pads` | ✓ |
-| end plate | `End Plate` | ✓ |
-| side plate | `Side plate` | ✓ |
-| cooling plate | `Bottom cooling plate` | ✓ |
-| carrier | `Support Structure` | ✓ |
-| busbar (end) | `Bus bar short` | ✓ |
-| busbar (series) | `Bus bar long` | ✓ |
-| CMC | `PCB` | ✓ |
-| cover | `Cover` | ✓ |
+| cell can | `cell_can` | ✓ |
+| terminal (+) | `terminal_pos` | ✓ |
+| terminal (−) | `terminal_neg` | ✓ |
+| pad | `interface_pad` | ✓ |
+| end plate | `end_plate` | ✓ |
+| side plate | `side_plate` | ✓ |
+| cooling plate | `cooling_plate` | ✓ |
+| carrier | `busbar_carrier` | ✓ |
+| busbar (end) | `busbar_end` | ✓ |
+| busbar (series) | `busbar_series` | ✓ |
+| CMC | `cmc` | ✓ |
+| cover | `cover` | ✓ |
 
-**10 files vs 12 bodies: the two terminals are the difference, and the STEP is fine but the STL
-is not.** `VDA PHEV2 Prismatic Cell.step` carries **three solids** (can + both terminals) under a
-single STEP product, so the geometry exists and is separable. But the exported
-`VDA PHEV2 Prismatic Cell.stl` is a **binary STL — one merged mesh with no body boundaries**.
+Two extra files are references, not bodies: **`cell_assembled`** (can + both terminals as one
+mesh) and **`module_assembled`** (the whole module). Useful for renders and for eyeballing a fit
+check. **The generator must not load `cell_assembled`** — it loads `cell_can` plus the two
+terminals, because that is what lets a terminal be transformed independently.
 
-That matters because §4 depends on it: the terminal-height and terminal-tilt defect classes are
-injected by transforming the terminal *relative to* the can. From a single merged mesh they are
-ungeneratable. **Action: export `terminal_pos` and `terminal_neg` as their own STLs**, origin at
-the centre of each seating face per §4. The STEP needs no change.
+*(Resolved 1 Nov 2026 — the first export had the two terminals merged into a single
+`VDA PHEV2 Prismatic Cell` file. Its STEP held three solids, so the geometry was fine, but the
+STL was one binary mesh with no body boundaries, which made the terminal-height and terminal-tilt
+defect classes ungeneratable: both are injected by transforming the terminal relative to the can.
+Re-exported as three files.)*
 
 The assembly file names parts individually (`Front End Plate v6` / `Back End Plate v6`,
 `Left Side plate v2` / `Right Side plate v2`, three `Bus bar long`, two `Bus bar short`), which

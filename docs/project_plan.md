@@ -111,8 +111,8 @@ against the equations in §9 — write the maths down before writing the code.
 | Defect generation + detection | **Current work**: §4B, module generator, mesh-native |
 | MoveIt configs | HC10DT first (§4A.2), then GP7 cell placement, then GP4 busbars |
 | Sensor flange | Snapshot 3D + line profilometer; 2D camera only if task 1.11 requires it (§3.7.3, revised 28 Oct 2026) |
-| **Battery module CAD** | **Exported 1 Nov 2026** — 10 components + assembled reference, STEP + STL, `src/battery_description/models/` (`module_spec.md` §7) |
-| **Inspector mount CAD** | **Started early** — `HC10 Flange V0.0`, carries the Zivid + FOV volume (§4A.4). Task 2.3 is ahead of sequence. |
+| **Battery module CAD** | **Complete 1 Nov 2026** — all 12 bodies of `module_spec.md` §7, plus two assembled references. STEP in `cad/module/`, STL in `src/motobat_description/meshes/module/` |
+| **Inspector mount CAD** | **Started early** — `inspector_flange`, carrying the Zivid 2+ M60 and the Keyence LJ-X8200 (§4A.4). Task 2.3 is ahead of sequence. |
 | Isaac Sim | Deferred, not cut: Gazebo first (§4) |
 | Memory upgrade | Optional, deferred past 1 Oct — §1.0, §4.0b |
  
@@ -1205,8 +1205,8 @@ changes (`GazeboSimSystem` → `JointStateTopicSystem`, §4.2).
 One arm at a time. Gazebo with a single arm is comfortable in 8 GB.
 
 **Loading the module meshes (added 1 Nov 2026).** The battery CAD now exists
-(`src/battery_description/models/`, see `module_spec.md` §7), so task 2.6 can
-load it rather than box primitives. Three things to get right:
+(`src/motobat_description/meshes/module/`, see `module_spec.md` §7), so task
+2.6 can load it rather than box primitives. Three things to get right:
 
 - **Gazebo cannot load STEP.** It loads STL / OBJ / DAE / glTF. STEP is the
   archive format only.
@@ -1283,24 +1283,54 @@ frames", which the §3.7.3 revision supersedes)*:
 
 #### Mount CAD as built — 1 Nov 2026
 
-`src/motobat_description/models/HC10_Inspector/HC10 Flange V0.0.{step,stl}`.
-STEP products: `HC10 Flange V0.0` (top level), `Mount v3` (the plate),
-`Zivid 2 Plus M60 with FOV v1`, and `AS_108261` — **an unidentified vendor
-part number; confirm what it is before the payload sum.** The mount therefore
-carries the Zivid for certain. No midiCam2 is present, which matches the
-28 Oct decision; if one is ever added, keep it and record its status as
-"pending task 1.11" rather than deleting it.
+`cad/inspector/inspector_flange.step` and
+`src/motobat_description/meshes/inspector/inspector_flange.stl`.
 
-**The Zivid STEP includes its FOV volume.** Keep that as a separate component
-and **exclude it from both collision and visual meshes**, or MoveIt treats the
-view cone as a solid and every scan pose "collides". The FOV apex marks the
-optical origin, which becomes the URDF `<origin>`.
+| STEP product | What it is |
+|---|---|
+| `HC10 Flange V0.0` | top-level assembly |
+| `Mount v3` | the adapter plate — **AL-5052** |
+| `Zivid 2 Plus M60 with FOV v1` | Zivid 2+ M60 |
+| `AS_108261` | **Keyence LJ-X8200** (confirmed 1 Nov 2026) |
 
-> **Size warning.** These two files are **69 MB (STEP) and 99 MB (STL)** and
-> are already committed raw. The STL is within a hair of GitHub's 100 MB hard
-> limit. Move them to **Git LFS**, or decimate the STL — a sensor body only
-> needs to be a datasheet-outline box (`module_spec.md` §9), and the ray-cast
-> sensor models intersect against these triangles.
+No midiCam2, which matches the 28 Oct decision. If one is ever added, keep it
+and record its status as "pending task 1.11" rather than deleting it.
+
+**There is no FOV geometry in the file**, despite the product name — that is
+just Zivid's download filename. The view cone will be generated in code for
+TF2 / RViz visualisation, which is the better approach anyway: it can follow
+the datasheet's 300–1100 mm working range instead of being frozen at one
+distance. **If an FOV solid is ever imported, exclude it from both collision
+and visual meshes**, or MoveIt treats the cone as solid and every scan pose
+"collides".
+
+**Payload — resolved 1 Nov 2026:**
+
+| Item | Mass | Tag |
+|---|---|---|
+| Zivid 2+ M60 | 1.0 kg | S (datasheet) |
+| Keyence LJ-X8200 head | 1.2 kg | S |
+| `Mount v3` (AL-5052) | from CAD | — |
+| Cabling + flange hardware | ≈ 0.3–0.5 | A |
+| **Total** | **≈ 2.5–3.0 kg** of the HC10DT's 10 kg | D |
+
+The old "≈ 3 kg" estimate survives for different reasons: dropping the
+midiCam2 freed roughly what the Keyence head costs over what was assumed.
+
+> **Take the sensor masses from the datasheets, not from the CAD.** The camera
+> bodies are placeholder shells; whatever material they carry in Fusion is
+> meaningless. Read `Mount v3`'s mass in isolation and add the two datasheet
+> figures. Note also that the **LJ-X8000A controller is not on the arm** and
+> must not be added — but the head-to-controller cable routes through the
+> wrist, which is one of the open design questions above.
+
+> **Size note.** The STL is **99 MB** and the STEP 69 MB, both committed raw;
+> the STL is just under GitHub's 100 MB hard limit. Accepted for now
+> (1 Nov 2026) — the detail is wanted and §9 only requires *collision*
+> geometry to be simple, not visuals. Revisit on **performance**, not on the
+> limit: if RViz or Gazebo turns sluggish, or `defectgen` ray-casting is slow,
+> this file is the first suspect, since the sensor models intersect against
+> every triangle in it.
 
 #### HC10DT tool-flange interface
 
@@ -1310,21 +1340,28 @@ it into the robot. The 5th hole is a **Ø6 H7 locating (dowel) hole** that
 fixes rotation; a centring diameter (spigot/recess) locates concentrically,
 and the bolts only clamp.
 
-**The pattern differs between DT and DTP, and this is unresolved.** The
-proposal names the **HC10DTP**, but the URDF is `hc10dt`.
+**It is the DT pattern — resolved 1 Nov 2026 by measurement.** The proposal
+names the **HC10DTP**, but the URDF is `hc10dt`, and the measurement agrees
+with the URDF: the proposal was wrong.
 
 | Variant | Pattern | Tag |
 |---|---|---|
-| **HC10DTP** | **ISO 9409-1-50-4-M6**: 4 × M6 on a **50 mm** pitch circle, Ø6 H7 pin hole 5 deep, ø31.5 centring diameter | S — SMC JMHZ2-X7400B gripper catalogue |
-| **HC10 / HC10DT** | The same catalogue lists no ISO designation. Schmalz sells an ISO 9409-1 flange set for the HC10DT with a **63 mm** pitch circle and M6 threads. | **A — unconfirmed.** Confirm from Yaskawa's HC10DT(P) manual drawing. |
+| HC10DTP | **ISO 9409-1-50-4-M6**: 4 × M6 on a **50 mm** pitch circle, Ø6 H7 pin hole 5 deep, ø31.5 centring diameter | S — SMC JMHZ2-X7400B gripper catalogue |
+| **HC10 / HC10DT ← this one** | **63 mm** pitch circle, M6 threads, Ø6 H7 pin hole. Most likely **ISO 9409-1-63-4-M6**. | **S — measured 1 Nov 2026**; the 63 mm figure also matches Schmalz's ISO 9409-1 flange set for the HC10DT |
 
-**Quick check:** measure opposite hole centres on the URDF or vendor mesh.
-≈ 50 → DTP pattern; ≈ 63 → DT.
+**How it was settled.** Opposite hole centres *are* the pitch circle diameter,
+and they measure **63 mm** — 13 mm larger than the DTP's 50. The other two
+measurements confirm the thread but do not discriminate: the 5 mm holes are
+the M6 tapping drill, and the 6 mm keying hole is the Ø6 H7 dowel. Both
+variants share those. **Only the PCD separates them.**
 
-Adapter plate (if DTP): 4 × Ø6.6 counterbored clearance holes on PCD 50; Ø6 H7
-hole with a Ø6 m6 dowel pin; ø31.5 centring feature. Screw length = plate
-thickness + ≈ 6–9 mm engagement, short of the tapped depth. Take depth and
-torque from the manual.
+Adapter plate: 4 × Ø6.6 counterbored clearance holes on **PCD 63**; Ø6 H7 hole
+with a Ø6 m6 dowel pin. Screw length = plate thickness + ≈ 6–9 mm engagement,
+short of the tapped depth. Take depth and torque from the manual.
+
+> **The ø31.5 centring diameter does not carry over.** That figure is from the
+> SMC **DTP** spec and is unverified for the DT. Tag **A** until confirmed
+> from Yaskawa's HC10DT manual drawing.
 
 **In simulation** the plate is a fixed joint to `s3_tool0`. Bolts and pins are
 not simulated. Model holes as plain cylinders and **never model threads** —

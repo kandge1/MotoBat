@@ -27,16 +27,17 @@ suite revised (28 Oct).*
 > reference and the scan target.
 >
 > **The CAD now exists (1 Nov 2026), so 1.1 loads real meshes, not box
-> primitives.** 10 components + an assembled reference, STEP + STL, in
-> `src/battery_description/models/`. `module_spec.md` §7 used to say "until
-> the Fusion parts exist, the generator uses its own box primitives" — that
-> condition is met.
+> primitives.** All 12 bodies of `module_spec.md` §7 plus two assembled
+> references: STL in `src/motobat_description/meshes/module/`, STEP archives
+> in `cad/module/`. Filenames are the §7 body names. `module_spec.md` §7 used
+> to say "until the Fusion parts exist, the generator uses its own box
+> primitives" — that condition is met.
 >
-> **One blocker inside that:** the cell STL is a single merged mesh, so
-> terminal (+) and terminal (−) are not separately addressable and the
-> terminal-height / terminal-tilt defects of task 1.2 cannot be injected.
-> Re-export the two terminals as their own STLs first (`module_spec.md` §7).
-> The STEP already holds them as separate solids.
+> **Load `cell_can` + `terminal_pos` + `terminal_neg`, never
+> `cell_assembled`.** The assembled cell is a single merged mesh and exists
+> only for renders; from it, the terminal-height and terminal-tilt defects of
+> task 1.2 cannot be injected, because both work by transforming a terminal
+> relative to its can.
 >
 > *(Superseded 26 Sep 2026: this task used to add "in parallel, measure the
 > terminal spacing, pad size and vent from photos in Fusion". The vendor
@@ -149,7 +150,7 @@ from the MDPI paper itself.
 |---|---|---|---|
 | 2.1 | HC10DT MoveIt config — **KDL, not OPW** | 4A.2 | `joint_5_b` offset 162 mm in Y; wrist axes do not intersect. No OPW file exists. Do not hunt for one. |
 | 2.2 | `ros2_control` + `joint_trajectory_controller`, HC10DT in Gazebo | 4A.3 | |
-| 2.3 | Flange: snapshot 3D + profilometer (**+ 2D camera only if 1.11 requires it**), poses as variables | 4A.4, 3.7.3 | **◀ IN PROGRESS, ahead of sequence.** A basic mount with HC10DT flange alignment features exists (`HC10 Flange V0.0`), carrying the Zivid + its FOV volume. Keep it **parametric** (sensor poses as Fusion User Parameters) so 1.11's result can swap the sensor class without a remodel. Check FOV occlusion and standoff compatibility. **Payload: recompute** (the old ~3 kg included a midiCam2; Keyence head mass TBD). Exclude the Zivid FOV volume from collision *and* visual, or every scan pose "collides". |
+| 2.3 | Flange: snapshot 3D + profilometer (**+ 2D camera only if 1.11 requires it**), poses as variables | 4A.4, 3.7.3 | **◀ IN PROGRESS, ahead of sequence.** `inspector_flange` exists, with HC10DT flange alignment features, carrying the Zivid 2+ M60 and the Keyence LJ-X8200 on an AL-5052 plate. Keep it **parametric** (sensor poses as Fusion User Parameters) so 1.11's result can swap the sensor class without a remodel. Check FOV occlusion and standoff compatibility. **Payload ≈ 2.5–3.0 kg of 10** (Zivid 1.0 + Keyence 1.2 + plate + cabling) — take sensor masses from datasheets, not from the CAD shells. Flange is the **DT** pattern, 63 mm PCD (§4A.4). |
 | 2.4 | `inspector_flange.xacro` — flange + sensor frames on `s3_tool0` | 4A.4 | derive origins from CAD **numerically**; a 2° eyeball error corrupts every registration downstream and will look like an algorithm bug |
 | 2.5 | Reachable view plan: Phase 1 viewpoints filtered by IK and collision, ordered to minimise motion | 4B.5 | the arm earns its place here. Must account for: **two different standoffs** (Zivid ≈ 600 mm nominal, 300–1100; LJ-X8200 ≈ 245 mm) implying separate poses per sensor; the **≈ 39° wall-occlusion limit** on outer terminal edges (`module_spec.md` §5); and housing-to-housing occlusion. **Needs 2.1 first** — scan poses cannot be checked for reach or collision without the HC10DT MoveIt config. |
 | 2.6 | Module meshes in Gazebo; depth camera + narrow-fan `gpu_lidar` as the sensors; fixed line-scan station alongside | 4B.8, 4A.3 | The CAD exists, so this loads real meshes. **Gazebo cannot load STEP** (STL/OBJ/DAE/glTF only), and **STL has no units while Gazebo assumes metres** — every mesh tag needs `<scale>0.001 0.001 0.001</scale>` or the module is 1000× too large. |

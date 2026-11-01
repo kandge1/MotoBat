@@ -149,25 +149,49 @@ The rule above is about *generated* data. CAD is the opposite: it is hand-author
 source that nothing can regenerate, so STEP and STL **are** committed and are
 deliberately absent from `.gitignore`.
 
-| Location | Contents |
-|---|---|
-| `src/battery_description/models/` | 10 module components + the assembled `PHEV Pack` reference, STEP + STL (22 files) |
-| `src/motobat_description/models/HC10_Inspector/` | `HC10 Flange V0.0` — inspector sensor mount, STEP + STL |
+**STEP is archive, STL is runtime, and they live apart.** Nothing loads STEP at
+run time — Gazebo reads STL / OBJ / DAE / glTF only — so STEP sits outside
+`src/` and the ROS package ships only what is actually read.
 
-**Two things to resolve here.**
+```
+cad/                                 STEP archives — source, committed, not shipped
+  module/                            15 × .step  (12 bodies + 2 assembled references)
+  inspector/                         inspector_flange.step
+src/
+  motobat_description/
+    meshes/
+      module/                        15 × .stl
+      inspector/                     inspector_flange.stl
+```
 
-1. **`src/battery_description/` breaks §3.3's prefix rule** and is not yet a
-   package — it holds only `models/`, with no `package.xml`. Under the rule
-   "every package gets the `motobat_` prefix", this should become
-   `motobat_battery_description`, or the meshes should move under
-   `motobat_description/models/module/`. Deferred to the user: renaming a
-   committed path is their call, not a docs change.
-2. **The mount files are too large to sit in git raw**: `HC10 Flange V0.0.stl`
-   is **99 MB** and the `.step` is **69 MB**, against GitHub's 100 MB hard
-   limit. Move both to **Git LFS**, or decimate the STL — a sensor body only
-   needs to be a datasheet-outline box (`module_spec.md` §9), and `defectgen`'s
-   ray-cast sensor models intersect against every one of those triangles. The
-   battery meshes are fine: the largest is 0.8 MB.
+**Filenames are the body names from `module_spec.md` §7** — `cell_can`,
+`terminal_pos`, `terminal_neg`, `interface_pad`, `end_plate`, `side_plate`,
+`cooling_plate`, `busbar_carrier`, `busbar_end`, `busbar_series`, `cmc`,
+`cover`, plus `cell_assembled` and `module_assembled` as references. A
+filename, a Fusion User Parameter prefix and a generator config key therefore
+all read the same, which is §7's one-source-of-truth rule applied to paths.
+The earlier names had spaces (`Bus bar long.stl`), which are awkward in URDF,
+SDF and shell paths.
+
+*(Restructured 1 Nov 2026. Previously `src/battery_description/models/` and
+`src/motobat_description/models/HC10_Inspector/`. The former was not a package
+at all — no `package.xml` — and broke §3.3's prefix rule. Folding the meshes
+into `motobat_description` clears that without creating a second package that
+would hold nothing but geometry, which §3.7 warns against. `models/` also
+means Gazebo SDF model directories; `meshes/` is the ROS convention.)*
+
+**One open item.** `inspector_flange.stl` is **99 MB** and its `.step` 69 MB,
+against GitHub's 100 MB hard limit. Accepted for now — the detail is wanted,
+and §9 only requires *collision* geometry to be simple, not visuals. Revisit
+on **performance** rather than on the limit: `defectgen`'s ray-cast sensor
+models intersect against every triangle in it. The battery meshes are fine;
+the largest is 0.8 MB.
+
+**A note for `defectgen`.** It lives outside `src/` and must not import ROS
+(§2). Reading meshes from `src/motobat_description/meshes/` is only a file
+path, so it creates no ROS dependency — but it does mean `defectgen` reaches
+into `src/`, slightly against the grain of why it sits outside. Accepted as
+the lesser evil over duplicating the meshes.
 
 ---
 

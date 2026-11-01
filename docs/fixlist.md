@@ -11,7 +11,7 @@ date (`~~item~~ — **done 5 Nov 2026**`) rather than deleting it, per the house
 Section references like §4A.4 point into `project_plan.md`; §7 and §12 point into
 `module_spec.md`.
 
-*Last updated: 1 Nov 2026*
+*Last updated: 1 Nov 2026 — A, B and C closed in one pass; only D remains.*
 
 ---
 
@@ -22,134 +22,100 @@ Section references like §4A.4 point into `project_plan.md`; §7 and §12 point 
 | What is `AS_108261` in the mount STEP? | **Keyence LJ-X8200.** The mount carries Zivid 2+ M60, LJ-X8200 and `Mount v3`. No midiCam2, which matches the 28 Oct decision. |
 | LJ-X8200 head mass | **1200 g** (S — user). This was the missing figure blocking the payload sum. |
 | midiCam2 on the wrist | Future version only, if the Zivid's 2D proves insufficient. Gated on task 1.11. |
-| Flange pattern | **DT, not DTP** — see §C2 below. |
+| Flange pattern | **DT, not DTP** — 63 mm PCD, measured. See C2. |
+| Is the Zivid FOV volume in the CAD? | **No.** The product name `Zivid 2 Plus M60 with FOV v1` is just Zivid's download filename. The cone will be generated in code for TF2 / RViz. |
+| `Mount v3` material | **AL-5052.** |
 
 ---
 
-## A. CAD re-exports
+## A. CAD re-exports — ✅ closed 1 Nov 2026
 
-- [ ] **A1 — Export `terminal_pos` and `terminal_neg` as separate STLs.** Origin at the centre of
-      each terminal's seating face (§4), so a height defect is a pure +Z translation and a tilt is
-      a pure rotation about the real pivot.
-      **This blocks task 1.2.** The STEP is already correct — `VDA PHEV2 Prismatic Cell.step`
-      holds three solids (can + both terminals). But the exported STL is binary and single-mesh,
-      so a loader sees one rigid cell with no terminal to move. Terminal-height and terminal-tilt
-      defects are injected by transforming the terminal *relative to* the can, so from a merged
-      mesh those two classes cannot be generated at all. This is a re-export, not a remodel.
+- [x] ~~**A1 — Export `terminal_pos` and `terminal_neg` as separate STLs.**~~ — **done
+      1 Nov 2026.** Exported as `cell_can`, `terminal_pos`, `terminal_neg` in both STEP and STL,
+      one solid each, correctly named products. This completes §7's 12-body list and unblocks the
+      terminal-height and terminal-tilt defect classes in task 1.2.
+      **Standing rule that came out of it:** the generator loads `cell_can` + the two terminals,
+      **never** `cell_assembled` — the assembled cell is a single merged mesh with no terminal to
+      transform, and exists only for renders.
 
-- [ ] **A2 — Decimate `HC10 Flange V0.0.stl`.** It is **99 MB**, against GitHub's 100 MB hard
-      limit; the `.step` is 69 MB. Both are already committed raw.
-      Prefer decimation over Git LFS: LFS hides the size, decimation removes it. §9 says a sensor
-      body only needs a box at the datasheet outline, and `defectgen`'s ray-cast sensor models
-      intersect against every triangle in these meshes. Small is correct here, not a compromise.
+- [x] ~~**A2 — Decimate `inspector_flange.stl`.**~~ — **deferred by decision, 1 Nov 2026.** The
+      detail is wanted and the file is under the 100 MB limit. Note that §9 only requires
+      *collision* geometry to be simple, not visuals, so the detailed mesh and a cheap collision
+      proxy can coexist. **Revisit on performance, not on the limit:** if RViz or Gazebo turns
+      sluggish, or `defectgen` ray-casting is slow, this file is the first suspect, since the
+      sensor models intersect against every triangle in it.
 
-- [ ] **A3 — Keep the Zivid FOV volume as its own component, excluded from both collision and
-      visual meshes.** Otherwise MoveIt treats the view cone as a solid and every scan pose
-      "collides". The FOV apex marks the optical origin, which becomes the URDF `<origin>`.
+- [x] ~~**A3 — Exclude the Zivid FOV volume from collision and visual.**~~ — **not applicable,
+      1 Nov 2026.** There is no FOV geometry in the file. Generating it in code is the better
+      approach regardless: it can follow the datasheet's 300–1100 mm working range instead of
+      being frozen at one distance. The warning stays recorded in §4A.4 in case an FOV solid is
+      ever imported.
 
-- [ ] **A4 — Confirm `Mount v3`'s material before trusting its mass.** The Fusion document rule is
-      **Steel**; if the plate is aluminium the figure will be roughly 3× too high. Blocks the
-      payload total in C3.
-
----
-
-## B. Repository structure
-
-- [ ] **B1 — `src/battery_description/` is not a package and breaks the prefix rule.** It holds
-      only `models/`, with no `package.xml`, and `project_structure.md` §3.3 requires the
-      `motobat_` prefix on every package. Resolve by folding the meshes into
-      `motobat_description` (recommended, see §E) rather than creating a second package that
-      would contain nothing but geometry — §3.7 says packages are created when they are written.
-
-- [ ] **B2 — Rename `models/` to `meshes/`.** `models/` means Gazebo SDF model directories;
-      `meshes/` is the ROS convention for geometry consumed by URDF.
-
-- [ ] **B3 — Decide whether STEP ships inside the ROS package.** Nothing loads STEP at runtime —
-      Gazebo reads STL / OBJ / DAE / glTF only. See §E for the recommendation.
+- [x] ~~**A4 — Confirm `Mount v3`'s material.**~~ — **done 1 Nov 2026, AL-5052.**
+      **Correction carried into §4A.4:** do **not** set the camera bodies to a material and read a
+      total assembly mass. They are placeholder shells; a hollow plastic Zivid weighs nothing like
+      a real one. Read `Mount v3`'s mass **in isolation** and add the datasheet figures
+      (Zivid 1.0 kg, Keyence 1.2 kg). The LJ-X8000A controller is not on the arm and must not be
+      added — though its cable routes through the wrist, which is an open §4A.4 design question.
 
 ---
 
-## C. Documentation corrections
+## B. Repository structure — ✅ closed 1 Nov 2026
 
-These follow from the answers in §0 and are not yet written into the docs.
+- [x] ~~**B1 — `src/battery_description/` is not a package and breaks the prefix rule.**~~ —
+      **done.** The directory is gone; its contents folded into `motobat_description`. This avoids
+      creating a second package that would hold nothing but geometry, which §3.7 warns against.
+- [x] ~~**B2 — Rename `models/` to `meshes/`.**~~ — **done.**
+- [x] ~~**B3 — Decide whether STEP ships inside the ROS package.**~~ — **done: it does not.**
+      STEP lives in `cad/` at the repo root, so the package ships only what Gazebo and MoveIt
+      actually read.
 
-- [ ] **C1 — §4A.4:** replace "`AS_108261` — an unidentified vendor part number" with the Keyence
-      LJ-X8200, and drop the instruction to confirm it before the payload sum.
+Also done in the same pass: **every file renamed to its §7 body name** (`Bus bar long.stl` →
+`busbar_series.stl`, and so on). Spaces in paths are awkward in URDF, SDF and shell, and matching
+§7 means a filename, a Fusion User Parameter prefix and a generator config key all read the same.
+All moves were made with rename detection intact, so file history follows.
 
-- [ ] **C2 — §4A.4: the flange is DT, and the current text says the question is open.**
-      Opposite hole centres *are* the pitch circle diameter, so the measured **63 mm is a 63 mm
-      PCD** — the Schmalz HC10DT figure. The DTP is ISO 9409-1-**50**-4-M6, a 50 mm PCD, 13 mm
-      smaller. The 5 mm holes (M6 tapping drill) and the 6 mm keying hole (Ø6 H7 dowel) are common
-      to both variants and do not discriminate; **only the PCD does.**
-      This agrees with the URDF being `hc10dt`, so the proposal naming the HC10DTP was the error.
-      Three consequences to write in:
-      - Designation is most likely **ISO 9409-1-63-4-M6** (S — measured, 1 Nov 2026).
-      - Adapter plate clearance holes go on **PCD 63**, not 50.
-      - The **ø31.5 centring diameter is unverified** — it came from the SMC DTP spec and does not
-        carry over. Confirm from Yaskawa's HC10DT manual drawing. Tag **A** until then.
-
-- [ ] **C3 — §4A.4 and `status_update.md` task 2.3: write the payload sum with its working.**
-
-      | Item | Mass |
-      |---|---|
-      | Zivid 2+ M60 | 1.0 kg (S) |
-      | LJ-X8200 head | 1.2 kg (S) |
-      | `Mount v3` | from Fusion — gated on A4 |
-      | Cabling + flange hardware | ≈ 0.3–0.5 kg (A) |
-      | **Total** | **≈ 2.5–3.0 kg** against the HC10DT's 10 kg |
-
-      Note that the old "≈ 3 kg" estimate survives for different reasons: dropping the midiCam2
-      freed roughly what the Keyence head costs over what was assumed. Two caveats to record: the
-      **LJ-X8000A controller is not on the arm** and must not be added; but the head-to-controller
-      cable routes through the wrist, which is already an open §4A.4 design question.
-
-- [ ] **C4 —** remove "Keyence head mass TBD" wherever it appears (§4A.4, `status_update.md` 2.3).
-
----
-
-## D. Still genuinely open
-
-Not fixes — these need a source or a measurement before results are claimed (§3.7.9).
-
-- [ ] CMC components must stay under **≈ 1.4 mm**, or the cover needs a local recess over the CMC.
-      Raising the walls further breaks the VDA 355 height. (`module_spec.md` §5 height check)
-- [ ] Confirm the **0.1 mm adjacent-terminal tolerance** from MDPI *Batteries* 6(3):47 directly.
-- [ ] A **module-line cycle time** for the fixed-vs-arm comparison. Not found yet.
-- [ ] `Mount v3` mass — gated on A4.
-
----
-
-## E. Target layout
-
-Written in the style of `project_structure.md` §3.7.
+Resulting layout — see `project_structure.md` §2 for the reasoning:
 
 ```
-cad/                                 STEP archives — source, committed, not shipped
-  module/                            11 × .step  (10 components + PHEV Pack reference)
-  inspector/                         HC10 Flange V0.0.step
-
+cad/
+  module/            15 × .step   (12 bodies + cell_assembled + module_assembled)
+  inspector/         inspector_flange.step
 src/
   motobat_description/
     meshes/
-      module/                        12 × .stl  (10 exported + the two new terminals, A1)
-      inspector/                     decimated mount .stl (A2)
-    models/                          retire — fold into meshes/ (B2)
-    urdf/
-      inspector_flange.xacro         flange + 2 sensor frames on s3_tool0
+      module/        15 × .stl
+      inspector/     inspector_flange.stl
 ```
 
-**Why one `motobat_description` rather than a new `motobat_battery_description`.** The package
-already exists, already holds the flange, and already satisfies the prefix rule. A second package
-containing nothing but meshes would trip §3.7's "packages are created when they are written, not
-in advance". If the module geometry later grows its own URDF and launch files, split it then.
+---
 
-**Why STEP sits outside `src/`.** Nothing loads it at runtime, so keeping it in `cad/` means the
-ROS package ships only what Gazebo and MoveIt actually read. STEP stays committed as source, per
-the rule now in `project_structure.md` §2 — CAD is hand-authored and cannot be regenerated, which
-is the opposite of the `data/` case.
+## C. Documentation corrections — ✅ closed 1 Nov 2026
 
-**The one thing to check before adopting this.** `defectgen` lives outside `src/` and must not
-import ROS (§2 of `project_structure.md`). Reading meshes from `src/motobat_description/meshes/`
-is only a file path, so it creates no ROS dependency — but it does mean `defectgen` reaches into
-`src/`, slightly against the grain of why it sits outside. The alternative is `meshes/` at the
-repo root, with the package copying or symlinking at build time. The path is the lesser evil.
+- [x] ~~C1 — §4A.4: `AS_108261` → Keyence LJ-X8200~~
+- [x] ~~C2 — §4A.4: flange is **DT**, 63 mm PCD, ISO 9409-1-63-4-M6; adapter clearance holes on
+      PCD 63~~ — **done.** How it was settled, recorded for the write-up: opposite hole centres
+      *are* the pitch circle diameter, and they measure 63 mm against the DTP's 50. The 5 mm holes
+      (M6 tapping drill) and 6 mm keying hole (Ø6 H7 dowel) are common to both variants and do not
+      discriminate — only the PCD does. This agrees with the URDF being `hc10dt`, so the proposal
+      naming the HC10DTP was the error. **One item moved to D: the ø31.5 centring diameter.**
+- [x] ~~C3 — payload sum with working~~ — **done**, ≈ 2.5–3.0 kg of 10.
+- [x] ~~C4 — remove "Keyence head mass TBD"~~ — **done.**
+
+---
+
+## D. Still open
+
+Not fixes — these need a source or a measurement before results are claimed (§3.7.9).
+
+- [ ] **`Mount v3` mass.** Read it in isolation now that the material is AL-5052, and close out
+      the payload total in §4A.4.
+- [ ] **The ø31.5 centring diameter is unverified for the DT.** It came from the SMC **DTP**
+      spec and does not carry over. Confirm from Yaskawa's HC10DT manual drawing; tagged **A**
+      until then.
+- [ ] **CMC component height** must stay under **≈ 1.4 mm**, or the cover needs a local recess
+      over the CMC. Raising the walls further breaks the VDA 355 height.
+      (`module_spec.md` §5 height check)
+- [ ] Confirm the **0.1 mm adjacent-terminal tolerance** from MDPI *Batteries* 6(3):47 directly.
+- [ ] A **module-line cycle time** for the fixed-vs-arm comparison. Not found yet.
+- [ ] *(Watch, not a task)* `inspector_flange.stl` at 99 MB — revisit if performance suffers (A2).
