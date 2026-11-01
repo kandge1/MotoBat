@@ -91,12 +91,23 @@ specifications support (full analysis: `docs/project_plan.md` §3.7.3).
 |---|---|---|
 | HC10DT wrist | Structured-light snapshot 3D camera (Zivid 2+ M60 class) | Coverage: stop-and-shoot views of the whole module |
 | HC10DT wrist | Laser line profilometer (Keyence LJ-X8200 class) | Precision: two adjacent terminals in one profile, µm-level height |
-| HC10DT wrist | 2D camera (SICK midiCam2) | Polarity, weld appearance |
 | Over the conveyor | 3D laser-triangulation camera (SICK Ranger3) | The fixed-sensor baseline |
-| Overhead, Station 1 | 2D camera (SICK midiCam2) | Locates cells for the GP7 pick |
+| Overhead, Stations 1 and 5 | 2D camera (SICK midiCam2) | Locates cells for the GP7 pick; final visual |
 | Cell perimeter | Safety laser scanner (SICK microScan3) | Speed-and-separation monitoring for the collaborative Inspector |
 
 All sensors are simulated, with parameters pinned to their datasheets.
+
+**No dedicated 2D camera on the wrist (revised 28 Oct 2026).** The Zivid 2+ M60 already captures
+5 MP colour 2D registered pixel-for-pixel to its own point cloud, which covers polarity and weld
+discolouration without a second camera to calibrate against. A wrist midiCam2 is added only if
+the minimum-detectable-defect study shows that ≈ 0.12–0.23 mm/px misses weld spatter — making it
+a measured requirement rather than an assumption.
+
+**Known limitation — specular aluminium.** Terminals, busbars and weld seams are all bright
+aluminium, which reflects a laser away from the camera and causes real dropout. This is the
+largest sim-to-real gap in the project. The sensor models include incidence-angle- and
+material-dependent dropout for it; the residual difference from real hardware is not yet
+quantified.
 
 ---
 

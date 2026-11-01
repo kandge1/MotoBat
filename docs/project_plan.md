@@ -110,7 +110,9 @@ against the equations in §9 — write the maths down before writing the code.
 | **Domain** | **Battery module assembly line** as of 15 Sep 2026 (§3.7) |
 | Defect generation + detection | **Current work**: §4B, module generator, mesh-native |
 | MoveIt configs | HC10DT first (§4A.2), then GP7 cell placement, then GP4 busbars |
-| Sensor flange | Snapshot 3D + line profilometer + 2D camera (§3.7.3) |
+| Sensor flange | Snapshot 3D + line profilometer; 2D camera only if task 1.11 requires it (§3.7.3, revised 28 Oct 2026) |
+| **Battery module CAD** | **Exported 1 Nov 2026** — 10 components + assembled reference, STEP + STL, `src/battery_description/models/` (`module_spec.md` §7) |
+| **Inspector mount CAD** | **Started early** — `HC10 Flange V0.0`, carries the Zivid + FOV volume (§4A.4). Task 2.3 is ahead of sequence. |
 | Isaac Sim | Deferred, not cut: Gazebo first (§4) |
 | Memory upgrade | Optional, deferred past 1 Oct — §1.0, §4.0b |
  
@@ -816,7 +818,7 @@ dangerous one. See Finding C.
 | **Keyence LJ-X8200 class** | laser line profilometer | 72 mm width at 245 mm reference distance, 50 µm pitch, 1 µm Z | ✅ | **Wrist, precision:** covers two adjacent terminals in one profile, at a safe standoff |
 | **Zivid 2+ M60 class** | structured-light snapshot 3D camera | 0.24 mm spatial resolution at 60 cm, 58 × 47 cm field of view, 1 kg, ~100 ms capture | ✅ lateral / ⚠️ fine Z | **Wrist, coverage:** stop-and-shoot views of the whole module |
 | **SICK Ranger3** (or calibrated Ruler3000) | 3D laser-triangulation camera | 2560 points/profile, up to 46 k profiles/s | ✅ | **Fixed over the conveyor: the baseline station** |
-| **SICK midiCam2** | 2D GigE Vision camera, raw frames | 1–12 MP, global shutter | ✅ in-plane | Fixed overhead: locate cells for the GP7 pick. Wrist: polarity, weld appearance. |
+| **SICK midiCam2** | 2D GigE Vision camera, raw frames | 1–12 MP, global shutter | ✅ in-plane | **Fixed overhead at S1 (cell locating) and S5 (final visual). Wrist only if task 1.11 requires it** — revised 28 Oct 2026, see below. |
 | SICK Inspector83x | 2D smart camera, processes onboard | no depth | ⚠️ in-plane | Superseded by midiCam2: the pipeline needs raw images |
 | Stereolabs ZED 2i | passive stereo | < 1 % of range, ≳ 3 mm at best | ❌ | Not used for measurement |
 | SICK multiScan136 | 3D lidar | statistical error ≤ 20 mm | ❌ | Not used |
@@ -825,14 +827,77 @@ dangerous one. See Finding C.
 | **SICK microScan3** | safety laser scanner (machine guarding) | — | n/a | **Cell safety:** speed and separation monitoring for the collaborative HC10DT (ISO/TS 15066) |
 
 The consequence: the wrist carries a **snapshot 3D camera for coverage and a
-line profilometer for precision**, plus a 2D camera. That is about 3 kg with
-the flange, well inside the HC10DT's 10 kg. Four sensors on one wrist was
+line profilometer for precision**. Four sensors on one wrist was
 never the right question. The right question is which sensor belongs *where*.
+
+*(Superseded 28 Oct 2026 — this paragraph used to end "plus a 2D camera. That
+is about 3 kg with the flange." Both the third sensor and the mass figure are
+revised below.)*
+
+#### Revision 28 Oct 2026 — the wrist 2D camera is removed by default
+
+**The Zivid 2+ M60 already captures 5 MP colour 2D (2448 × 2048), registered
+pixel-for-pixel to its own point cloud.** Every colour pixel carries an XYZ, so
+there is no camera-to-camera calibration to do and no extra URDF frame to get
+wrong. The midiCam2 was chosen on 15 Sep only as a raw-frame replacement for
+the Inspector83x (which processes onboard). **It was not chosen for Isaac Sim
+or ROS 2 compatibility**, and nobody checked whether the Zivid's own 2D made
+it redundant.
+
+Zivid 2D pixel footprint: ≈ **0.23 mm/px at 600 mm** (FOV 570 × 460 mm),
+≈ 0.12 mm/px near its 300 mm minimum (D).
+
+| Wrist 2D job | Feature size | Zivid 2D enough? |
+|---|---|---|
+| Polarity (fill plug, vent, terminal shapes) | several mm | ✅ |
+| Weld discolouration / heat tint | seam 1–1.5 mm, 5–12 px | ✅ |
+| Weld spatter | 0.1–0.5 mm particles, 1–4 px | ⚠️ marginal |
+
+**Decision (A): wrist = Zivid 2+ M60 class + LJ-X8200 class profilometer.**
+Add a wrist midiCam2 **only if task 1.11** (minimum detectable defect,
+sensitivity to point spacing) shows that 0.12–0.23 mm/px misses spatter. That
+makes the second camera a *measured requirement* rather than an assumption. A
+dedicated 2D camera would win on pixel size (≈ 50 µm/px close up) and on
+controlled ring-light illumination of shiny aluminium — if the measurement
+says it is needed.
+
+**midiCam2 keeps its fixed role:** overhead at **S1** (locating cells for the
+GP7) and **S5** (final visual). Suggested variant **5 MP mono (I2D605M)**,
+since locating needs edges, not colour; ≈ 0.16 mm/px over the module. If a
+wrist 2D camera is ever added, **5 MP colour (I2D605C)**. *The part-number-to-
+resolution mapping is inferred from SICK naming — verify on sick.com.*
+midiCam2 resolutions are 1.58 / 3.15 / 5.01 / 12.29 MP, colour and mono,
+global shutter, C-mount, body 42.7 × 53 × 41 mm. If one is ever modelled on
+the wrist, **include the C-mount lens cylinder (≈ 30–50 mm)** — that is what
+collides and occludes.
+
+**Zivid 2+ M60 facts (S)** — [Stemmer Imaging product page]:
+
+| Item | Value |
+|---|---|
+| Working distance | 300–1100 mm |
+| FOV | 570 × 460 mm at 600 mm |
+| 2D | 5.0 MP colour, 2448 × 2048 |
+| Body | 169 × 124 × 56 mm, 1.0 kg, GigE / 10 GigE, M12 connectors |
+| Status | Listed under **"Zivid 2+ (Legacy)"** on Zivid's downloads; the R-series (MR60 etc.) is current. The "M60 *class*" wording above covers this. |
+| ROS 2 | Official driver `zivid_camera` (ROS index lists Jazzy) |
+| Isaac Sim | Zivid ships an **experimental** Isaac Sim extension (2D capture, point cloud, FOV display, model dropdown). Its docs do not list models, noise or ROS 2. |
+
+**midiCam2 in Isaac Sim is not confirmed as an asset — and it does not
+matter.** In simulation every 2D camera is a pinhole model (resolution, FOV,
+pose); brand is not a simulation decision. On real hardware it would use a
+generic GigE Vision / GenICam driver.
+
+**Payload must be recomputed.** The "≈ 3 kg" figure above included a midiCam2.
+Recompute from datasheets: Zivid 1.0 kg + LJ-X8200-class head + mount +
+cabling. The Keyence head mass is **TBD** — it is not in the repo and must not
+be invented.
 
 **Which sensor makes which measurement.** Zivid 2+ M60 datasheet figures:
 point precision 80 µm (1σ), local planarity precision 100 µm, global planarity
 trueness < 0.10 mm, spatial resolution 0.24 mm at 600 mm. A terminal pad is
-~21.5 × 17.5 mm, so a plane fitted to it averages hundreds of points and the
+22.0 × 18.5 mm *(corrected 26 Sep 2026 from ~21.5 × 17.5 — vendor drawing,
+`module_spec.md` §4)*, so a plane fitted to it averages hundreds of points and the
 *local* comparison of two adjacent pads (27 mm apart, same capture) is far
 better than the single-point figure. But the 0.1 mm tolerance is the same size
 as the camera's global trueness, so the snapshot camera **screens** and the
@@ -846,7 +911,7 @@ profilometer (1 µm) **adjudicates**:
 | Weld seam width, undercut, spatter | partial (top-down only) | screen | **primary** |
 | Cell-to-cell gaps, side-plate welds, module flanks | **blind** | **primary** | with reorientation |
 | Busbar side walls, shadowed terminal edges | **blind** | **primary** | with reorientation |
-| Polarity, markings, discolouration | no | partial | no (2D camera's job) |
+| Polarity, markings, discolouration | no | **primary** — the Zivid's own registered 5 MP 2D (28 Oct 2026) | no |
 
 This table *is* the fixed-vs-arm hypothesis (§3.7.6) written as predictions.
 §4B.6 measures whether it holds.
@@ -1038,6 +1103,16 @@ that replicates the recall mechanism itself in the same numpy pipeline.
 [Prismatic module line process sequence](https://www.linkedin.com/pulse/prismatic-ev-lithium-battery-module-pack-assembly-line-sam-lau) ·
 [Electroimpact AFP inspection (CF comparison)](https://www.electroimpact.com/whitepapers/2017-01-2150.pdf)
 
+**Added 28 Oct – 1 Nov 2026** (sensor revision, flange interface and CAD):
+[Zivid CAD index](https://www.zivid.com/documentation#cad) (not linked from the product page) ·
+[Zivid 2+ M60 with FOV — STEP](https://www.zivid.com/hubfs/Zivid%202%20Plus%20M60%20with%20FOV.step) ·
+[Zivid 2+ M60 with FOV — STL](https://www.zivid.com/hubfs/Zivid%202%20Plus%20M60%20with%20FOV.stl) (rev 1.0, 08/23) ·
+[Zivid ROS 2 driver `zivid_camera`](https://index.ros.org/p/zivid_camera) ·
+[Zivid Isaac Sim extension (experimental)](https://support.zivid.com/api-reference/wrappers/isaac-sim.html) ·
+[Zivid downloads — 2+ listed as Legacy](https://www.zivid.com/downloads) ·
+SMC JMHZ2-X7400B gripper catalogue (HC10DTP flange: ISO 9409-1-50-4-M6) ·
+Schmalz ISO 9409-1 flange set for HC10DT (63 mm pitch circle — unconfirmed)
+
 ---
 
 ## 4A. ACTIVE WORK PLAN — RViz2 + Gazebo (no Isaac Sim)
@@ -1128,29 +1203,57 @@ interface, and the MoveIt setup are all reused; only the hardware plugin
 changes (`GazeboSimSystem` → `JointStateTopicSystem`, §4.2).
  
 One arm at a time. Gazebo with a single arm is comfortable in 8 GB.
+
+**Loading the module meshes (added 1 Nov 2026).** The battery CAD now exists
+(`src/battery_description/models/`, see `module_spec.md` §7), so task 2.6 can
+load it rather than box primitives. Three things to get right:
+
+- **Gazebo cannot load STEP.** It loads STL / OBJ / DAE / glTF. STEP is the
+  archive format only.
+- **STL carries no units and Gazebo assumes metres.** The exports are in
+  millimetres, so every mesh tag needs `<scale>0.001 0.001 0.001</scale>` or
+  the module appears **1000× too large**. Expect this to be the first failure.
+- Each part's origin must sit at its `module_spec.md` §7 named datum (cell:
+  centre of the can's bottom face) so parts can be placed by transform alone.
  
 ### 4A.4 — Custom sensor flange for the HC10DT
 
-> **Redefined by §3.7.3 (15 Sep).** The wrist carries a **snapshot 3D camera
-> (Zivid 2+ M60 class) for coverage, a line profilometer (LJ-X8200 class) for
-> precision, and a 2D camera (midiCam2)**, about 3 kg with the flange. The
-> SICK lidars are not wrist sensors: microScan3 guards the cell, and the
-> others have no inspection role. The design questions become: occlusion
-> between the three fields of view, standoff compatibility (the snapshot
-> camera at ~60 cm, the profilometer at ~245 mm), and cable routing through
-> the wrist. The URDF-from-CAD warning below applies in full.
+> **Redefined by §3.7.3 (15 Sep), revised 28 Oct 2026.** The wrist carries a
+> **snapshot 3D camera (Zivid 2+ M60 class) for coverage and a line
+> profilometer (LJ-X8200 class) for precision**. The 2D camera is **removed by
+> default** — the Zivid's own registered 5 MP 2D covers polarity and heat
+> tint; a midiCam2 is added only if task 1.11 shows it misses spatter
+> (§3.7.3). **Payload: recompute** — the old "about 3 kg" included a midiCam2,
+> and the Keyence head mass is TBD. The SICK lidars are not wrist sensors:
+> microScan3 guards the cell, and the others have no inspection role. The
+> design questions become: occlusion between the fields of view, standoff
+> compatibility (snapshot at ~60 cm, profilometer at ~245 mm), and cable
+> routing through the wrist. The URDF-from-CAD warning below applies in full.
  
 The highest-value design work available right now, because it converts a
 Section 4 *assertion* into a verified result.
  
-Section 4 of the proposal states the Inspector carries four sensors. That is
-currently an assumption. Building the flange tests it:
+> **Proposal status.** Proposal §4's sensor array, and its "officially
+> validated vendor digital twins" argument, are **superseded** by §3.7.3
+> (15 Sep) and the 28 Oct revision above. The proposal `.docx` is not tracked
+> in this repo and has not been edited; this note is the record.
+
+Section 4 of the proposal states the Inspector carries four sensors. That was
+an assumption, and §3.7.3 answered it: **two**, with a third gated on task
+1.11. Building the flange tests what remains:
  
-- Do the SICK microScan3, multiScan136, Inspector83x, and ZED 2i physically
-  fit on one HC10DT wrist?
-- Do they occlude each other's fields of view?
+- ~~Do the SICK microScan3, multiScan136, Inspector83x, and ZED 2i physically
+  fit on one HC10DT wrist?~~ *(superseded 15 Sep by §3.7.3 — none of those
+  four is a wrist sensor. The question is now whether the Zivid 2+ M60 and
+  the LJ-X8200-class head fit together.)*
+- Do they occlude each other's fields of view? **Housing-to-housing occlusion
+  is a real constraint, and so are the module's own 101.5 mm walls — they
+  block the outer terminal edges below ≈ 39° elevation (`module_spec.md` §5).**
 - Is the total mass within the HC10's 10 kg payload, including the flange?
 - Are the standoff distances compatible with each sensor's working range?
+  **They are not co-located: Zivid ≈ 600 mm nominal (300–1100), LJ-X8200
+  ≈ 245 mm. That implies separate arm poses per sensor, not one pose that
+  serves both.**
 **Any answer is a real result.** If they do not fit, discovering that now — and
 reporting it with the geometry to prove it — is far better than assuming it
 works.
@@ -1165,14 +1268,71 @@ remodelled.
 > downstream, and it will look like an algorithm bug. Derive the URDF origins
 > from the CAD numerically; do not eyeball them.
  
-Deliverables:
+Deliverables *(restated 28 Oct 2026 — item 2 previously read "four sensor
+frames", which the §3.7.3 revision supersedes)*:
  
 1. Parametric flange model (STEP + source)
-2. `motobat_description/urdf/inspector_flange.xacro` — flange + four sensor
-   frames, attached to `s3_tool0`
-3. Mass/payload check against 10 kg
-4. FOV/occlusion study — even a simple ray-cast or a documented sketch
+2. `motobat_description/urdf/inspector_flange.xacro` — flange + **two sensor
+   frames (snapshot 3D, profilometer), plus a third only if task 1.11
+   requires a wrist 2D camera**, attached to `s3_tool0`
+3. Mass/payload check against 10 kg — **recompute; the old ≈ 3 kg included a
+   midiCam2, and the Keyence head mass is TBD**
+4. FOV/occlusion study — even a simple ray-cast or a documented sketch. Must
+   cover housing-to-housing occlusion **and** the ≈ 39° wall limit
 5. TF tree verified in RViz: `ros2 run tf2_tools view_frames`
+
+#### Mount CAD as built — 1 Nov 2026
+
+`src/motobat_description/models/HC10_Inspector/HC10 Flange V0.0.{step,stl}`.
+STEP products: `HC10 Flange V0.0` (top level), `Mount v3` (the plate),
+`Zivid 2 Plus M60 with FOV v1`, and `AS_108261` — **an unidentified vendor
+part number; confirm what it is before the payload sum.** The mount therefore
+carries the Zivid for certain. No midiCam2 is present, which matches the
+28 Oct decision; if one is ever added, keep it and record its status as
+"pending task 1.11" rather than deleting it.
+
+**The Zivid STEP includes its FOV volume.** Keep that as a separate component
+and **exclude it from both collision and visual meshes**, or MoveIt treats the
+view cone as a solid and every scan pose "collides". The FOV apex marks the
+optical origin, which becomes the URDF `<origin>`.
+
+> **Size warning.** These two files are **69 MB (STEP) and 99 MB (STL)** and
+> are already committed raw. The STL is within a hair of GitHub's 100 MB hard
+> limit. Move them to **Git LFS**, or decimate the STL — a sensor body only
+> needs to be a datasheet-outline box (`module_spec.md` §9), and the ray-cast
+> sensor models intersect against these triangles.
+
+#### HC10DT tool-flange interface
+
+The robot's tool-flange holes are **tapped M6 directly, with no inserts**. The
+adapter plate gets clearance holes and M6 socket-head cap screws pass through
+it into the robot. The 5th hole is a **Ø6 H7 locating (dowel) hole** that
+fixes rotation; a centring diameter (spigot/recess) locates concentrically,
+and the bolts only clamp.
+
+**The pattern differs between DT and DTP, and this is unresolved.** The
+proposal names the **HC10DTP**, but the URDF is `hc10dt`.
+
+| Variant | Pattern | Tag |
+|---|---|---|
+| **HC10DTP** | **ISO 9409-1-50-4-M6**: 4 × M6 on a **50 mm** pitch circle, Ø6 H7 pin hole 5 deep, ø31.5 centring diameter | S — SMC JMHZ2-X7400B gripper catalogue |
+| **HC10 / HC10DT** | The same catalogue lists no ISO designation. Schmalz sells an ISO 9409-1 flange set for the HC10DT with a **63 mm** pitch circle and M6 threads. | **A — unconfirmed.** Confirm from Yaskawa's HC10DT(P) manual drawing. |
+
+**Quick check:** measure opposite hole centres on the URDF or vendor mesh.
+≈ 50 → DTP pattern; ≈ 63 → DT.
+
+Adapter plate (if DTP): 4 × Ø6.6 counterbored clearance holes on PCD 50; Ø6 H7
+hole with a Ø6 m6 dowel pin; ø31.5 centring feature. Screw length = plate
+thickness + ≈ 6–9 mm engagement, short of the tapped depth. Take depth and
+torque from the manual.
+
+**In simulation** the plate is a fixed joint to `s3_tool0`. Bolts and pins are
+not simulated. Model holes as plain cylinders and **never model threads** —
+triangles the ray caster intersects for nothing. What matters is
+**orientation**: `tool0` sits at the flange-face centre with Z out of the
+face, and the dowel hole fixes the X direction. The mount CAD's origin and X
+axis must coincide with `tool0`, so sensor frames derived numerically from CAD
+match the URDF (the rule above).
 ### 4A.5 — Deferred: simulated network switch for DDS
  
 Considered and **deliberately deferred.** Recording the reasoning so it is not
@@ -1339,8 +1499,47 @@ For all three:
 - Output: N×3 arrays / `.ply` in the sensor frame, plus the sensor pose. That
   is the shape `sensor_msgs/PointCloud2` carries later.
 
-The 2D camera (midiCam2) is deferred. Polarity is detected from terminal
-geometry first; image rendering comes later, if it is needed at all.
+The 2D camera is deferred. Polarity is detected from terminal
+geometry first; image rendering comes later, if it is needed at all. *(Note
+28 Oct 2026: if 2D is rendered, it comes from the Zivid's own registered 5 MP
+2D, not a separate midiCam2 — §3.7.3.)*
+
+#### Do simulated sensors "actually scan", or are they gamed? — recorded 1 Nov 2026
+
+Neither. **No simulator has a "profilometer" sensor type.** Gazebo
+(`gpu_lidar`, `depth_camera`) and Isaac Sim (RTX Lidar with config profiles,
+cameras) offer only generic primitives: ray casters, depth cameras and RGB
+cameras. A sensor model *is* a primitive **configured from the datasheet**
+(resolution, field of view, range window, rate) plus post-processing. That is
+standard practice, not a workaround.
+
+- **A line profilometer is a single-row ray fan plus motion.** Each shot gives
+  one profile; the 3D surface exists only by stitching profiles using the pose
+  at each timestamp — exactly as on a real cell. Worked example: a 254 mm scan
+  at 50 mm/s and 1 kHz → 50 µm profile spacing, ≈ 5,000 profiles. In
+  Gazebo/Isaac the physics/sensor step must run at ≥ the profile rate, so the
+  scan runs slower than real time. That is acceptable.
+- **Snapshot 3D is a depth camera** at the datasheet resolution, FOV and
+  working distance.
+
+**Post-processing a bare ray cast lacks** (all parameters from datasheets,
+frozen and hashed before results, per task 1.3):
+
+| Real effect | Cause | Model |
+|---|---|---|
+| Triangulation shadowing | Emitter and camera sit at different points, so a point returns only if both see it | Second visibility ray from the camera origin; drop points the camera cannot see |
+| **Specular dropout on aluminium** | Bright Al reflects the laser away from the camera | Incidence-angle- and material-dependent dropout and noise |
+| Datasheet noise | Z repeatability, X resolution | Gaussian noise |
+| Range window, grazing angle | Out of range or too oblique | Clip by range; drop by incidence angle |
+
+> **Specular aluminium is the biggest sim-to-real gap in this project.**
+> Terminals, busbars and weld seams are all bright Al. Either model it or
+> state it in the README's Limitations section. Do not omit it silently.
+
+**Architecture:** sensor models live **once, in `defectgen`** — ray cast with
+Open3D `RaycastingScene` against the exported meshes, then the post-processing
+above. Gazebo and Isaac supply only poses and raw rays/depth. This mirrors the
+"detector written once" principle.
 
 ### 4B.4 — Detection pipeline (Open3D)
 

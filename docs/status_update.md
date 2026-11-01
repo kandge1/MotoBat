@@ -9,7 +9,8 @@ disagree, `project_plan.md` is right about *why* and this file is right about
 
 Section references like §4B.1 point into `project_plan.md`.
 
-*Last updated: 15 Sep 2026*
+*Last updated: 1 Nov 2026 — battery and mount CAD exist; task 2.3 started early; wrist sensor
+suite revised (28 Oct).*
 
 ---
 
@@ -19,12 +20,27 @@ Section references like §4B.1 point into `project_plan.md`.
 > trimesh, no ROS, no simulator. A VDA 355 module (355 × 151 × 108 mm):
 > twelve PHEV2 cells (148 × 91 × 26.5 mm) in 3P4S, laser-weld terminals,
 > busbars, weld seams, end and side plates, cooling plate, carrier, CMC and
-> cover. **Geometry reference: [`module_spec.md`](module_spec.md).** In
-> parallel: measure the terminal spacing, pad size and vent from photos in
-> Fusion (module_spec §6). It emits three stages
+> cover. **Geometry reference: [`module_spec.md`](module_spec.md).** It emits
+> three stages
 > (pre-busbar, pre-weld, post-weld) as watertight solids with STL/PLY export.
 > The generator returns `(mesh, labels)`, and the same mesh is both the
 > reference and the scan target.
+>
+> **The CAD now exists (1 Nov 2026), so 1.1 loads real meshes, not box
+> primitives.** 10 components + an assembled reference, STEP + STL, in
+> `src/battery_description/models/`. `module_spec.md` §7 used to say "until
+> the Fusion parts exist, the generator uses its own box primitives" — that
+> condition is met.
+>
+> **One blocker inside that:** the cell STL is a single merged mesh, so
+> terminal (+) and terminal (−) are not separately addressable and the
+> terminal-height / terminal-tilt defects of task 1.2 cannot be injected.
+> Re-export the two terminals as their own STLs first (`module_spec.md` §7).
+> The STEP already holds them as separate solids.
+>
+> *(Superseded 26 Sep 2026: this task used to add "in parallel, measure the
+> terminal spacing, pad size and vent from photos in Fusion". The vendor
+> drawing resolved all three — `module_spec.md` §4.)*
 >
 > Lives in `defectgen/`, outside `src/`. It must not import ROS (§2 of
 > `project_structure.md`).
@@ -115,9 +131,11 @@ the contribution.
 
 Tag the commit that produces 1.8–1.12: `git tag -a v0.1-detection-baseline`.
 
-**Source before claiming results** (§3.7.9): terminal and busbar dimensions,
-the cell-placement / busbar-gap / weld-seam tolerances, and a module-line
-cycle time. Confirm the 0.1 mm terminal figure from the MDPI paper itself.
+**Source before claiming results** (§3.7.9): ~~terminal and busbar
+dimensions~~ (**resolved** — vendor drawing 26 Sep, as-built busbars 22 Oct,
+`module_spec.md` §4–5), the cell-placement / busbar-gap / weld-seam
+tolerances, and a module-line cycle time. Confirm the 0.1 mm terminal figure
+from the MDPI paper itself.
 
 **Do not** let this phase acquire a ROS dependency. A reviewer must be able to
 `pip install -e defectgen && pytest` without touching ROS 2 (§2 of
@@ -131,10 +149,10 @@ cycle time. Confirm the 0.1 mm terminal figure from the MDPI paper itself.
 |---|---|---|---|
 | 2.1 | HC10DT MoveIt config — **KDL, not OPW** | 4A.2 | `joint_5_b` offset 162 mm in Y; wrist axes do not intersect. No OPW file exists. Do not hunt for one. |
 | 2.2 | `ros2_control` + `joint_trajectory_controller`, HC10DT in Gazebo | 4A.3 | |
-| 2.3 | Flange: snapshot 3D + profilometer + 2D camera, poses as variables | 4A.4, 3.7.3 | check field-of-view occlusion, standoff compatibility, ~3 kg payload |
+| 2.3 | Flange: snapshot 3D + profilometer (**+ 2D camera only if 1.11 requires it**), poses as variables | 4A.4, 3.7.3 | **◀ IN PROGRESS, ahead of sequence.** A basic mount with HC10DT flange alignment features exists (`HC10 Flange V0.0`), carrying the Zivid + its FOV volume. Keep it **parametric** (sensor poses as Fusion User Parameters) so 1.11's result can swap the sensor class without a remodel. Check FOV occlusion and standoff compatibility. **Payload: recompute** (the old ~3 kg included a midiCam2; Keyence head mass TBD). Exclude the Zivid FOV volume from collision *and* visual, or every scan pose "collides". |
 | 2.4 | `inspector_flange.xacro` — flange + sensor frames on `s3_tool0` | 4A.4 | derive origins from CAD **numerically**; a 2° eyeball error corrupts every registration downstream and will look like an algorithm bug |
-| 2.5 | Reachable view plan: Phase 1 viewpoints filtered by IK and collision, ordered to minimise motion | 4B.5 | the arm earns its place here |
-| 2.6 | Module meshes in Gazebo; depth camera + narrow-fan `gpu_lidar` as the sensors; fixed line-scan station alongside | 4B.8 | |
+| 2.5 | Reachable view plan: Phase 1 viewpoints filtered by IK and collision, ordered to minimise motion | 4B.5 | the arm earns its place here. Must account for: **two different standoffs** (Zivid ≈ 600 mm nominal, 300–1100; LJ-X8200 ≈ 245 mm) implying separate poses per sensor; the **≈ 39° wall-occlusion limit** on outer terminal edges (`module_spec.md` §5); and housing-to-housing occlusion. **Needs 2.1 first** — scan poses cannot be checked for reach or collision without the HC10DT MoveIt config. |
+| 2.6 | Module meshes in Gazebo; depth camera + narrow-fan `gpu_lidar` as the sensors; fixed line-scan station alongside | 4B.8, 4A.3 | The CAD exists, so this loads real meshes. **Gazebo cannot load STEP** (STL/OBJ/DAE/glTF only), and **STL has no units while Gazebo assumes metres** — every mesh tag needs `<scale>0.001 0.001 0.001</scale>` or the module is 1000× too large. |
 | 2.7 | **Fixed vs arm with real cycle time** (motion + capture per module) | 3.7.6 | completes the central comparison |
 | 2.8 | Verify TF tree: `ros2 run tf2_tools view_frames` | 4A.4 | |
 

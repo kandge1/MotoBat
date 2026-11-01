@@ -143,6 +143,32 @@ A seeded generator is stronger evidence than a committed dataset — anyone can
 regenerate it, vary it, and check that results hold across seeds. It also keeps
 the repository small enough to clone quickly.
 
+### CAD is source, so CAD is committed — 1 Nov 2026
+
+The rule above is about *generated* data. CAD is the opposite: it is hand-authored
+source that nothing can regenerate, so STEP and STL **are** committed and are
+deliberately absent from `.gitignore`.
+
+| Location | Contents |
+|---|---|
+| `src/battery_description/models/` | 10 module components + the assembled `PHEV Pack` reference, STEP + STL (22 files) |
+| `src/motobat_description/models/HC10_Inspector/` | `HC10 Flange V0.0` — inspector sensor mount, STEP + STL |
+
+**Two things to resolve here.**
+
+1. **`src/battery_description/` breaks §3.3's prefix rule** and is not yet a
+   package — it holds only `models/`, with no `package.xml`. Under the rule
+   "every package gets the `motobat_` prefix", this should become
+   `motobat_battery_description`, or the meshes should move under
+   `motobat_description/models/module/`. Deferred to the user: renaming a
+   committed path is their call, not a docs change.
+2. **The mount files are too large to sit in git raw**: `HC10 Flange V0.0.stl`
+   is **99 MB** and the `.step` is **69 MB**, against GitHub's 100 MB hard
+   limit. Move both to **Git LFS**, or decimate the STL — a sensor body only
+   needs to be a datasheet-outline box (`module_spec.md` §9), and `defectgen`'s
+   ray-cast sensor models intersect against every one of those triangles. The
+   battery meshes are fine: the largest is 0.8 MB.
+
 ---
 
 ## 3. The `src/` package structure

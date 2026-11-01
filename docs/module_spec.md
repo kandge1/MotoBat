@@ -13,8 +13,8 @@ Every dimension is tagged:
 | **A** | Assumed — a reasonable engineering value; replace when a better source appears |
 | **M** | Measure — take it from a real-cell photo in Fusion (method in §6) |
 
-Units: millimetres. Last updated 22 Oct 2026 — wall height and busbar corrections, see §5
-"Corrections made 22 Oct 2026".
+Units: millimetres. Last updated 1 Nov 2026 — CAD exported and reconciled against §7, Gazebo
+mesh-loading notes added. Previous: 22 Oct 2026, wall height and busbar corrections (§5).
 
 ---
 
@@ -143,9 +143,28 @@ every tilt drag the contact point sideways, injecting two defects where one was 
 | — busbar width | **11** | A | as built, 22 Oct 2026. Replaces "≈ 20–25 (≥ pad width)", which had no basis: a busbar narrower than the 22 mm pad sits entirely on aluminium, so the weld cannot miss. Leaves ≈ 5.5 of bare pad each side, which the step-8 gap check uses as a direct height step. |
 | — busbar lengths | short (end, 3 terminals) **63.5**; long (series, 6 terminals) **147.5** | A | as built, 22 Oct 2026 |
 | — electrical sizing | not modelled | — | 11 × 1.5 is thin for 150 A real current. Deliberate: this spec serves welds and scans, not current capacity. |
-| **Laser weld seams** | one seam per busbar–terminal joint; pattern: closed loop or 2–3 linear stitches ≈ 10–15 long, ≈ 1–1.5 wide | A | post-weld inspection target. Lap (penetration) weld: beam fires down through the busbar into the terminal. On an 11 mm busbar, linear stitches run along X. |
+| **Laser weld seams** | one seam per busbar–terminal joint; 2–3 linear stitches ≈ 10–15 long, ≈ 1–1.5 wide | A | post-weld inspection target. See the weld note below §5. |
 | **Cell module controller** (PCB) | **333 × 45 × 1.6** + components | A | as built, 27 Sep 2026. Runs the carrier's length, seated in the central channel between the two busbar rows at ±57.5, so no clash. Sense tabs to each busbar. |
 | **Cover** | 355 × 151 × **2** | A | plastic or Al. Rests on the wall tops: z 105.5 → 107.5. |
+
+### Weld note — it is a lap weld, and the gap is the process variable
+
+**Busbar welding is a lap (penetration) weld**, not a two-sided resistance-style weld: the laser
+fires down *through* the 1.5 mm busbar and fuses ≈ 0.5–1 mm into the 4 mm terminal pad beneath.
+Aluminium's low resistance makes resistance welding impractical at this thickness.
+
+- On the 11 mm busbar, linear stitches run **along X** (the busbar's length). Use one centreline
+  stitch, or two parallel stitches ≈ 2.5 either side of the centreline. Keep ≈ 2 from the busbar
+  edges.
+- **The pre-weld gap is the critical process variable.** A gap larger than a small fraction of
+  the top sheet's thickness causes undercut, porosity or no fusion at all. That is precisely why
+  §8 step 8 checks it before the irreversible weld at step 9.
+
+**Constraint on generated seams at the end terminals.** The as-built lengths are `n × 28 + 7.5`,
+so each busbar ends **3.75 past the centre** of its outermost terminal and covers ≈ **13 of that
+pad's 18.5** in X. Generated weld seams on an end pad must lie inside the busbar ∩ pad overlap —
+this binds the *generator*, not the CAD. (A suggestion to lengthen the busbars to 74.5 / 158.5
+was considered and rejected; the as-built lengths stand.)
 
 ### Stack-up — nothing adds to the envelope
 
@@ -338,8 +357,54 @@ it with per-segment width and height. Visual mesh only, **no collision**.
 arrive until step 3, so the sensor only ever sees it uncompressed. If a post-compression look is
 ever wanted for a render, author a second static bead (wider, flatter, slight squeeze-out) and
 swap meshes — deformable-body physics here would cost days and inform no measurement, the same
-trade §11 refuses for the conveyor belt. Until the Fusion parts exist, the generator uses its own box primitives
-with the same parameters, so code does not wait on CAD.
+trade §11 refuses for the conveyor belt.
+
+*(Superseded 1 Nov 2026 — this section used to end "until the Fusion parts exist, the generator
+uses its own box primitives … so code does not wait on CAD." The parts now exist; see below.)*
+
+### The CAD as exported — 1 Nov 2026
+
+Committed under `src/battery_description/models/`: **STEP + STL for 10 distinct components**,
+plus **STEP + STL of the assembled reference module** (`PHEV Pack`). 22 files.
+
+| §7 body (12 listed) | CAD file | Status |
+|---|---|---|
+| cell can | `VDA PHEV2 Prismatic Cell` | ⚠️ see below |
+| terminal (+) | — | ⚠️ inside the cell file |
+| terminal (−) | — | ⚠️ inside the cell file |
+| pad | `Interface pads` | ✓ |
+| end plate | `End Plate` | ✓ |
+| side plate | `Side plate` | ✓ |
+| cooling plate | `Bottom cooling plate` | ✓ |
+| carrier | `Support Structure` | ✓ |
+| busbar (end) | `Bus bar short` | ✓ |
+| busbar (series) | `Bus bar long` | ✓ |
+| CMC | `PCB` | ✓ |
+| cover | `Cover` | ✓ |
+
+**10 files vs 12 bodies: the two terminals are the difference, and the STEP is fine but the STL
+is not.** `VDA PHEV2 Prismatic Cell.step` carries **three solids** (can + both terminals) under a
+single STEP product, so the geometry exists and is separable. But the exported
+`VDA PHEV2 Prismatic Cell.stl` is a **binary STL — one merged mesh with no body boundaries**.
+
+That matters because §4 depends on it: the terminal-height and terminal-tilt defect classes are
+injected by transforming the terminal *relative to* the can. From a single merged mesh they are
+ungeneratable. **Action: export `terminal_pos` and `terminal_neg` as their own STLs**, origin at
+the centre of each seating face per §4. The STEP needs no change.
+
+The assembly file names parts individually (`Front End Plate v6` / `Back End Plate v6`,
+`Left Side plate v2` / `Right Side plate v2`, three `Bus bar long`, two `Bus bar short`), which
+confirms the 3P4S busbar count. The generator instances the single exported part per position;
+it does not need the left/right variants as separate files.
+
+### Loading these meshes in Gazebo
+
+- **Gazebo cannot load STEP.** It loads STL / OBJ / DAE / glTF. STEP stays the archive format.
+- **STL carries no units, and Gazebo assumes metres.** These are exported in millimetres, so the
+  SDF/URDF mesh tag needs `<scale>0.001 0.001 0.001</scale>` or the module loads **1000× too
+  large**. This is the single most likely first failure when §4B.8 / task 2.6 begins.
+- Each part's origin must sit at its named datum above (cell: centre of the can's bottom face),
+  so the generator can place parts by transform alone.
 
 ---
 
@@ -479,6 +544,11 @@ the fixed-vs-arm comparison a controlled experiment rather than two anecdotes.
 - ~~Wall height vs cover~~ — **resolved 22 Oct 2026**: end and side plates raised to 101.5 (§5).
 - ~~Busbar width~~ — **resolved 22 Oct 2026**: as-built 11 × 1.5, lengths 63.5 / 147.5 (§5).
 - CMC component height: must stay under ≈ 1.4 mm, or recess the cover locally (§5 height check).
+- ~~Reconcile 10 exported CAD components against the 12 bodies listed in §7~~ — **resolved
+  1 Nov 2026**: the two terminals are merged into the cell file. The STEP holds them as separate
+  solids; the STL does not.
+- **Export terminal (+) and terminal (−) as their own STLs** (§7). Until then the terminal-height
+  and terminal-tilt defect classes cannot be generated, because the cell STL is one merged mesh.
 - Weld seam pattern, carrier and CMC dimensions: assumed, refine from photos of real VDA 355
   modules if useful.
 - A module-line cycle time for the fixed-vs-arm comparison: not found yet.
