@@ -13,8 +13,9 @@ Every dimension is tagged:
 | **A** | Assumed — a reasonable engineering value; replace when a better source appears |
 | **M** | Measure — take it from a real-cell photo in Fusion (method in §6) |
 
-Units: millimetres. Last updated 1 Nov 2026 — CAD exported and reconciled against §7, Gazebo
-mesh-loading notes added. Previous: 22 Oct 2026, wall height and busbar corrections (§5).
+Units: millimetres. Last updated 1 Nov 2026 — CAD exported and reconciled against §7; six
+as-built corrections measured by loading the meshes into `defectgen` (§5); Gazebo mesh-loading
+notes added. Previous: 22 Oct 2026, wall height and busbar corrections (§5).
 
 ---
 
@@ -132,20 +133,20 @@ every tilt drag the contact point sideways, injecting two defects where one was 
 
 | Part | Key dimensions | Tag | Notes |
 |---|---|---|---|
-| **End plates** (×2, finned — "passive cooling structure") | **148 W × 101.5 H × 10.25 T** incl. fins | D | Raised from 91.5 on 22 Oct 2026 (see corrections below): top at z = 105.5, 3 mm above the busbar tops, so the cover closes over everything. Shallow for fins — budget ≈ 4 base + 6 fin. Structurally ample: 3 kN over the 148 × 101.5 face is only 0.20 MPa. |
+| **End plates** (×2, finned — "passive cooling structure") | **148 W × 101.0 H × 10.25 T** incl. fins | D | Raised from 91.5 on 22 Oct 2026 (see corrections below): top at z = 105.5, 3 mm above the busbar tops, so the cover closes over everything. Shallow for fins — budget ≈ 4 base + 6 fin. Structurally ample: 3 kN over the 148 × 101.0 face is only 0.20 MPa. *(Height corrected 101.5 → 101.0 on 1 Nov 2026 — measured from the CAD.)* |
 | **Interface pads** (×11, between cells) | 148 × 91, **1.5** thick | A | Set by the 28.0 cell pitch (below). Also the better number on its own merits: real modules use compressible foam pads of 1–2 mm+ to take cell swelling; the earlier 0.8 was pure arithmetic. |
-| **Side plates** (×2) | **355 L × 101.5 H × 1.5 T** | D | Raised from 91.5 on 22 Oct 2026, same height as the end plates. Lap over the *outboard* faces of the end plates; welded after compression. |
+| **Side plates** (×2) | **355 L × 101.0 H × 1.5 T** | D | Raised from 91.5 on 22 Oct 2026, same height as the end plates. Lap over the *outboard* faces of the end plates; welded after compression. |
 | **Bottom cooling plate** ("liquid cooling structure") | 355 × 151, ≈ 3–5 thick, internal channels | A | channels matter only visually; the thermal gap-filler bead on top of it is a defect class |
 | **Thermal gap filler bead** | bead width ≈ 5–8, height ≈ 2 before compression | A | adhesive-bead defect target. **Not a CAD part — generated geometry (§7).** |
-| **Busbar carrier** ("support structure", CCS frame) | **333 L × 146.5 W × 6.5 H**, windows over each terminal | A | as built, 27 Sep 2026. Terminals span 14.25 → 340.75, so 333 centred covers them with ≈ 3 spare each end. The 146.5 leaves 0.75 clearance to each side plate — tight on purpose: that is the threshold at which a mis-placed carrier contacts a side plate, which §10 wants geometry behind. Industry supplies carrier + busbars + sense wiring as **one subassembly** (cell contacting system). |
+| **Busbar carrier** ("support structure", CCS frame) | **333 L × 146.5 W × 7.0 H**, windows over each terminal | A | as built, 27 Sep 2026. Terminals span 14.25 → 340.75, so 333 centred covers them with ≈ 3 spare each end. The 146.5 leaves 0.75 clearance to each side plate — tight on purpose: that is the threshold at which a mis-placed carrier contacts a side plate, which §10 wants geometry behind. Industry supplies carrier + busbars + sense wiring as **one subassembly** (cell contacting system). |
 | **Busbars** | 1060 Al, **1.5 thick** | S | weld study above |
 | — busbar pattern (3P4S) | end busbars span 3 terminals; series busbars span 6 terminals (3 + 3) | D | computed from config by the generator |
-| — busbar width | **11** | A | as built, 22 Oct 2026. Replaces "≈ 20–25 (≥ pad width)", which had no basis: a busbar narrower than the 22 mm pad sits entirely on aluminium, so the weld cannot miss. Leaves ≈ 5.5 of bare pad each side, which the step-8 gap check uses as a direct height step. |
-| — busbar lengths | short (end, 3 terminals) **63.5**; long (series, 6 terminals) **147.5** | A | as built, 22 Oct 2026 |
+| — busbar width | **12** | A | as built, 22 Oct 2026. Replaces "≈ 20–25 (≥ pad width)", which had no basis: a busbar narrower than the 22 mm pad sits entirely on aluminium, so the weld cannot miss. Leaves ≈ 5.5 of bare pad each side, which the step-8 gap check uses as a direct height step. |
+| — busbar lengths | short (end, 3 terminals) **64.5**; long (series, 6 terminals) **148.5** | B | as built, measured from the CAD 1 Nov 2026. Previously recorded as 63.5 / 147.5. |
 | — electrical sizing | not modelled | — | 11 × 1.5 is thin for 150 A real current. Deliberate: this spec serves welds and scans, not current capacity. |
 | **Laser weld seams** | one seam per busbar–terminal joint; 2–3 linear stitches ≈ 10–15 long, ≈ 1–1.5 wide | A | post-weld inspection target. See the weld note below §5. |
-| **Cell module controller** (PCB) | **333 × 45 × 1.6** + components | A | as built, 27 Sep 2026. Runs the carrier's length, seated in the central channel between the two busbar rows at ±57.5, so no clash. Sense tabs to each busbar. |
-| **Cover** | 355 × 151 × **2** | A | plastic or Al. Rests on the wall tops: z 105.5 → 107.5. |
+| **Cell module controller** (PCB) | **250 × 50 × 3.2** incl. components | A | as built, 27 Sep 2026. Runs the carrier's length, seated in the central channel between the two busbar rows at ±57.5, so no clash. Sense tabs to each busbar. |
+| **Cover** | 355 × 151 × **2** | A | plastic or Al. Rests on the wall tops: z 105.0 → 107.0. |
 
 ### Weld note — it is a lap weld, and the gap is the process variable
 
@@ -160,8 +161,8 @@ Aluminium's low resistance makes resistance welding impractical at this thicknes
   the top sheet's thickness causes undercut, porosity or no fusion at all. That is precisely why
   §8 step 8 checks it before the irreversible weld at step 9.
 
-**Constraint on generated seams at the end terminals.** The as-built lengths are `n × 28 + 7.5`,
-so each busbar ends **3.75 past the centre** of its outermost terminal and covers ≈ **13 of that
+**Constraint on generated seams at the end terminals.** The as-built lengths are `n × 28 + 8.5`,
+so each busbar ends **4.25 past the centre** of its outermost terminal and covers **13.5 of that
 pad's 18.5** in X. Generated weld seams on an end pad must lie inside the busbar ∩ pad overlap —
 this binds the *generator*, not the CAD. (A suggestion to lengthen the busbars to 74.5 / 158.5
 was considered and rejected; the as-built lengths stand.)
@@ -175,7 +176,7 @@ plates and side plates sit **on top of it**, not beside it.
 |---|---|---|
 | X (355) | 10.25 + (12 × 26.5) + (11 × 1.5) + 10.25 | **355.0** ✓ |
 | Y (151) | 1.5 + 148 + 1.5 | **151.0** ✓ |
-| Z (108) | cooling 4 + walls 101.5 + cover 2 = 107.5 (cells, terminals, carrier, busbars, CMC all inside the walls) | **107.5** ✓, 0.5 spare |
+| Z (108) | cooling 4 + walls 101.0 + cover 2 = 107.0 (cells, terminals, carrier, busbars, CMC all inside the walls) | **107.0** ✓, 1.0 spare |
 
 ### Cell pitch = 28.0 — the number the carrier is built to
 
@@ -258,22 +259,45 @@ carrier 4 + …`) implied the carrier stacked above the terminals and under-budg
 | 0 → 4 | cooling plate |
 | 4 → 95 | cells (91) |
 | 95 → 101 | terminals (6) — through the carrier windows |
-| 95 → 101.5 | carrier (6.5) — overlaps the terminal zone |
+| 95 → 102.0 | carrier (7.0) — overlaps the terminal zone |
 | 101 → 102.5 | busbars (1.5), on the terminal tops |
-| 102.5 → 104.1 | CMC (1.6) — bare board; see caveat |
-| 4 → 105.5 | end plates and side plates (101.5), on the cooling plate |
-| 105.5 → 107.5 | cover (2), resting on the wall tops |
+| 102.0 → 105.2 | CMC (3.2) — **0.2 over the wall top, see caveat** |
+| 4 → 105.0 | end plates and side plates (101.0), on the cooling plate |
+| 105.0 → 107.0 | cover (2), resting on the wall tops |
 
-Closes at **107.5**, 0.5 under the 108 envelope. Clearance under the cover: 3.0 above the busbars,
-**1.4 above the bare CMC board**.
+Closes at **107.0**, 1.0 under the 108 envelope. Clearance above the busbars: 2.5.
+Independently confirmed 1 Nov 2026 — the generator's assembled mesh and the Fusion
+`module_assembled` reference agree on z 0 → 107.0 exactly.
 
-> **CMC caveat.** The CMC, not the busbars, is now the tallest part under the cover. Its
-> components (connectors, capacitors, thermistor headers) must stay under **≈ 1.4 mm**, or the
-> cover needs a local recess over the CMC. Raising the walls further breaks the VDA 355 height.
-> Open item — §12.
+> **CMC clash — now measured, no longer a margin.** At 3.2 thick seated on the carrier top at
+> z = 102.0 the CMC reaches **105.2**, which is **0.2 above the wall top at 105.0**, so the cover
+> cannot sit flat. Earlier wording called this "≈ 1.4 mm of headroom" on the assumption of a
+> 1.6 mm bare board; the as-built part is 3.2 and the walls came in 0.5 lower than recorded.
+> Raising the walls further breaks the VDA 355 height, so the fix is to lower the CMC into the
+> carrier, thin the board, or recess the cover locally. Open item — §12, and asserted as a
+> strict `xfail` in `defectgen/tests/test_budgets.py::test_cmc_clears_the_cover`.
 
 *(Before 22 Oct 2026 this table listed the cover at 106 → 108 with ≈ 1.9 headroom, but had no
 row for the walls; with 91.5 walls, the cover had nothing at that height to rest on.)*
+
+**Corrections made 1 Nov 2026 — measured from the CAD.** Building `defectgen` meant loading every
+exported mesh and comparing it against this file, which surfaced six as-built values that had
+drifted from what was recorded. The CAD wins; these are now the numbers:
+
+| Item | Was | As built |
+|---|---|---|
+| End and side plate height | 101.5 | **101.0** |
+| Busbar carrier thickness | 6.5 | **7.0** |
+| Busbar width | 11 | **12** |
+| Busbar lengths (end / series) | 63.5 / 147.5 | **64.5 / 148.5** |
+| CMC | 333 × 45 × 1.6 | **250 × 50 × 3.2** |
+| Busbar overhang rule | `n × 28 + 7.5` | **`n × 28 + 8.5`** |
+
+X and Y are unaffected and still close at 355.0 and 151.0. Z now closes at **107.0** rather than
+107.5, which is what makes the CMC clash above a real 0.2 mm overrun rather than a margin.
+
+All six are enforced by `defectgen/tests/`, so the next drift fails a test rather than waiting
+for someone to notice.
 
 ---
 
@@ -408,6 +432,30 @@ it does not need the left/right variants as separate files.
   large**. This is the single most likely first failure when §4B.8 / task 2.6 begins.
 - Each part's origin must sit at its named datum above (cell: centre of the can's bottom face),
   so the generator can place parts by transform alone.
+
+### What the generator found when it loaded these — 1 Nov 2026
+
+The exports do **not** satisfy the axes and origin rules above, so `defectgen` normalises them on
+load rather than waiting on a re-export. The table lives in `defectgen/src/defectgen/parts.py`.
+
+- **Seven of the twelve bodies are rotated 90° about Z** relative to "X along the module length":
+  `cell_can`, both terminals, `cooling_plate`, `busbar_carrier`, both busbars and `cmc`. The other
+  four already match.
+- **Every origin sits at a body centroid**, not at a named datum. Normalisation puts the centre of
+  each part's bottom face on the origin — which for a terminal is the seating face §4 asks for,
+  so a height defect stays a pure +Z translation.
+- Each load is checked against the config, so a re-export that silently changes orientation or
+  size raises instead of producing a subtly wrong module.
+
+**Two parts need re-exporting. Neither blocks the generator, both are recorded in §12.**
+
+1. **`terminal_neg` is 38.5 wide against `terminal_pos`'s 22** — the fill-plug is merged into it.
+   Placed on the terminal centre its outer edge reaches y = 76.75, past the side plate at 74.0 and
+   past the 151 envelope, making the module 153.5 wide. The plug belongs as a feature on the can
+   (§4), so the fix is to export the terminal alone.
+2. **`cmc` is non-manifold** where its components meet the board. It has no holes, so a ray cannot
+   leak through it and nothing downstream is affected — the generator checks for holes rather than
+   strict two-manifoldness for exactly this reason. Worth knowing, not worth fixing on its own.
 
 ---
 
@@ -546,7 +594,11 @@ the fixed-vs-arm comparison a controlled experiment rather than two anecdotes.
 - The 0.1 mm adjacent-terminal tolerance: confirm from MDPI *Batteries* 6(3):47 directly.
 - ~~Wall height vs cover~~ — **resolved 22 Oct 2026**: end and side plates raised to 101.5 (§5).
 - ~~Busbar width~~ — **resolved 22 Oct 2026**: as-built 11 × 1.5, lengths 63.5 / 147.5 (§5).
-- CMC component height: must stay under ≈ 1.4 mm, or recess the cover locally (§5 height check).
+- **CMC clashes with the cover by 0.2 mm.** At 3.2 thick on a carrier top of 102.0 it reaches
+  105.2 against a wall top of 105.0. Lower it into the carrier, thin the board, or recess the
+  cover. (§5 height check; strict `xfail` in `defectgen/tests/test_budgets.py`.)
+- **Re-export `terminal_neg` without the merged fill plug** (§7). Until then the module is 153.5
+  wide instead of 151.0. Strict `xfail` in `defectgen/tests/test_parts.py`.
 - ~~Reconcile 10 exported CAD components against the 12 bodies listed in §7~~ — **resolved
   1 Nov 2026**: the two terminals are merged into the cell file. The STEP holds them as separate
   solids; the STL does not.

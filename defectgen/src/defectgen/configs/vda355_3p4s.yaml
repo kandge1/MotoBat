@@ -1,0 +1,78 @@
+# VDA 355 module, 12 × PHEV2 cells, 3P4S.
+#
+# This file is the executable form of docs/module_spec.md. Key names match the
+# Fusion User Parameters (spec §7); change a number here and in Fusion, never
+# one alone. Tags: S sourced, D derived, A assumed, B as-built-from-CAD.
+#
+# Millimetres throughout. Axes: Z up, X along the module length (cell stacking
+# direction), Y across. See spec §7.
+
+name: vda355_3p4s
+
+envelope:
+  module_l: 355.0            # S  VDA 355
+  module_w: 151.0            # S
+  module_h: 108.0            # S
+
+layout:
+  n_cells: 12                # S
+  n_parallel: 3              # S  3P4S
+  n_series: 4                # S
+  cell_pitch: 28.0           # D  cell_t + pad_t
+
+cell:
+  cell_w: 148.0              # S  Y, across the module
+  cell_t: 26.5               # S  X, stacking direction
+  cell_h: 91.0               # S  Z
+
+terminal:
+  terminal_d: 18.5           # S  X, drawing L6
+  terminal_w: 22.0           # S  Y, drawing L5
+  terminal_h: 6.0            # S  Z above the cap, drawing L1
+  terminal_pitch_y: 115.0    # S  drawing L7, centre to centre
+  terminal_neg_w: 38.5       # B  the negative terminal is wider as built; see spec §4
+
+pad:
+  pad_t: 1.5                 # A  X
+  pad_w: 148.0               # D  Y
+  pad_h: 91.0                # D  Z
+
+housing:
+  end_plate_t: 10.25         # D  X
+  end_plate_w: 148.0         # D  Y
+  end_plate_h: 101.0         # B  Z, was 101.5 in the spec before the CAD check
+  side_plate_l: 355.0        # D  X
+  side_plate_t: 1.5          # D  Y
+  side_plate_h: 101.0        # B  Z, matches the end plates
+  cooling_plate_l: 355.0     # D  X
+  cooling_plate_w: 151.0     # D  Y
+  cooling_plate_t: 4.0       # A  Z
+  cover_l: 355.0             # A  X
+  cover_w: 151.0             # A  Y
+  cover_t: 2.0               # A  Z
+
+carrier:
+  carrier_l: 333.0           # B  X
+  carrier_w: 146.5           # B  Y
+  carrier_h: 7.0             # B  Z, was 6.5 in the spec before the CAD check
+
+busbar:
+  busbar_t: 1.5              # S  weld study, 1060 Al
+  busbar_w: 12.0             # B  Y, was 11
+  busbar_end_l: 64.5         # B  X, spans 3 terminals
+  busbar_series_l: 148.5     # B  X, spans 6 terminals
+
+cmc:
+  cmc_l: 250.0               # B  X
+  cmc_w: 50.0                # B  Y
+  cmc_t: 3.2                 # B  Z
+
+# Nominal seam geometry only. Seam defects belong to task 1.2.
+# Lap weld: the beam fires down through the busbar into the terminal pad.
+weld:
+  weld_stitches: 2           # A  parallel stitches per busbar-terminal joint
+  weld_stitch_l: 12.0        # A  X, spec §5 says 10-15
+  weld_stitch_w: 1.25        # A  Y, spec §5 says 1-1.5
+  weld_stitch_offset_y: 2.5  # A  either side of the busbar centreline
+  weld_bead_h: 0.3           # A  reinforcement proud of the busbar top
+  weld_edge_margin: 2.0      # A  minimum clear distance to a busbar edge

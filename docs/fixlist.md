@@ -11,8 +11,9 @@ date (`~~item~~ — **done 5 Nov 2026**`) rather than deleting it, per the house
 Section references like §4A.4 point into `project_plan.md`; §7 and §12 point into
 `module_spec.md`.
 
-*Last updated: 1 Nov 2026 — A, B and C closed in one pass. D remains, and **none of it blocks
-the current task** — each item gates a specific later task, named in §D.*
+*Last updated: 1 Nov 2026 — A, B and C closed. D remains and **none of it blocks the current
+task**, each item gating a specific later task (§D). **§E is new**: two CAD issues found by
+building the generator, one of which supersedes D3.*
 
 ---
 
@@ -214,3 +215,33 @@ demoted and recorded rather than quietly kept.
 
 **Watch item, not a task.** `inspector_flange.stl` at 99 MB — revisit only if performance
 suffers (A2).
+
+---
+
+## E. Found by building the generator — 1 Nov 2026
+
+Loading every mesh and comparing it against `module_spec.md` turned up things no amount of
+reading would have. Both are recorded as strict `xfail`s in `defectgen/tests/`, so the suite is
+green today and will fail loudly the moment each is fixed — telling you to delete the marker.
+
+- [ ] **E1 — Re-export `terminal_neg` without the fill plug.** It exports 38.5 wide against
+      `terminal_pos`'s 22, so the plug is merged in. Placed on the terminal centre its outer edge
+      reaches y = 76.75, past the side plate at 74.0 and past the 151 envelope — the generated
+      module comes out **153.5 wide**. The plug belongs as a feature on the can (spec §4), so
+      exporting the terminal alone fixes it. *Blocks: a geometrically valid module. Everything
+      else in task 1.1 works.*
+      Test: `test_parts.py::test_terminals_have_matching_footprints`.
+
+- [ ] **E2 — The CMC clash is real and is 0.2 mm, not 1.4 mm of headroom.** This supersedes D3.
+      The as-built board is **3.2 thick, not 1.6**, and the walls came in at **101.0, not 101.5**.
+      Seated on the carrier top at z = 102.0 it reaches 105.2 against a wall top of 105.0.
+      Test: `test_budgets.py::test_cmc_clears_the_cover`.
+
+- [x] ~~**E3 — `cmc` is non-manifold**~~ — **closed as not-a-defect.** It has no holes, so a ray
+      cannot leak through it. The generator checks for holes rather than strict two-manifoldness,
+      because CAD parts whose sub-bodies sit exactly face-to-face always go non-manifold once
+      duplicate vertices merge, and nothing downstream cares.
+
+**Six dimension corrections** also came out of this and are already written into
+`module_spec.md` §5 — walls 101.0, carrier 7.0, busbar width 12, busbar lengths 64.5 / 148.5,
+CMC 250 × 50 × 3.2, overhang rule `n × 28 + 8.5`. Z now closes at 107.0, not 107.5.

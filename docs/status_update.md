@@ -14,6 +14,11 @@ suite revised (28 Oct).*
 
 ---
 
+> **Task 1.1 is done (1 Nov 2026).** `defectgen/` exists and emits all three stages from the real
+> CAD. Current task is now **1.2 — defect injection**. The generator's `(mesh, labels)` seam and
+> the terminal/can split are in place for it. Two CAD re-exports are outstanding in fixlist §E;
+> neither blocks starting 1.2.
+
 ## ▶ CURRENT TASK
 
 > **§4B.1 — Procedural battery-module generator, mesh-native.** Pure numpy +
@@ -117,7 +122,7 @@ the contribution.
 | # | Task | § | Output |
 |---|---|---|---|
 | 1.0 | Resolution gate + scope decision | 3.7 | ✅ 15 Sep, in `project_plan.md` |
-| 1.1 | Mesh-native module generator, three stages, `(mesh, labels)` seam | 4B.1 | `defectgen/module.py` |
+| 1.1 | Mesh-native module generator, three stages, `(mesh, labels)` seam | 4B.1 | ✅ 1 Nov 2026 — `defectgen/`, 65 tests passing. Loads the real CAD, normalising each mesh into the §7 frame on the way in. Blocked only on re-exporting `terminal_neg` (fixlist E1) for a geometrically valid module. |
 | 1.2 | Defect injection: cell pose, terminal height/tilt, missing cell, reversed polarity, busbar pose/gap, weld seam, adhesive bead, FOD | 4B.2 | `defects.py` |
 | 1.3 | Three ray-cast sensor models: fixed Ranger3 line-scan, wrist Zivid-class snapshot, wrist LJ-X8200-class profilometer. Both occlusions, dropout, noise; parameters **frozen and hashed before any results**. | 4B.3 | `scan.py` |
 | 1.4 | Detection: align → ICP → per-feature fits within one capture → residual segmentation → classify | 4B.4 | `detect.py` |
