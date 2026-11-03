@@ -235,12 +235,33 @@ green today and will fail loudly the moment each is fixed — telling you to del
       Tests: `test_parts.py::test_terminals_have_matching_footprints` (strict xfail),
       `test_module.py::test_terminals_sit_where_the_fusion_cell_has_them`.
 
-- [ ] **E2 — The CMC overruns the cover by 0.2 mm.** This supersedes D3, and shrinks it.
-      The 3.2 thickness is **deliberate: 1.6 of PCB plus 1.6 of surface-mount component space**,
-      so D3's question — "will the components fit in the headroom?" — was already answered in the
-      CAD. What is left is arithmetic: 102.0 carrier top + 3.2 = 105.2 against a 105.0 wall top.
-      Drop the CMC 0.2 into the carrier, or take the component allowance to 1.4.
-      Test: `test_budgets.py::test_cmc_clears_the_cover`.
+- [x] **E2 — The CMC overruns the cover by 0.2 mm.** *Not real (3 Nov 2026).* The arithmetic used the
+      carrier's top (102.0) as the CMC seat. In `module_assembled` the CMC sits flush on the carrier
+      deck at 98.0 → 101.2, between the pegs, leaving 3.8 to the wall top. Fixed with
+      `carrier_deck_h: 3.0`; `test_budgets.py::test_cmc_clears_the_cover` now passes.
+
+- [ ] **E3 — `busbar_carrier.stl` is 7.0 tall; the carrier inside `module_assembled` is 8.0.** The
+      assembly's carrier has CMC mounting pegs to z = 103.0 (223.6 mm² of top faces) that the
+      standalone export lacks. Re-export the carrier from the current Fusion design and set
+      `carrier_h` to match. The standalone export also has wide bosses at z +5.6 that reach under
+      solid CMC board (48 of 264 sampled points), so on it the CMC would ride 2.6 high on the
+      bosses. Until the re-export, `settle.py` leaves the CMC at the assembly's deck height
+      instead of settling it.
+
+- [ ] **E4 — Six cells in `module_assembled` face the wrong way for 3P4S.** Cells 3, 6, 7, 9, 10
+      and 11 are rotated against the rest of their parallel group. By fill-plug side the assembly
+      is three blocks of four — cells 0–3 one way, 4–7 the other, 8–11
+      the first — which is a 4P3S layout, while its busbars are 3P4S. 3P4S needs
+      [0–2][3–5][6–8][9–11] alternating. The generator follows spec §2.
+
+- [ ] **E5 — The carrier sits on the fill plugs.** The plug merged into `terminal_neg` stands 5.0
+      above the cap; the carrier's underside is on the cap with no pocket over the plug, so every
+      negative terminal overlaps the carrier by ≈ 1426 mm³ — in `module_assembled` too. Either
+      pocket the carrier over the plugs or model the plug at its real (much lower) height as a
+      can feature. Every plug clashes regardless of which way its cell faces, so the carrier has
+      no keying pockets at present (the user recalls designing keying that may have been lost
+      while simplifying the carrier). Until fixed, `settle.py` rests the carrier on the terminal
+      pads only (`_pad_only`).
 
 - [x] ~~**E3 — `cmc` is non-manifold**~~ — **closed as not-a-defect.** It has no holes, so a ray
       cannot leak through it. The generator checks for holes rather than strict two-manifoldness,

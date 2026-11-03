@@ -189,3 +189,20 @@ def test_no_terminal_reaches_past_the_cell():
     for placement in build_plan(cfg, "pre_busbar").of_kind("terminal"):
         built = parts[placement.part].copy().apply_transform(placement.transform)
         assert np.abs(built.bounds[:, 1]).max() <= cfg.cell_w / 2 + 1e-6, placement.ref
+
+
+@needs_meshes
+@pytest.mark.parametrize("stage", STAGES)
+def test_a_clean_module_is_already_at_rest(stage):
+    """Settling with every step forced must move nothing in a clean build. If
+    it did, either the solver is wrong or the CAD does not sit where the plan
+    puts it -- both worth knowing before any defect result."""
+    from defectgen.parts import load_all
+    from defectgen.module import build_plan
+    from defectgen.settle import settle
+
+    plan, nominal = build_plan(cfg, stage), build_plan(cfg, stage)
+    settle(plan, load_all(cfg), force=True)
+    for p, q in zip(plan.placements, nominal.placements):
+        np.testing.assert_allclose(p.transform, q.transform, atol=1e-6, err_msg=str(p.ref))
+    assert not plan.overrides

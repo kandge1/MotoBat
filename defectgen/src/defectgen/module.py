@@ -26,6 +26,7 @@ from .groundtruth import (
     TerminalGT,
 )
 from .parts import PARTS, load_all, mesh_dir
+from .settle import particle_mesh, settle
 from .plan import Dent, Placement, Plan, SeamPlan, rotation_z, translation
 
 
@@ -204,7 +205,7 @@ def build_plan(cfg: Config, stage: Stage) -> Plan:
                     )
 
         plan.placements.append(
-            Placement("cmc", translation(0, 0, cfg.z_carrier_top), ("cmc",))
+            Placement("cmc", translation(0, 0, cfg.z_carrier_deck), ("cmc",))
         )
         plan.placements.append(
             Placement("cover", translation(0, 0, cfg.z_wall_top), ("cover",))
@@ -262,8 +263,11 @@ def _solids(plan: Plan, parts: dict[str, trimesh.Trimesh]):
     for placement in plan.placements:
         if not placement.present:
             continue
-        mesh = parts[placement.part].copy()
-        mesh.apply_transform(placement.transform)
+        if placement.ref in plan.overrides:
+            mesh = plan.overrides[placement.ref].copy()
+        else:
+            mesh = parts[placement.part].copy()
+            mesh.apply_transform(placement.transform)
         for dent in plan.dents:
             if dent.ref == placement.ref:
                 mesh = _apply_dent(mesh, dent)
@@ -280,9 +284,7 @@ def _solids(plan: Plan, parts: dict[str, trimesh.Trimesh]):
         yield "welds", box
 
     for particle in plan.particles:
-        blob = trimesh.creation.icosphere(subdivisions=1, radius=particle.radius)
-        blob.apply_translation(particle.centre)
-        yield "fod", blob
+        yield "fod", particle_mesh(particle)
 
 
 def realise(plan: Plan, parts: dict[str, trimesh.Trimesh]) -> trimesh.Trimesh:
@@ -339,6 +341,8 @@ def defect_bounds(plan: Plan, parts: dict[str, trimesh.Trimesh]) -> list[np.ndar
                 pieces.append(_seam_box(plan.seams[i]))
         if target.region is not None:
             pieces.append(_box(*target.region))
+        if target.particle is not None:
+            pieces.append(_box(*particle_mesh(plan.particles[target.particle]).bounds))
         stack = np.array(pieces)
         boxes.append(_box(stack[:, 0].min(axis=0), stack[:, 1].max(axis=0)))
     return boxes
@@ -428,10 +432,23 @@ def collect_labels(
 def _with_bounds(plan: Plan, parts) -> tuple:
     if parts is None or not plan.defects:
         return tuple(plan.defects)
-    return tuple(
-        replace(d, bounds=(tuple(map(float, b[0])), tuple(map(float, b[1]))))
-        for d, b in zip(plan.defects, defect_bounds(plan, parts))
-    )
+    out = []
+    for d, t, b in zip(plan.defects, plan.targets, defect_bounds(plan, parts)):
+        # Settling may have moved a seam or a particle after it was recorded;
+        # the label describes where it ended up.
+        location = d.location
+        if t.particle is not None:
+            location = tuple(map(float, plan.particles[t.particle].centre))
+        elif len(t.seams) == 1:
+            location = tuple(map(float, plan.seams[t.seams[0]].centre))
+        out.append(
+            replace(
+                d,
+                location=location,
+                bounds=(tuple(map(float, b[0])), tuple(map(float, b[1]))),
+            )
+        )
+    return tuple(out)
 
 
 DefectFn = Callable[[Plan, np.random.Generator], None]
@@ -442,8 +459,10 @@ def injected_plan(
     cfg: Config | None = None,
     seed: int = 0,
     defects: Sequence[DefectFn] = (),
+    parts: dict[str, trimesh.Trimesh] | None = None,
 ) -> Plan:
-    """Build the plan for a stage and run every injector that applies to it."""
+    """Build the plan for a stage, run every injector that applies to it, then
+    settle it so no two parts overlap (settle.py)."""
     cfg = cfg or load()
     plan = build_plan(cfg, stage)
 
@@ -455,6 +474,7 @@ def injected_plan(
         if STAGES.index(getattr(inject, "min_stage", STAGES[0])) > reached:
             continue
         inject(plan, rng)
+    settle(plan, parts if parts is not None else load_all(cfg))
     return plan
 
 
@@ -465,8 +485,9 @@ def generate(
     defects: Sequence[DefectFn] = (),
     mesh_dir: Path | None = None,
 ) -> tuple[trimesh.Trimesh, Labels]:
-    plan = injected_plan(stage, cfg, seed, defects)
-    parts = load_all(plan.cfg, mesh_dir)
+    cfg = cfg or load()
+    parts = load_all(cfg, mesh_dir)
+    plan = injected_plan(stage, cfg, seed, defects, parts)
     return realise(plan, parts), collect_labels(plan, seed, parts)
 
 
@@ -484,7 +505,7 @@ def export(
     outdir.mkdir(parents=True, exist_ok=True)
     written = []
     for stage in STAGES:
-        plan = injected_plan(stage, cfg, seed, defects)
+        plan = injected_plan(stage, cfg, seed, defects, parts)
         stl = outdir / f"{stage}.stl"
         realise(plan, parts).export(stl)
         js = outdir / f"{stage}.labels.json"

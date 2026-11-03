@@ -38,6 +38,12 @@ class Placement:
     transform: np.ndarray
     ref: Ref
     present: bool = True
+    # Held where it is by something the model does not contain (a clip, a
+    # fixture), so settling leaves it alone. It still supports what rests on it.
+    pinned: bool = False
+    # Rigidly fixed to its cell but disturbed: lift it clear of the cap rather
+    # than let it rest under gravity (a tilted terminal stands on its low edge).
+    seat: bool = False
 
     def compose(self, delta: np.ndarray) -> None:
         """Apply `delta` in module coordinates, i.e. after the existing placement."""
@@ -64,7 +70,12 @@ class SeamPlan:
 
 @dataclass
 class Particle:
-    """Spatter or foreign debris. A blob on a surface."""
+    """Spatter, foreign debris or a chip. A blob on a surface.
+
+    Debris and FOD are present before later parts arrive, so settling treats
+    them as supports -- a chip on a terminal holds the busbar off it. Spatter
+    lands after welding and supports nothing.
+    """
 
     centre: np.ndarray
     radius: float
@@ -96,6 +107,7 @@ class Target:
     refs: tuple[Ref, ...] = ()
     seams: tuple[int, ...] = ()
     region: tuple[np.ndarray, np.ndarray] | None = None
+    particle: int | None = None
 
 
 @dataclass
@@ -109,6 +121,10 @@ class Plan:
     defects: list[Defect] = field(default_factory=list)
     # Parallel to `defects`: what each one touched, for its bounding box.
     targets: list[Target] = field(default_factory=list)
+    # Deformed parts, in module coordinates, keyed by ref. Settling writes these
+    # for the compliant parts (pads compress, side plates bulge); `realise`
+    # uses them in place of transforming the CAD part.
+    overrides: dict = field(default_factory=dict)
 
     def find(self, ref: Ref) -> Placement:
         for p in self.placements:
@@ -131,14 +147,19 @@ class Plan:
         refs: tuple[Ref, ...] = (),
         seams: tuple[SeamPlan, ...] = (),
         radius: float | None = None,
+        particle: Particle | None = None,
     ) -> None:
-        """`radius` boxes a sphere of that size around `location`."""
+        """`radius` boxes a sphere of that size around `location`. `particle`
+        boxes that particle wherever settling leaves it."""
         region = None
         if radius is not None:
             centre = np.asarray(location, dtype=float)
             region = (centre - radius, centre + radius)
+        index = None
+        if particle is not None:
+            index = next(i for i, q in enumerate(self.particles) if q is particle)
         self.targets.append(
-            Target(tuple(refs), tuple(self.seam_index(s) for s in seams), region)
+            Target(tuple(refs), tuple(self.seam_index(s) for s in seams), region, index)
         )
         self.defects.append(
             Defect(

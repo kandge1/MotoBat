@@ -97,6 +97,10 @@ def terminal_tilt(k: int, polarity: str, deg: float, axis: str = "y"):
         pivot = placement.origin
         vector = (0.0, 1.0, 0.0) if axis == "y" else (1.0, 0.0, 0.0)
         placement.compose(_rotation(deg, vector, pivot))
+        # Rotating about the centre sinks one edge into the cap; settling lifts
+        # it until it stands on that edge, which is where a tilted terminal
+        # actually pivots. The extra height is real and lands in the labels.
+        placement.seat = True
         plan.record("terminal_tilt", deg, pivot, refs=(placement.ref,))
 
     return apply
@@ -154,14 +158,33 @@ def busbar_pose(index: int, dx: float = 0.0, dy: float = 0.0, dtheta_deg: float 
 
 
 @_from("pre_weld")
-def busbar_liftoff(index: int, gap: float):
+def busbar_liftoff(index: int, gap: float, cell_index: int | None = None):
     """The pre-weld gap is the critical process variable: too large and the lap
-    weld undercuts, goes porous or fails to fuse (spec §5)."""
+    weld undercuts, goes porous or fails to fuse (spec §5).
+
+    Modelled by its cause, not as a pose: a chip of debris `gap` tall on one
+    terminal pad (the busbar's last, unless `cell_index` says which). Settling
+    then rests the busbar on it, so the gap is largest over the chip and closes
+    toward the far end -- a raised busbar does not float level.
+    """
 
     def apply(plan: Plan, rng: np.random.Generator) -> None:
-        pivot = plan.find(("busbar", index)).origin
-        _move_busbar(plan, index, translation(0.0, 0.0, gap))
-        plan.record("busbar_liftoff", gap, pivot, refs=(("busbar", index),))
+        from .module import busbar_plan, terminal_y
+
+        terms = busbar_plan(plan.cfg)[index][1]
+        k, polarity = next(t for t in terms if t[0] == cell_index) if cell_index is not None else terms[-1]
+        centre = np.array(
+            [
+                plan.cfg.cell_centre_x(k),
+                terminal_y(plan.cfg, k, polarity),
+                plan.cfg.z_terminal_top + gap / 2,
+            ]
+        )
+        chip = Particle(centre=centre, radius=gap / 2, kind="debris")
+        plan.particles.append(chip)
+        plan.record(
+            "busbar_liftoff", gap, centre, refs=(("busbar", index),), particle=chip
+        )
 
     return apply
 
@@ -241,8 +264,9 @@ def spatter(count: int, radius: float = 0.2, spread: float = 6.0):
             origin = live[int(seam)].centre
             offset = np.append(rng.normal(0.0, spread, 2), 0.0)
             centre = origin + offset
-            plan.particles.append(Particle(centre=centre, radius=radius, kind="spatter"))
-            plan.record("spatter", radius, centre, radius=radius)
+            drop = Particle(centre=centre, radius=radius, kind="spatter")
+            plan.particles.append(drop)
+            plan.record("spatter", radius, centre, particle=drop)
 
     return apply
 
@@ -290,8 +314,9 @@ def missing_pad(k: int):
 def fod(centre, radius: float = 0.5):
     def apply(plan: Plan, rng: np.random.Generator) -> None:
         at = np.array(centre, dtype=float)
-        plan.particles.append(Particle(centre=at, radius=radius, kind="fod"))
-        plan.record("fod", radius, at, radius=radius)
+        particle = Particle(centre=at, radius=radius, kind="fod")
+        plan.particles.append(particle)
+        plan.record("fod", radius, at, particle=particle)
 
     return apply
 
@@ -308,6 +333,8 @@ def carrier_seating(dz: float, tilt_deg: float = 0.0, axis: str = "y"):
             vector = (0.0, 1.0, 0.0) if axis == "y" else (1.0, 0.0, 0.0)
             delta = delta @ _rotation(tilt_deg, vector, pivot)
         placement.compose(delta)
+        # Held up by a clip that did not snap home -- not something gravity undoes.
+        placement.pinned = True
         plan.record("carrier_seating", dz, pivot, refs=(placement.ref,))
 
     return apply

@@ -24,9 +24,13 @@ from .module import export, export_cells
 
 
 def demo_defects(cfg):
-    """One of each primary class, sized to be obvious in a viewer."""
+    """One of each primary class, sized to be obvious in a viewer -- but still
+    physically possible. The cell error is near the most the 1.5 mm pads can
+    absorb: 0.4 deg of yaw moves a corner 74 sin(0.4) = 0.52 mm, plus 0.5 of
+    shift, against 1.2 mm of crushable foam. Any more and settling refuses it,
+    because the cells would collide."""
     return [
-        defects.cell_placement(4, dx=2.0, dy=1.5, dtheta_deg=2.0),
+        defects.cell_placement(4, dx=0.5, dy=1.5, dtheta_deg=0.4),
         defects.terminal_height(6, "pos", dz=1.5),
         defects.terminal_tilt(7, "neg", deg=6.0),
         defects.missing_cell(9),

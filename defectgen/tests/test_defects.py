@@ -50,7 +50,11 @@ def test_terminal_height_shows_up_as_an_adjacent_delta():
     assert worst == pytest.approx(0.25, abs=1e-9)
 
 
-def test_terminal_tilt_pivots_on_the_seating_face():
+def test_terminal_tilt_stands_on_its_low_edge():
+    """A tilted terminal cannot sink into the cap: it stands on the edge that
+    went down, so its seating centre rises by half its depth times sin(tilt).
+    (Rotating about the centre and lifting differs from a true edge pivot by
+    (d/2)(1 - cos) sideways -- 3 um at 1.5 deg.)"""
     _, clean = generate("pre_busbar")
     _, bad = generate("pre_busbar", defects=[defects.terminal_tilt(2, "neg", deg=1.5)])
 
@@ -58,7 +62,8 @@ def test_terminal_tilt_pivots_on_the_seating_face():
     tilted = {(t.cell_index, t.polarity): t for t in bad.terminals}
     target = tilted[(2, "neg")]
 
-    np.testing.assert_allclose(np.array(target.centre), seat[(2, "neg")], atol=1e-9)
+    rise = cfg.terminal_d / 2 * np.sin(np.radians(1.5))
+    np.testing.assert_allclose(np.array(target.centre), seat[(2, "neg")] + [0, 0, rise], atol=1e-6)
     assert target.normal[2] == pytest.approx(np.cos(np.radians(1.5)), abs=1e-9)
 
 
@@ -80,17 +85,25 @@ def test_reversed_polarity_swaps_the_terminal_rows():
     assert after[(2, "pos")] == pytest.approx(before[(2, "pos")], abs=1e-9)
 
 
-def test_busbar_liftoff_raises_the_busbar_and_its_seams():
-    _, clean = generate("post_weld")
-    _, bad = generate("post_weld", defects=[defects.busbar_liftoff(1, gap=0.4)])
+def test_busbar_liftoff_rests_the_busbar_on_the_chip():
+    """Lift-off is a chip on the busbar's last terminal. The busbar tilts onto
+    it: the gap is the chip height over that terminal and shrinks toward the
+    far end, which still rests on its pad. The seams ride with it."""
+    from defectgen.module import busbar_plan
 
-    assert bad.busbars[1].underside_z - clean.busbars[1].underside_z == pytest.approx(0.4)
-    assert bad.busbars[0].underside_z == pytest.approx(clean.busbars[0].underside_z)
+    gap = 0.4
+    _, clean = generate("post_weld")
+    _, bad = generate("post_weld", defects=[defects.busbar_liftoff(1, gap=gap)])
 
     lifted = [s for s in bad.seams if s.busbar_index == 1]
     original = [s for s in clean.seams if s.busbar_index == 1]
-    for a, b in zip(original, lifted):
-        assert b.start[2] - a.start[2] == pytest.approx(0.4)
+    rise = {s.cell_index: b.start[2] - s.start[2] for s, b in zip(original, lifted)}
+    terms = [k for k, _ in busbar_plan(cfg)[1][1]]
+    near, far = terms[-1], terms[0]
+    assert 0.5 * gap < rise[near] <= gap + 1e-6
+    assert rise[far] < rise[near]
+    assert min(rise.values()) > -1e-6, "nothing may sink below its nominal seat"
+    assert bad.busbars[0].underside_z == pytest.approx(clean.busbars[0].underside_z)
 
 
 def test_busbar_pose_leaves_other_busbars_alone():
@@ -273,12 +286,74 @@ def test_missing_cell_box_is_where_the_cell_belonged():
 
 
 def test_moved_busbar_box_spans_both_poses():
+    """The busbar tilts onto the chip, so the box runs from the nominal
+    underside up to at least the chip-raised top -- a little more, since the
+    tilt adds height across the busbar's width."""
     _, labels = generate("pre_weld", defects=[defects.busbar_liftoff(2, gap=0.2)])
     (d,) = labels.defects
-    assert _size(d)[2] == pytest.approx(cfg.busbar_t + 0.2)
+    lo, hi = np.array(d.bounds)
+    assert lo[2] == pytest.approx(cfg.z_terminal_top, abs=1e-6)
+    assert hi[2] >= cfg.z_terminal_top + cfg.busbar_t + 0.2 - 1e-6
+    assert hi[2] <= cfg.z_terminal_top + cfg.busbar_t + 0.2 + 0.05
 
 
 def test_spatter_box_is_the_particle():
     _, labels = generate("post_weld", defects=[defects.spatter(count=3, radius=0.2)])
     for d in labels.defects:
         np.testing.assert_allclose(_size(d), 0.4)
+
+
+# Settling -- nothing passes through anything.
+
+def _overlaps(stage, injectors):
+    """Exact overlap volume between every pair of rigid placed parts."""
+    import itertools
+
+    import trimesh
+
+    from defectgen.module import injected_plan
+    from defectgen.parts import load_all
+    from defectgen.settle import world_mesh
+
+    parts = load_all(cfg)
+    plan = injected_plan(stage, cfg, 0, injectors, parts)
+    meshes = [
+        (p.ref, world_mesh(plan, parts, p))
+        for p in plan.placements
+        # cmc is non-manifold (spec §7) and terminal_neg's plug sits in the
+        # carrier by design until fixlist E5 is resolved.
+        if p.present and p.ref[0] != "cmc"
+    ]
+    found = []
+    for (ra, a), (rb, b) in itertools.combinations(meshes, 2):
+        if "carrier" in (ra[0], rb[0]) and "terminal" in (ra[0], rb[0]):
+            continue
+        lo, hi = np.maximum(a.bounds[0], b.bounds[0]), np.minimum(a.bounds[1], b.bounds[1])
+        if np.any(hi - lo <= 1e-6):
+            continue
+        v = trimesh.boolean.intersection([a, b], engine="manifold").volume
+        if v > 1e-3:
+            found.append((ra, rb, round(v, 3)))
+    return found
+
+
+def test_realistic_defects_leave_nothing_interpenetrating():
+    from defectgen.__main__ import realistic_defects
+
+    assert _overlaps("post_weld", realistic_defects(cfg)) == []
+
+
+def test_a_cell_pushed_sideways_bulges_the_side_plate():
+    from defectgen.module import injected_plan
+    from defectgen.parts import load_all
+    from defectgen.settle import world_mesh
+
+    parts = load_all(cfg)
+    plan = injected_plan("pre_busbar", cfg, 0, [defects.cell_placement(6, dy=0.8)], parts)
+    plate = world_mesh(plan, parts, plan.find(("side_plate", "right")))
+    assert plate.bounds[1][1] == pytest.approx(cfg.cell_w / 2 + cfg.side_plate_t + 0.8, abs=0.05)
+
+
+def test_a_cell_error_no_pad_can_absorb_is_refused():
+    with pytest.raises(ValueError, match="would collide"):
+        generate("pre_busbar", defects=[defects.cell_placement(4, dx=2.0)])

@@ -34,6 +34,7 @@ terminal:
 
 pad:
   pad_t: 1.5                 # A  X
+  pad_min_t: 0.3             # A  foam crushed this far stops absorbing; past it, cells collide
   pad_w: 148.0               # D  Y
   pad_h: 91.0                # D  Z
 
@@ -44,6 +45,7 @@ housing:
   side_plate_l: 355.0        # D  X
   side_plate_t: 1.5          # D  Y
   side_plate_h: 101.0        # B  Z, matches the end plates
+  side_plate_bulge_spread: 20.0  # A  how far a local push spreads along a 1.5 mm sheet
   cooling_plate_l: 355.0     # D  X
   cooling_plate_w: 151.0     # D  Y
   cooling_plate_t: 4.0       # A  Z
@@ -55,6 +57,7 @@ carrier:
   carrier_l: 333.0           # B  X
   carrier_w: 146.5           # B  Y
   carrier_h: 7.0             # B  Z, was 6.5 in the spec before the CAD check
+  carrier_deck_h: 3.0        # B  Z, the deck the CMC sits flush on (module_assembled, 3 Nov)
 
 busbar:
   busbar_t: 1.5              # S  weld study, 1060 Al

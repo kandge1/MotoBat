@@ -35,6 +35,7 @@ class Config:
     terminal_neg_w: float
 
     pad_t: float
+    pad_min_t: float
     pad_w: float
     pad_h: float
 
@@ -44,6 +45,7 @@ class Config:
     side_plate_l: float
     side_plate_t: float
     side_plate_h: float
+    side_plate_bulge_spread: float
     cooling_plate_l: float
     cooling_plate_w: float
     cooling_plate_t: float
@@ -54,6 +56,7 @@ class Config:
     carrier_l: float
     carrier_w: float
     carrier_h: float
+    carrier_deck_h: float
 
     busbar_t: float
     busbar_w: float
@@ -92,6 +95,11 @@ class Config:
     @property
     def z_carrier_top(self) -> float:
         return self.z_cell_top + self.carrier_h
+
+    @property
+    def z_carrier_deck(self) -> float:
+        """Where the CMC sits: on the deck between the pegs, not on top of them."""
+        return self.z_cell_top + self.carrier_deck_h
 
     @property
     def z_wall_top(self) -> float:

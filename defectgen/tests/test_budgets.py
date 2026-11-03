@@ -69,11 +69,12 @@ def test_seams_fit_the_end_terminal_overlap():
     assert cfg.weld_stitch_l <= overlap
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="fixlist D3: CMC is 3.2 thick on a carrier top of 102.0, so it reaches "
-    "105.2 against a wall top of 105.0. Resolve by lowering it into the carrier, "
-    "thinning the board, or recessing the cover.",
-)
 def test_cmc_clears_the_cover():
-    assert cfg.z_carrier_top + cfg.cmc_t <= cfg.z_wall_top
+    """Fixlist E2 was arithmetic on the wrong datum: the CMC sits on the carrier
+    deck (module_assembled, 98.0 -> 101.2), not on top of the carrier at 102.0."""
+    assert cfg.z_carrier_deck + cfg.cmc_t <= cfg.z_wall_top
+
+
+def test_cmc_sits_on_the_deck_as_in_the_fusion_assembly():
+    assert cfg.z_carrier_deck == pytest.approx(98.0)
+    assert cfg.z_carrier_deck + cfg.cmc_t == pytest.approx(101.2)
