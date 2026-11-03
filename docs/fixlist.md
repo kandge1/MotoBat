@@ -232,9 +232,11 @@ green today and will fail loudly the moment each is fixed — telling you to del
       else in task 1.1 works.*
       Test: `test_parts.py::test_terminals_have_matching_footprints`.
 
-- [ ] **E2 — The CMC clash is real and is 0.2 mm, not 1.4 mm of headroom.** This supersedes D3.
-      The as-built board is **3.2 thick, not 1.6**, and the walls came in at **101.0, not 101.5**.
-      Seated on the carrier top at z = 102.0 it reaches 105.2 against a wall top of 105.0.
+- [ ] **E2 — The CMC overruns the cover by 0.2 mm.** This supersedes D3, and shrinks it.
+      The 3.2 thickness is **deliberate: 1.6 of PCB plus 1.6 of surface-mount component space**,
+      so D3's question — "will the components fit in the headroom?" — was already answered in the
+      CAD. What is left is arithmetic: 102.0 carrier top + 3.2 = 105.2 against a 105.0 wall top.
+      Drop the CMC 0.2 into the carrier, or take the component allowance to 1.4.
       Test: `test_budgets.py::test_cmc_clears_the_cover`.
 
 - [x] ~~**E3 — `cmc` is non-manifold**~~ — **closed as not-a-defect.** It has no holes, so a ray

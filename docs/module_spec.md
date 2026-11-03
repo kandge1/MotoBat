@@ -269,13 +269,15 @@ Closes at **107.0**, 1.0 under the 108 envelope. Clearance above the busbars: 2.
 Independently confirmed 1 Nov 2026 — the generator's assembled mesh and the Fusion
 `module_assembled` reference agree on z 0 → 107.0 exactly.
 
-> **CMC clash — now measured, no longer a margin.** At 3.2 thick seated on the carrier top at
-> z = 102.0 the CMC reaches **105.2**, which is **0.2 above the wall top at 105.0**, so the cover
-> cannot sit flat. Earlier wording called this "≈ 1.4 mm of headroom" on the assumption of a
-> 1.6 mm bare board; the as-built part is 3.2 and the walls came in 0.5 lower than recorded.
-> Raising the walls further breaks the VDA 355 height, so the fix is to lower the CMC into the
-> carrier, thin the board, or recess the cover locally. Open item — §12, and asserted as a
-> strict `xfail` in `defectgen/tests/test_budgets.py::test_cmc_clears_the_cover`.
+> **CMC — 0.2 over, and the component allowance is already in the number.** The 3.2 is
+> deliberate: **1.6 of PCB plus 1.6 of surface-mount component space above it.** So the old
+> open item "will the components fit in 1.4 mm?" is answered — they were budgeted from the
+> start. What remains is a plain arithmetic overrun: seated on the carrier top at z = 102.0 the
+> CMC reaches **105.2** against a wall top of **105.0**, so the cover cannot sit flat.
+> It is 0.2 mm, and raising the walls is not available without breaking the VDA 355 height.
+> Cheapest fixes: drop the CMC 0.2 into the carrier, or take the component allowance to 1.4.
+> Open item — §12, asserted as a strict `xfail` in
+> `defectgen/tests/test_budgets.py::test_cmc_clears_the_cover`.
 
 *(Before 22 Oct 2026 this table listed the cover at 106 → 108 with ≈ 1.9 headroom, but had no
 row for the walls; with 91.5 walls, the cover had nothing at that height to rest on.)*
