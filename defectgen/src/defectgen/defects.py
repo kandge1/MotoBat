@@ -64,7 +64,12 @@ def cell_placement(k: int, dx: float = 0.0, dy: float = 0.0, dtheta_deg: float =
         delta = translation(dx, dy, 0.0) @ rotation_z(dtheta_deg, about=(cx, 0.0, 0.0))
         for ref in _cell_refs(k):
             plan.find(ref).compose(delta)
-        plan.record("cell_placement", float(np.hypot(dx, dy)), (cx, 0.0, plan.cfg.z_cell_bottom))
+        plan.record(
+            "cell_placement",
+            float(np.hypot(dx, dy)),
+            (cx, 0.0, plan.cfg.z_cell_bottom),
+            refs=_cell_refs(k),
+        )
 
     return apply
 
@@ -76,7 +81,7 @@ def terminal_height(k: int, polarity: str, dz: float):
     def apply(plan: Plan, rng: np.random.Generator) -> None:
         placement = plan.find(("terminal", k, polarity))
         placement.compose(translation(0.0, 0.0, dz))
-        plan.record("terminal_height", dz, placement.origin)
+        plan.record("terminal_height", dz, placement.origin, refs=(placement.ref,))
 
     return apply
 
@@ -92,7 +97,7 @@ def terminal_tilt(k: int, polarity: str, deg: float, axis: str = "y"):
         pivot = placement.origin
         vector = (0.0, 1.0, 0.0) if axis == "y" else (1.0, 0.0, 0.0)
         placement.compose(_rotation(deg, vector, pivot))
-        plan.record("terminal_tilt", deg, pivot)
+        plan.record("terminal_tilt", deg, pivot, refs=(placement.ref,))
 
     return apply
 
@@ -105,7 +110,7 @@ def missing_cell(k: int):
         location = plan.find(("cell", k)).origin
         for ref in _cell_refs(k):
             plan.find(ref).present = False
-        plan.record("missing_cell", 1.0, location)
+        plan.record("missing_cell", 1.0, location, refs=_cell_refs(k))
 
     return apply
 
@@ -120,7 +125,9 @@ def reversed_polarity(k: int):
         delta = rotation_z(180.0, about=(cx, 0.0, 0.0))
         for ref in _cell_refs(k):
             plan.find(ref).compose(delta)
-        plan.record("reversed_polarity", 180.0, (cx, 0.0, plan.cfg.z_cell_top))
+        plan.record(
+            "reversed_polarity", 180.0, (cx, 0.0, plan.cfg.z_cell_top), refs=_cell_refs(k)
+        )
 
     return apply
 
@@ -141,7 +148,7 @@ def busbar_pose(index: int, dx: float = 0.0, dy: float = 0.0, dtheta_deg: float 
         pivot = plan.find(("busbar", index)).origin
         delta = translation(dx, dy, 0.0) @ rotation_z(dtheta_deg, about=tuple(pivot))
         _move_busbar(plan, index, delta)
-        plan.record("busbar_pose", float(np.hypot(dx, dy)), pivot)
+        plan.record("busbar_pose", float(np.hypot(dx, dy)), pivot, refs=(("busbar", index),))
 
     return apply
 
@@ -154,7 +161,7 @@ def busbar_liftoff(index: int, gap: float):
     def apply(plan: Plan, rng: np.random.Generator) -> None:
         pivot = plan.find(("busbar", index)).origin
         _move_busbar(plan, index, translation(0.0, 0.0, gap))
-        plan.record("busbar_liftoff", gap, pivot)
+        plan.record("busbar_liftoff", gap, pivot, refs=(("busbar", index),))
 
     return apply
 
@@ -175,7 +182,7 @@ def missing_weld(busbar_index: int, cell_index: int):
     def apply(plan: Plan, rng: np.random.Generator) -> None:
         for seam in _seams(plan, busbar_index, cell_index):
             seam.present = False
-            plan.record("missing_weld", 1.0, seam.centre)
+            plan.record("missing_weld", 1.0, seam.centre, seams=(seam,))
 
     return apply
 
@@ -185,7 +192,7 @@ def short_weld(busbar_index: int, cell_index: int, fraction: float):
     def apply(plan: Plan, rng: np.random.Generator) -> None:
         for seam in _seams(plan, busbar_index, cell_index):
             seam.length *= fraction
-            plan.record("short_weld", 1.0 - fraction, seam.centre)
+            plan.record("short_weld", 1.0 - fraction, seam.centre, seams=(seam,))
 
     return apply
 
@@ -195,7 +202,7 @@ def seam_deviation(busbar_index: int, cell_index: int, dy: float):
     def apply(plan: Plan, rng: np.random.Generator) -> None:
         for seam in _seams(plan, busbar_index, cell_index):
             seam.centre = seam.centre + np.array([0.0, dy, 0.0])
-            plan.record("seam_deviation", dy, seam.centre)
+            plan.record("seam_deviation", dy, seam.centre, seams=(seam,))
 
     return apply
 
@@ -205,7 +212,7 @@ def width_deviation(busbar_index: int, cell_index: int, factor: float):
     def apply(plan: Plan, rng: np.random.Generator) -> None:
         for seam in _seams(plan, busbar_index, cell_index):
             seam.width *= factor
-            plan.record("width_deviation", seam.width, seam.centre)
+            plan.record("width_deviation", seam.width, seam.centre, seams=(seam,))
 
     return apply
 
@@ -217,7 +224,7 @@ def reinforcement(busbar_index: int, cell_index: int, dh: float):
     def apply(plan: Plan, rng: np.random.Generator) -> None:
         for seam in _seams(plan, busbar_index, cell_index):
             seam.height += dh
-            plan.record("reinforcement", dh, seam.centre)
+            plan.record("reinforcement", dh, seam.centre, seams=(seam,))
 
     return apply
 
@@ -235,7 +242,7 @@ def spatter(count: int, radius: float = 0.2, spread: float = 6.0):
             offset = np.append(rng.normal(0.0, spread, 2), 0.0)
             centre = origin + offset
             plan.particles.append(Particle(centre=centre, radius=radius, kind="spatter"))
-            plan.record("spatter", radius, centre)
+            plan.record("spatter", radius, centre, radius=radius)
 
     return apply
 
@@ -259,7 +266,8 @@ def handling_damage(
                 direction=np.array(direction, dtype=float),
             )
         )
-        plan.record("handling_damage", depth, at)
+        # Boxed to the dent, not the struck part -- the whole cell is not damaged.
+        plan.record("handling_damage", depth, at, radius=radius)
 
     return apply
 
@@ -271,7 +279,7 @@ def missing_pad(k: int):
     def apply(plan: Plan, rng: np.random.Generator) -> None:
         placement = plan.find(("pad", k))
         placement.present = False
-        plan.record("missing_pad", 1.0, placement.origin)
+        plan.record("missing_pad", 1.0, placement.origin, refs=(placement.ref,))
 
     return apply
 
@@ -283,7 +291,7 @@ def fod(centre, radius: float = 0.5):
     def apply(plan: Plan, rng: np.random.Generator) -> None:
         at = np.array(centre, dtype=float)
         plan.particles.append(Particle(centre=at, radius=radius, kind="fod"))
-        plan.record("fod", radius, at)
+        plan.record("fod", radius, at, radius=radius)
 
     return apply
 
@@ -300,7 +308,7 @@ def carrier_seating(dz: float, tilt_deg: float = 0.0, axis: str = "y"):
             vector = (0.0, 1.0, 0.0) if axis == "y" else (1.0, 0.0, 0.0)
             delta = delta @ _rotation(tilt_deg, vector, pivot)
         placement.compose(delta)
-        plan.record("carrier_seating", dz, pivot)
+        plan.record("carrier_seating", dz, pivot, refs=(placement.ref,))
 
     return apply
 
@@ -315,6 +323,8 @@ def cover_misalignment(dx: float = 0.0, dy: float = 0.0, dtheta_deg: float = 0.0
         placement.compose(
             translation(dx, dy, 0.0) @ rotation_z(dtheta_deg, about=tuple(pivot))
         )
-        plan.record("cover_misalignment", float(np.hypot(dx, dy)), pivot)
+        plan.record(
+            "cover_misalignment", float(np.hypot(dx, dy)), pivot, refs=(placement.ref,)
+        )
 
     return apply

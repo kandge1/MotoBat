@@ -59,10 +59,16 @@ class SeamGT:
 
 @dataclass(frozen=True)
 class Defect:
+    """`bounds` is the axis-aligned (min, max) box around everything the defect
+    touched, covering both where it should be and where it is -- so a missing
+    weld leaves an empty box where the seam belonged, and a short weld sits
+    inside a box of full nominal length."""
+
     cls: str
     magnitude: float
     location: Vec3
     stage: Stage
+    bounds: tuple[Vec3, Vec3] | None = None
 
 
 @dataclass(frozen=True)

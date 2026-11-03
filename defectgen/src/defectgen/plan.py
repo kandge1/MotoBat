@@ -88,6 +88,17 @@ class Dent:
 
 
 @dataclass
+class Target:
+    """What a defect touched. Placement refs and seam indices are resolved to
+    boxes against both the nominal and the final plan; `region` is a box given
+    outright, for things with no nominal pose (spatter, a dent)."""
+
+    refs: tuple[Ref, ...] = ()
+    seams: tuple[int, ...] = ()
+    region: tuple[np.ndarray, np.ndarray] | None = None
+
+
+@dataclass
 class Plan:
     cfg: Config
     stage: Stage
@@ -96,6 +107,8 @@ class Plan:
     particles: list[Particle] = field(default_factory=list)
     dents: list[Dent] = field(default_factory=list)
     defects: list[Defect] = field(default_factory=list)
+    # Parallel to `defects`: what each one touched, for its bounding box.
+    targets: list[Target] = field(default_factory=list)
 
     def find(self, ref: Ref) -> Placement:
         for p in self.placements:
@@ -106,7 +119,27 @@ class Plan:
     def of_kind(self, kind: str) -> list[Placement]:
         return [p for p in self.placements if p.ref[0] == kind]
 
-    def record(self, cls: str, magnitude: float, location) -> None:
+    def seam_index(self, seam: SeamPlan) -> int:
+        return next(i for i, s in enumerate(self.seams) if s is seam)
+
+    def record(
+        self,
+        cls: str,
+        magnitude: float,
+        location,
+        *,
+        refs: tuple[Ref, ...] = (),
+        seams: tuple[SeamPlan, ...] = (),
+        radius: float | None = None,
+    ) -> None:
+        """`radius` boxes a sphere of that size around `location`."""
+        region = None
+        if radius is not None:
+            centre = np.asarray(location, dtype=float)
+            region = (centre - radius, centre + radius)
+        self.targets.append(
+            Target(tuple(refs), tuple(self.seam_index(s) for s in seams), region)
+        )
         self.defects.append(
             Defect(
                 cls=cls,

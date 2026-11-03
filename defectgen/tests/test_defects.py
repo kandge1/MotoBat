@@ -236,3 +236,49 @@ def test_every_defect_carries_class_magnitude_location_and_stage():
     assert d.cls and d.stage == "post_weld"
     assert isinstance(d.magnitude, float)
     assert len(d.location) == 3
+
+
+# Bounding boxes -- what a viewer draws, and what detection matches against.
+
+def _size(defect):
+    lo, hi = np.array(defect.bounds)
+    return hi - lo
+
+
+def test_every_defect_gets_a_box():
+    from defectgen.__main__ import demo_defects
+
+    _, labels = generate("post_weld", defects=demo_defects(cfg))
+    assert labels.defects and all(d.bounds is not None for d in labels.defects)
+    for d in labels.defects:
+        lo, hi = np.array(d.bounds)
+        assert np.all(lo <= hi), d.cls
+
+
+def test_short_weld_box_keeps_the_nominal_length():
+    """The point of the box: the short seam visibly fails to fill it."""
+    _, labels = generate("post_weld", defects=[defects.short_weld(0, 1, fraction=0.5)])
+    for d in labels.defects:
+        assert _size(d)[0] == pytest.approx(cfg.weld_stitch_l)
+        assert _size(d)[1] == pytest.approx(cfg.weld_stitch_w)
+
+
+def test_missing_cell_box_is_where_the_cell_belonged():
+    _, labels = generate("pre_busbar", defects=[defects.missing_cell(5)])
+    (d,) = labels.defects
+    lo, hi = np.array(d.bounds)
+    assert (lo[0] + hi[0]) / 2 == pytest.approx(cfg.cell_centre_x(5))
+    assert _size(d)[0] == pytest.approx(cfg.cell_t)
+    assert hi[2] == pytest.approx(cfg.z_terminal_top)
+
+
+def test_moved_busbar_box_spans_both_poses():
+    _, labels = generate("pre_weld", defects=[defects.busbar_liftoff(2, gap=0.2)])
+    (d,) = labels.defects
+    assert _size(d)[2] == pytest.approx(cfg.busbar_t + 0.2)
+
+
+def test_spatter_box_is_the_particle():
+    _, labels = generate("post_weld", defects=[defects.spatter(count=3, radius=0.2)])
+    for d in labels.defects:
+        np.testing.assert_allclose(_size(d), 0.4)

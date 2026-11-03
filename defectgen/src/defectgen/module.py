@@ -8,6 +8,7 @@ and returns the `(mesh, labels)` seam everything downstream consumes.
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -24,7 +25,7 @@ from .groundtruth import (
     Stage,
     TerminalGT,
 )
-from .parts import load_all
+from .parts import PARTS, load_all, mesh_dir
 from .plan import Dent, Placement, Plan, SeamPlan, rotation_z, translation
 
 
@@ -34,9 +35,27 @@ def is_flipped(cfg: Config, cell_index: int) -> bool:
     return cfg.group_of(cell_index) % 2 == 1
 
 
+# Where each terminal sits on an unflipped cell, in the cell's own frame. Read
+# off the user's Fusion cell_assembled: positive at -Y, negative at +Y with the
+# fill plug on its inboard side. test_module checks every cell against it.
+TERMINAL_LOCAL_Y = {"pos": -1.0, "neg": 1.0}
+
+
+def cell_transform(cfg: Config, cell_index: int) -> np.ndarray:
+    """A flipped cell is the whole cell turned 180 degrees about Z -- can,
+    terminals and fill plug together -- not its terminals swapped."""
+    t = translation(cfg.cell_centre_x(cell_index), 0, cfg.z_cell_bottom)
+    if is_flipped(cfg, cell_index):
+        t = t @ rotation_z(180.0)
+    return t
+
+
+def terminal_local(cfg: Config, polarity: Polarity) -> np.ndarray:
+    return translation(0, TERMINAL_LOCAL_Y[polarity] * cfg.terminal_y, cfg.cell_h)
+
+
 def terminal_y(cfg: Config, cell_index: int, polarity: Polarity) -> float:
-    pos_y = -cfg.terminal_y if is_flipped(cfg, cell_index) else cfg.terminal_y
-    return pos_y if polarity == "pos" else -pos_y
+    return float((cell_transform(cfg, cell_index) @ terminal_local(cfg, polarity))[1, 3])
 
 
 def busbar_plan(cfg: Config) -> list[tuple[str, tuple[tuple[int, Polarity], ...]]]:
@@ -99,15 +118,13 @@ def build_plan(cfg: Config, stage: Stage) -> Plan:
     )
 
     for k in range(cfg.n_cells):
-        cx = cfg.cell_centre_x(k)
-        plan.placements.append(
-            Placement("cell_can", translation(cx, 0, cfg.z_cell_bottom), ("cell", k))
-        )
+        cell = cell_transform(cfg, k)
+        plan.placements.append(Placement("cell_can", cell, ("cell", k)))
         for polarity in ("pos", "neg"):
             plan.placements.append(
                 Placement(
                     f"terminal_{polarity}",
-                    translation(cx, terminal_y(cfg, k, polarity), cfg.z_cell_top),
+                    cell @ terminal_local(cfg, polarity),
                     ("terminal", k, polarity),
                 )
             )
@@ -225,9 +242,23 @@ def _apply_dent(mesh: trimesh.Trimesh, dent: Dent) -> trimesh.Trimesh:
     return mesh
 
 
-def realise(plan: Plan, parts: dict[str, trimesh.Trimesh]) -> trimesh.Trimesh:
-    solids: list[trimesh.Trimesh] = []
+# Body groups, keyed by the first element of a placement ref. A viewer shows or
+# hides these as a unit -- lift the cover off, look at the busbars.
+GROUPS = {
+    "cooling_plate": "cooling_plate",
+    "cell": "cells",
+    "pad": "pads",
+    "end_plate": "end_plates",
+    "side_plate": "side_plates",
+    "carrier": "carrier",
+    "busbar": "busbars",
+    "cmc": "cmc",
+    "cover": "cover",
+}
 
+
+def _solids(plan: Plan, parts: dict[str, trimesh.Trimesh]):
+    """Yield (group, mesh) for every present body, in one fixed order."""
     for placement in plan.placements:
         if not placement.present:
             continue
@@ -236,24 +267,86 @@ def realise(plan: Plan, parts: dict[str, trimesh.Trimesh]) -> trimesh.Trimesh:
         for dent in plan.dents:
             if dent.ref == placement.ref:
                 mesh = _apply_dent(mesh, dent)
-        solids.append(mesh)
+        kind = placement.ref[0]
+        # Terminals split by polarity, so a viewer can tell them apart.
+        group = f"terminals_{placement.ref[2]}" if kind == "terminal" else GROUPS[kind]
+        yield group, mesh
 
     for seam in plan.seams:
         if not seam.present:
             continue
         box = trimesh.creation.box(extents=(seam.length, seam.width, abs(seam.height)))
         box.apply_translation(seam.centre + np.array([0.0, 0.0, seam.height / 2]))
-        solids.append(box)
+        yield "welds", box
 
     for particle in plan.particles:
         blob = trimesh.creation.icosphere(subdivisions=1, radius=particle.radius)
         blob.apply_translation(particle.centre)
-        solids.append(blob)
-
-    return trimesh.util.concatenate(solids)
+        yield "fod", blob
 
 
-def collect_labels(plan: Plan, seed: int) -> Labels:
+def realise(plan: Plan, parts: dict[str, trimesh.Trimesh]) -> trimesh.Trimesh:
+    return trimesh.util.concatenate([mesh for _, mesh in _solids(plan, parts)])
+
+
+def realise_groups(
+    plan: Plan, parts: dict[str, trimesh.Trimesh]
+) -> dict[str, trimesh.Trimesh]:
+    """The same solids as `realise`, one mesh per body group. For viewing only:
+    the merged mesh from `realise` stays the scan target."""
+    buckets: dict[str, list[trimesh.Trimesh]] = {}
+    for group, mesh in _solids(plan, parts):
+        buckets.setdefault(group, []).append(mesh)
+    return {g: trimesh.util.concatenate(ms) for g, ms in buckets.items()}
+
+
+def _box(lo, hi) -> np.ndarray:
+    return np.array([lo, hi], dtype=float)
+
+
+def _part_box(part: trimesh.Trimesh, transform: np.ndarray) -> np.ndarray:
+    """Box of the part's local bounding box after `transform`. Conservative for
+    a rotated part, which is the right way to err for a box drawn around it."""
+    corners = trimesh.bounds.corners(part.bounds)
+    moved = trimesh.transform_points(corners, transform)
+    return _box(moved.min(axis=0), moved.max(axis=0))
+
+
+def _seam_box(seam: SeamPlan) -> np.ndarray:
+    half = np.array([seam.length / 2, seam.width / 2, 0.0])
+    lo = seam.centre - half
+    hi = seam.centre + half
+    lo[2], hi[2] = sorted((seam.centre[2], seam.centre[2] + seam.height))
+    return _box(lo, hi)
+
+
+def defect_bounds(plan: Plan, parts: dict[str, trimesh.Trimesh]) -> list[np.ndarray]:
+    """One (min, max) box per recorded defect, spanning where everything it
+    touched should be (a fresh nominal plan) and where it ended up. Seams are
+    matched by index: injectors edit seams in place and never reorder them."""
+    nominal = build_plan(plan.cfg, plan.stage)
+    boxes = []
+    for target in plan.targets:
+        pieces = []
+        for ref in target.refs:
+            want, got = nominal.find(ref), plan.find(ref)
+            pieces.append(_part_box(parts[want.part], want.transform))
+            if got.present:
+                pieces.append(_part_box(parts[got.part], got.transform))
+        for i in target.seams:
+            pieces.append(_seam_box(nominal.seams[i]))
+            if plan.seams[i].present:
+                pieces.append(_seam_box(plan.seams[i]))
+        if target.region is not None:
+            pieces.append(_box(*target.region))
+        stack = np.array(pieces)
+        boxes.append(_box(stack[:, 0].min(axis=0), stack[:, 1].max(axis=0)))
+    return boxes
+
+
+def collect_labels(
+    plan: Plan, seed: int, parts: dict[str, trimesh.Trimesh] | None = None
+) -> Labels:
     """Ground truth read off the final plan, so it describes the module that was
     actually built rather than the one that was intended."""
     cfg = plan.cfg
@@ -328,20 +421,29 @@ def collect_labels(plan: Plan, seed: int) -> Labels:
         terminals=tuple(terminals),
         busbars=tuple(busbars),
         seams=tuple(seams),
-        defects=tuple(plan.defects),
+        defects=_with_bounds(plan, parts),
+    )
+
+
+def _with_bounds(plan: Plan, parts) -> tuple:
+    if parts is None or not plan.defects:
+        return tuple(plan.defects)
+    return tuple(
+        replace(d, bounds=(tuple(map(float, b[0])), tuple(map(float, b[1]))))
+        for d, b in zip(plan.defects, defect_bounds(plan, parts))
     )
 
 
 DefectFn = Callable[[Plan, np.random.Generator], None]
 
 
-def generate(
+def injected_plan(
     stage: Stage = "post_weld",
     cfg: Config | None = None,
     seed: int = 0,
     defects: Sequence[DefectFn] = (),
-    mesh_dir: Path | None = None,
-) -> tuple[trimesh.Trimesh, Labels]:
+) -> Plan:
+    """Build the plan for a stage and run every injector that applies to it."""
     cfg = cfg or load()
     plan = build_plan(cfg, stage)
 
@@ -353,9 +455,19 @@ def generate(
         if STAGES.index(getattr(inject, "min_stage", STAGES[0])) > reached:
             continue
         inject(plan, rng)
+    return plan
 
-    mesh = realise(plan, load_all(cfg, mesh_dir))
-    return mesh, collect_labels(plan, seed)
+
+def generate(
+    stage: Stage = "post_weld",
+    cfg: Config | None = None,
+    seed: int = 0,
+    defects: Sequence[DefectFn] = (),
+    mesh_dir: Path | None = None,
+) -> tuple[trimesh.Trimesh, Labels]:
+    plan = injected_plan(stage, cfg, seed, defects)
+    parts = load_all(plan.cfg, mesh_dir)
+    return realise(plan, parts), collect_labels(plan, seed, parts)
 
 
 def export(
@@ -364,15 +476,69 @@ def export(
     seed: int = 0,
     defects: Sequence[DefectFn] = (),
 ) -> list[Path]:
-    """Write every stage as STL plus its labels as JSON."""
+    """Write every stage as STL plus its labels as JSON, and each stage's body
+    groups as <stage>/<group>.stl so a viewer can hide them one at a time."""
+    cfg = cfg or load()
+    parts = load_all(cfg)
     outdir = Path(outdir)
     outdir.mkdir(parents=True, exist_ok=True)
     written = []
     for stage in STAGES:
-        mesh, labels = generate(stage, cfg=cfg, seed=seed, defects=defects)
+        plan = injected_plan(stage, cfg, seed, defects)
         stl = outdir / f"{stage}.stl"
-        mesh.export(stl)
+        realise(plan, parts).export(stl)
         js = outdir / f"{stage}.labels.json"
-        js.write_text(labels.to_json())
+        js.write_text(collect_labels(plan, seed, parts).to_json())
         written += [stl, js]
+
+        # Clear first: a clean run into a dir that once held a defective one
+        # would otherwise leave its fod.stl behind, and the viewer would show it.
+        groups_dir = outdir / stage
+        groups_dir.mkdir(exist_ok=True)
+        for old in groups_dir.glob("*.stl"):
+            old.unlink()
+        for group, mesh in realise_groups(plan, parts).items():
+            path = groups_dir / f"{group}.stl"
+            mesh.export(path)
+            written.append(path)
+    return written
+
+
+def export_cells(outdir: Path | str, cells: Sequence[int], cfg: Config | None = None) -> list[Path]:
+    """Just the named cells and their terminals, clean, as the generator places
+    them -- plus the user's Fusion cell_assembled under the same cell transforms
+    in `reference/`, to overlay as a ghost. Any disagreement between the two is
+    a placement bug, not a defect."""
+    cfg = cfg or load()
+    parts = load_all(cfg)
+    outdir = Path(outdir)
+    stage: Stage = "pre_busbar"
+    plan = build_plan(cfg, stage)
+    plan.placements = [
+        p for p in plan.placements if p.ref[0] in ("cell", "terminal") and p.ref[1] in cells
+    ]
+    groups_dir = outdir / stage
+    groups_dir.mkdir(parents=True, exist_ok=True)
+    for old in groups_dir.glob("*.stl"):
+        old.unlink()
+    written = [outdir / f"{stage}.stl", outdir / f"{stage}.labels.json"]
+    realise(plan, parts).export(written[0])
+    written[1].write_text(collect_labels(plan, 0, parts).to_json())
+    for group, mesh in realise_groups(plan, parts).items():
+        written.append(groups_dir / f"{group}.stl")
+        mesh.export(written[-1])
+
+    ref = (outdir / "reference")
+    ref.mkdir(exist_ok=True)
+    can = trimesh.load_mesh(mesh_dir() / "cell_can.stl")
+    merged = trimesh.load_mesh(mesh_dir() / "cell_assembled.stl")
+    rot = trimesh.transformations.rotation_matrix(
+        np.radians(PARTS["cell_can"].rot_z_deg), [0, 0, 1]
+    )
+    can.apply_transform(rot)
+    lo, hi = can.bounds
+    merged.apply_transform(translation(-(lo[0] + hi[0]) / 2, -(lo[1] + hi[1]) / 2, -lo[2]) @ rot)
+    copies = [merged.copy().apply_transform(cell_transform(cfg, k)) for k in cells]
+    written.append(ref / f"{stage}.stl")
+    trimesh.util.concatenate(copies).export(written[-1])
     return written

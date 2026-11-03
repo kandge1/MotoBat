@@ -37,12 +37,17 @@ EXTENT_TOL = 0.05
 class PartSpec:
     rot_z_deg: int
     extent: tuple[str, str, str]
+    # Datum Y at the centre of the top face rather than of the bounding box.
+    # terminal_neg has the fill plug merged in beside the pad, so its bounding
+    # box centre is 8.25 off the pad centre -- the point L7's 115.0 is measured
+    # between. Placed by the box, the plug hangs past the side plate.
+    pad_datum: bool = False
 
 
 PARTS: dict[str, PartSpec] = {
     "cell_can": PartSpec(90, ("cell_t", "cell_w", "cell_h")),
-    "terminal_pos": PartSpec(90, ("terminal_d", "terminal_w", "terminal_h")),
-    "terminal_neg": PartSpec(90, ("terminal_d", "terminal_neg_w", "terminal_h")),
+    "terminal_pos": PartSpec(90, ("terminal_d", "terminal_w", "terminal_h"), pad_datum=True),
+    "terminal_neg": PartSpec(90, ("terminal_d", "terminal_neg_w", "terminal_h"), pad_datum=True),
     "interface_pad": PartSpec(0, ("pad_t", "pad_w", "pad_h")),
     "end_plate": PartSpec(0, ("end_plate_t", "end_plate_w", "end_plate_h")),
     "side_plate": PartSpec(0, ("side_plate_l", "side_plate_t", "side_plate_h")),
@@ -96,6 +101,16 @@ def load_part(name: str, cfg: Config, directory: Path | None = None) -> trimesh.
             f"config {expected.tolist()} (fields {spec.extent}). The mesh was "
             f"re-exported with a different orientation or size, or the config is stale."
         )
+
+    if spec.pad_datum:
+        top = mesh.vertices[np.isclose(mesh.vertices[:, 2], mesh.bounds[1][2], atol=1e-3)]
+        y_lo, y_hi = top[:, 1].min(), top[:, 1].max()
+        if not np.isclose(y_hi - y_lo, cfg.terminal_w, atol=EXTENT_TOL):
+            raise ValueError(
+                f"{name}: top face spans {y_hi - y_lo:.3f} in Y, expected the "
+                f"{cfg.terminal_w} pad (terminal_w). Cannot locate the pad centre."
+            )
+        mesh.apply_translation([0.0, -(y_lo + y_hi) / 2, 0.0])
     return mesh
 
 

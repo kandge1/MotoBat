@@ -452,9 +452,15 @@ load rather than waiting on a re-export. The table lives in `defectgen/src/defec
 **Two parts need re-exporting. Neither blocks the generator, both are recorded in §12.**
 
 1. **`terminal_neg` is 38.5 wide against `terminal_pos`'s 22** — the fill-plug is merged into it.
-   Placed on the terminal centre its outer edge reaches y = 76.75, past the side plate at 74.0 and
-   past the 151 envelope, making the module 153.5 wide. The plug belongs as a feature on the can
-   (§4), so the fix is to export the terminal alone.
+   *(Corrected 3 Nov 2026.)* This was first read as making the module 153.5 wide. That was a
+   generator bug, not the CAD: the part was placed by its bounding-box centre, which sits 8.25
+   off the pad centre, and the plug hung outboard past the side plate. Checked against
+   `cell_assembled`, the pad sits at the outboard end and the plug runs **inboard** (y 30.0 →
+   68.5 on an unflipped cell). Terminals are now placed by their pad centre, and the module is
+   151.0 wide. The same check found `+` and `−` on swapped sides, and flipped cells whose terminals
+   had been moved without being turned. Both are fixed: a flipped cell is the whole cell rotated
+   180°. What is left is minor: a height or tilt defect on a `−` terminal also moves the plug,
+   which belongs to the can. Exporting the terminal alone still fixes that.
 2. **`cmc` is non-manifold** where its components meet the board. It has no holes, so a ray cannot
    leak through it and nothing downstream is affected — the generator checks for holes rather than
    strict two-manifoldness for exactly this reason. Worth knowing, not worth fixing on its own.
@@ -599,8 +605,9 @@ the fixed-vs-arm comparison a controlled experiment rather than two anecdotes.
 - **CMC clashes with the cover by 0.2 mm.** At 3.2 thick on a carrier top of 102.0 it reaches
   105.2 against a wall top of 105.0. Lower it into the carrier, thin the board, or recess the
   cover. (§5 height check; strict `xfail` in `defectgen/tests/test_budgets.py`.)
-- **Re-export `terminal_neg` without the merged fill plug** (§7). Until then the module is 153.5
-  wide instead of 151.0. Strict `xfail` in `defectgen/tests/test_parts.py`.
+- **Re-export `terminal_neg` without the merged fill plug** (§7). No longer affects placement or
+  width (3 Nov 2026); only a `−` terminal height/tilt defect also moving the plug. Strict `xfail` in
+  `defectgen/tests/test_parts.py`.
 - ~~Reconcile 10 exported CAD components against the 12 bodies listed in §7~~ — **resolved
   1 Nov 2026**: the two terminals are merged into the cell file. The STEP holds them as separate
   solids; the STL does not.

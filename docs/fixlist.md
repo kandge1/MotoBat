@@ -225,12 +225,15 @@ reading would have. Both are recorded as strict `xfail`s in `defectgen/tests/`, 
 green today and will fail loudly the moment each is fixed — telling you to delete the marker.
 
 - [ ] **E1 — Re-export `terminal_neg` without the fill plug.** It exports 38.5 wide against
-      `terminal_pos`'s 22, so the plug is merged in. Placed on the terminal centre its outer edge
-      reaches y = 76.75, past the side plate at 74.0 and past the 151 envelope — the generated
-      module comes out **153.5 wide**. The plug belongs as a feature on the can (spec §4), so
-      exporting the terminal alone fixes it. *Blocks: a geometrically valid module. Everything
-      else in task 1.1 works.*
-      Test: `test_parts.py::test_terminals_have_matching_footprints`.
+      `terminal_pos`'s 22, so the plug is merged in. *Downgraded 3 Nov 2026.* The 153.5-wide
+      module this was blamed for was a generator bug: the part was placed by its bounding-box
+      centre instead of its pad centre, which pushed the plug outboard. Measured against the
+      Fusion `cell_assembled`, the plug runs inboard. Fixed in `parts.py` (`pad_datum`), together
+      with `+`/`−` on swapped sides and flipped cells whose terminals were not turned
+      (`module.cell_transform`). The module is now 151.0 wide. What remains: a height or tilt
+      defect on a `−` terminal also moves the plug, which is part of the can. *Blocks: nothing.*
+      Tests: `test_parts.py::test_terminals_have_matching_footprints` (strict xfail),
+      `test_module.py::test_terminals_sit_where_the_fusion_cell_has_them`.
 
 - [ ] **E2 — The CMC overruns the cover by 0.2 mm.** This supersedes D3, and shrinks it.
       The 3.2 thickness is **deliberate: 1.6 of PCB plus 1.6 of surface-mount component space**,

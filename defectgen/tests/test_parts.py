@@ -23,9 +23,16 @@ def test_extent_matches_config(name):
 
 @pytest.mark.parametrize("name", sorted(PARTS))
 def test_datum_is_bottom_face_centre(name):
-    low, high = load_part(name, cfg).bounds
+    """Terminals are the exception in Y: their datum is the pad centre, which
+    for terminal_neg is not the bounding-box centre (see PartSpec.pad_datum)."""
+    mesh = load_part(name, cfg)
+    low, high = mesh.bounds
     assert low[2] == pytest.approx(0.0, abs=1e-6)
     assert (low[0] + high[0]) / 2 == pytest.approx(0.0, abs=1e-6)
+    if PARTS[name].pad_datum:
+        top = mesh.vertices[np.isclose(mesh.vertices[:, 2], high[2], atol=1e-3)]
+        low, high = top.min(axis=0), top.max(axis=0)
+        assert high[1] - low[1] == pytest.approx(cfg.terminal_w, abs=0.05)
     assert (low[1] + high[1]) / 2 == pytest.approx(0.0, abs=1e-6)
 
 
@@ -37,8 +44,9 @@ def test_part_has_no_holes(name):
 @pytest.mark.xfail(
     strict=True,
     reason="terminal_neg exports 38.5 wide against terminal_pos's 22.0 -- the "
-    "fill plug is merged into it. Placed on the terminal centre it reaches "
-    "y=76.75, past the side plate at 74.0 and past the 75.5 envelope. Fix by "
+    "fill plug is merged into it. Placement is no longer affected (the pad "
+    "centre is the datum), but a terminal_height or terminal_tilt defect on a "
+    "negative terminal also lifts the plug, which is part of the can. Fix by "
     "re-exporting the terminal alone.",
 )
 def test_terminals_have_matching_footprints():
