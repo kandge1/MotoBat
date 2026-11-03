@@ -11,7 +11,8 @@ date (`~~item~~ — **done 5 Nov 2026**`) rather than deleting it, per the house
 Section references like §4A.4 point into `project_plan.md`; §7 and §12 point into
 `module_spec.md`.
 
-*Last updated: 1 Nov 2026 — A, B and C closed in one pass; only D remains.*
+*Last updated: 1 Nov 2026 — A, B and C closed in one pass. D remains, and **none of it blocks
+the current task** — each item gates a specific later task, named in §D.*
 
 ---
 
@@ -22,7 +23,7 @@ Section references like §4A.4 point into `project_plan.md`; §7 and §12 point 
 | What is `AS_108261` in the mount STEP? | **Keyence LJ-X8200.** The mount carries Zivid 2+ M60, LJ-X8200 and `Mount v3`. No midiCam2, which matches the 28 Oct decision. |
 | LJ-X8200 head mass | **1200 g** (S — user). This was the missing figure blocking the payload sum. |
 | midiCam2 on the wrist | Future version only, if the Zivid's 2D proves insufficient. Gated on task 1.11. |
-| Flange pattern | **DT, not DTP** — 63 mm PCD, measured. See C2. |
+| Flange pattern | **DT, not DTP** — 63 mm PCD, measured and independently verified by the user, 1 Nov 2026. See C2. |
 | Is the Zivid FOV volume in the CAD? | **No.** The product name `Zivid 2 Plus M60 with FOV v1` is just Zivid's download filename. The cone will be generated in code for TF2 / RViz. |
 | `Mount v3` material | **AL-5052.** |
 
@@ -106,16 +107,110 @@ src/
 
 ## D. Still open
 
-Not fixes — these need a source or a measurement before results are claimed (§3.7.9).
+> **None of these block the current task.** Task 1.1 needs the CAD, and the CAD is done. Each
+> item below gates a *specific later* task, listed in the table. Carry on with 1.1; come back to
+> each one when the task it gates comes up.
 
-- [ ] **`Mount v3` mass.** Read it in isolation now that the material is AL-5052, and close out
-      the payload total in §4A.4.
-- [ ] **The ø31.5 centring diameter is unverified for the DT.** It came from the SMC **DTP**
-      spec and does not carry over. Confirm from Yaskawa's HC10DT manual drawing; tagged **A**
-      until then.
-- [ ] **CMC component height** must stay under **≈ 1.4 mm**, or the cover needs a local recess
-      over the CMC. Raising the walls further breaks the VDA 355 height.
-      (`module_spec.md` §5 height check)
-- [ ] Confirm the **0.1 mm adjacent-terminal tolerance** from MDPI *Batteries* 6(3):47 directly.
-- [ ] A **module-line cycle time** for the fixed-vs-arm comparison. Not found yet.
-- [ ] *(Watch, not a task)* `inspector_flange.stl` at 99 MB — revisit if performance suffers (A2).
+Ordered by what each can cost, worst first.
+
+| # | Item | Blocks | Can it change a conclusion? |
+|---|---|---|---|
+| D1 | MDPI 0.1 mm tolerance | results 1.8–1.12 | **Yes** |
+| D2 | Module-line cycle time | task 2.7 | **Yes** — leaves the central comparison half-answered |
+| D3 | CMC component height | next CAD pass on the CMC | No — a design decision |
+| D4 | `Mount v3` mass | task 2.3 write-up | No |
+| D5 | ø31.5 centring diameter | nothing, unless physically built | No |
+
+---
+
+### D1 — Confirm the 0.1 mm adjacent-terminal tolerance from MDPI *Batteries* 6(3):47
+
+**What it is.** The claim that adjacent terminals must match within ±0.1 mm. §4 attributes it to
+that paper but says it came "via search" — from a search result, not from reading the paper.
+
+**What it costs.** This number is load-bearing for the whole project. It sets the defect size,
+which drives the entire §3.7.3 sensor analysis (σ ≲ D/3, sample spacing ≲ D/2) — which is *why*
+the Zivid screens and the profilometer adjudicates. It also sets the defect severity ranges in
+task 1.2 and is the justification that this inspection is worth doing at all.
+
+If the paper says 0.2 mm, or says 0.1 mm about a different quantity, or measures it differently,
+the sensor argument shifts underneath the results. **This is the one item in D that can
+invalidate a conclusion rather than just leave a gap.** §3.7.9's "source before claiming results"
+exists for exactly this.
+
+**To close.** Read the paper itself.
+
+### D2 — A module-line cycle time
+
+**What it is.** Seconds per module on a real prismatic module assembly line.
+
+**What it costs.** The headline question (§3.7.6) is whether an arm finds what a fixed line-scan
+misses **and what it costs in cycle time**. Task 2.7 will produce "the arm takes N seconds per
+module." Without an industrial figure to compare against, there is no way to say whether N is
+acceptable or disqualifying — you get the coverage and recall half of the result and no verdict
+on feasibility.
+
+A 1.5–2.5 s/unit figure appears in proposal §3.2, but it is unsourced and may be per *cell
+placement* rather than per module. Those are very different numbers, and using the wrong one
+would make the arm look either trivially fine or hopelessly slow.
+
+**To close.** Find a real module-line takt, or state the assumption explicitly in the README's
+Limitations section rather than quietly adopting the proposal's number.
+
+### D3 — CMC component height
+
+**What it is.** The cover underside sits at z = 105.5 and the bare CMC board tops out at 104.1,
+leaving **1.4 mm** of headroom for anything mounted on that board (§5 height check).
+
+**What it costs.** 1.4 mm is almost certainly not enough for a realistically populated board: an
+electrolytic capacitor is 5–10 mm, a 0.1" header ≈ 8 mm, and even a modest SMD connector is
+2–4 mm. Model a populated CMC and it will clip straight through the cover. Raising the walls is
+not available — that breaks the 108 mm envelope.
+
+Three ways out, none expensive:
+
+1. Model the CMC as a **bare board**, no components. Nothing measures it, so this is likely fine.
+2. **Recess the cover** locally over the CMC.
+3. Accept the interpenetration — the cover is opaque and nothing inspects underneath it.
+
+**Why it is listed at all.** Not because it is hard, but because deciding late means discovering
+the clash at an assembly fit-check after the board is modelled. It is a decision, not a research
+gap.
+
+### D4 — `Mount v3` mass
+
+**What it is.** The adapter plate's mass, now that the material is set to AL-5052.
+
+**What it costs.** Very little. §4A.4's payload reads "≈ 2.5–3.0 kg" because plate + cabling is
+a guessed range; with the real plate figure it becomes computed rather than estimated. You are
+at roughly 3 kg of a 10 kg payload either way, so no design decision turns on it — but it is a
+number that goes in the write-up and it is currently tagged **D** with a missing input.
+
+**To close.** Read `Mount v3`'s mass **in isolation** and add the datasheet figures (Zivid
+1.0 kg, Keyence 1.2 kg). Do not read a whole-assembly mass — the camera bodies are placeholder
+shells and whatever material they carry is meaningless (see A4).
+
+### D5 — The ø31.5 centring diameter
+
+**What it is.** On a tool flange the bolts only clamp; a spigot — a boss on the robot seating
+into a recess in the plate — is what centres the plate concentrically. ø31.5 is that diameter.
+It came from SMC's catalogue for the **DTP**, and the flange is a **DT**, so the figure now has
+no source.
+
+**What it costs.** Nothing in this project. §4A.4 already states the plate is a fixed joint to
+`s3_tool0` in simulation, with bolts and pins not simulated. No result depends on it.
+
+It would matter if the mount were ever physically built: a wrong centring diameter means the
+plate either will not seat or seats loose, and loose means its position depends on how the bolts
+were tightened — which would break the CAD-to-URDF correspondence that §4A.4 calls ground truth.
+
+**Why it is listed at all.** It was tagged **S** when it was really **A**. Leaving a wrong
+confidence tag in place is precisely what the S/D/A/M system exists to prevent, so it gets
+demoted and recorded rather than quietly kept.
+
+**To close.** Yaskawa's HC10DT manual drawing.
+
+---
+
+**Watch item, not a task.** `inspector_flange.stl` at 99 MB — revisit only if performance
+suffers (A2).
