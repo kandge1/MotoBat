@@ -328,6 +328,7 @@ Packages are created **when they are written**, not in advance.
 | `motobat_description` | line xacro, 4-arm layout, RViz configs, sensor flange (§4A.4) | **exists** |
 | `motobat_interfaces` | `DefectReport.msg`, `ScanResult.msg`, `CorrectionCmd.action` | §4B.4 |
 | `motobat_gp4_moveit_config` | SRDF, OPW kinematics, joint limits | §4A.1 |
+| `motobat_gp25_moveit_config` | SRDF, OPW kinematics derived from the URDF, joint limits; MOTOPAC-RL2D scanner as the end effector | §4A.7 |
 | `motobat_hc10dt_moveit_config` | SRDF, KDL kinematics, joint limits | §4A.2 |
 | `motobat_perception` | ROS wrapper over `defectgen`; publishes `DefectReport` | §4B.4 |
 | `motobat_bringup` | station/line launch composition, Isaac Sim scene setup | §4A.3 |

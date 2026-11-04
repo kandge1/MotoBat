@@ -79,3 +79,23 @@ weld:
   weld_stitch_offset_y: 2.5  # A  either side of the busbar centreline
   weld_bead_h: 0.3           # A  reinforcement proud of the busbar top
   weld_edge_margin: 2.0      # A  minimum clear distance to a busbar edge
+
+# The weld process, for weld.py. A seam is laid by a beam trace -- the spot's
+# centre over time -- and the bead is what the energy it deposits melts.
+weld_process:
+  weld_speed: 100.0          # A  mm/s along the seam; 50-200 typical for busbar lap welds
+  weld_trace_step: 0.01      # A  mm between trace samples
+  weld_melt_threshold: 0.5   # A  fraction of steady-state centre energy that melts; sets the
+                             #    spot size so a straight stitch is exactly weld_stitch_w wide
+  weld_ripple_pitch: 0.3     # A  mm between solidification ripples
+  weld_ripple_amp: 0.010     # S  ~10 um ripple height (pulsed-weld ripple study, spec §5 sources)
+  weld_crater_depth: 0.25    # A  mm, the dip where the beam stops and the pool is not fed;
+                             #    kept under weld_bead_h so a good weld never cuts the busbar
+  weld_grid: 0.05            # A  mm, bead heightfield resolution (LJ-X8200 samples every 25 um)
+  # How the busbar-to-terminal gap under the beam changes the weld. Assumed
+  # until sourced for Cu-on-Al (status_update.md, QUEUED 1).
+  weld_gap_ok: 0.15          # A  10% of the 1.5 mm top sheet: no visible effect below this
+  weld_gap_fusion: 0.30      # A  above this the joint does not fuse (internal, not visible)
+  weld_gap_hole: 0.75        # A  half the top sheet: melt drops through, leaving a hole
+  weld_fill_factor: 1.0      # A  mm of crown lost per mm of gap the melt has to bridge
+  weld_undercut_factor: 0.3  # A  mm of toe groove per mm of gap above weld_gap_ok

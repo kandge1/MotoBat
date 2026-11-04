@@ -3,6 +3,7 @@
     python -m defectgen --out data/preview
     python -m defectgen --out data/preview_bad --demo-defects
     python -m defectgen --out data/preview_real --demo-defects realistic
+    python -m defectgen --out data/preview_welds --demo-defects welds
     python -m defectgen --out data/cell_check --cells 0 3
 
 The default demo set is deliberately exaggerated: it exists to check that each
@@ -39,6 +40,8 @@ def demo_defects(cfg):
         defects.busbar_liftoff(2, gap=2.0),
         defects.missing_weld(1, 5),
         defects.short_weld(1, 4, fraction=0.4),
+        defects.weld_path_drift(0, 1, amp=0.5, wavelength=4.0),
+        defects.weld_arc(2, 8, sagitta=0.8),
         defects.spatter(count=25, radius=0.6),
         defects.handling_damage(
             ("cell", 0),
@@ -71,6 +74,8 @@ def realistic_defects(cfg):
         defects.busbar_liftoff(2, gap=0.15),
         defects.missing_weld(1, 5),
         defects.short_weld(1, 4, fraction=0.8),
+        defects.weld_path_drift(0, 1, amp=0.15, wavelength=6.0),
+        defects.weld_arc(2, 8, sagitta=0.2),
         defects.spatter(count=10, radius=0.15),
         defects.handling_damage(
             ("cell", 0),
@@ -84,7 +89,27 @@ def realistic_defects(cfg):
     ]
 
 
-DEMOS = {"exaggerated": demo_defects, "realistic": realistic_defects}
+def weld_defects(cfg):
+    """Weld defects only -- every other part placed perfectly. Path errors
+    (drift, arc, offset, width, crown), missing and short stitches, spatter,
+    and one cause outside the weld: a chip under the end busbar on cells 9-11.
+    That one is needed because the gap consequences (underfill, undercut, no
+    fusion, burn-through) only exist where something opens a gap; its tilt
+    gives all four along one busbar."""
+    return [
+        defects.missing_weld(0, 1),
+        defects.short_weld(0, 4, fraction=0.5),
+        defects.weld_path_drift(1, 5, amp=0.4, wavelength=4.0),
+        defects.weld_arc(2, 8, sagitta=0.6),
+        defects.seam_deviation(1, 7, dy=0.6),
+        defects.width_deviation(2, 10, factor=1.6),
+        defects.reinforcement(3, 1, dh=-0.15),
+        defects.spatter(count=15, radius=0.3),
+        defects.busbar_liftoff(4, gap=1.0),
+    ]
+
+
+DEMOS = {"exaggerated": demo_defects, "realistic": realistic_defects, "welds": weld_defects}
 
 
 def main() -> None:

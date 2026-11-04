@@ -1,10 +1,11 @@
 # MotoBat — Project Start
  
 **Battery Module Assembly Line: Robotic Multi-View Inspection & Correction**
-A simulated battery-module line. A GP7 places prismatic cells, a GP4 places and
-welds busbars, and an HC10DT inspects from several angles before the
-irreversible laser weld and corrects the next placement. It is benchmarked
-against a fixed line-scan station.
+A simulated battery-module line. A GP7 places prismatic cells, a GP4 places the
+busbar carrier, a GP25 with a remote laser scanner welds the busbars, and an
+HC10DT inspects from several angles before the irreversible laser weld and
+corrects the next placement. It is benchmarked against a fixed line-scan
+station. *(Welder changed from GP4 to GP25 + MOTOPAC-RL2D on 4 Nov 2026, §4A.7.)*
 
 > **Scope changed 15 Sep 2026: from inspecting the inside of a cell to
 > inspecting a module assembly line.** The reasons are measured. See **§3.7**.
@@ -750,7 +751,9 @@ project. Done properly and written honestly, it competes.
 
 > **Decision: MotoBat inspects a battery *module* assembly line, not the inside
 > of a single cell.** A GP7 places prismatic cells into a module. A GP4 places
-> busbars and performs a simulated laser weld. The HC10DT inspects from several
+> busbars and performs a simulated laser weld *(superseded 4 Nov 2026: a GP25
+> with the MOTOPAC-RL2D remote laser package welds; the GP4 places the carrier,
+> §4A.7)*. The HC10DT inspects from several
 > angles before and after the weld. A fixed line-scan station is the baseline
 > it has to beat.
 >
@@ -1129,7 +1132,9 @@ first de-risks Isaac Sim rather than delaying it.
 ### 4A.1 — GP4 with MoveIt2 in RViz (start here)
 
 > **Re-sequenced (15 Sep).** The GP4's job is busbar placement plus the
-> simulated weld pass (§4B). It comes **after** the HC10DT (§4A.2), which
+> simulated weld pass (§4B). *(4 Nov 2026: the weld moves to a GP25 + MOTOPAC-RL2D,
+> §4A.7. The GP4 keeps busbar-carrier, CMC and cover placement, about 0.3 kg at
+> most.)* It comes **after** the HC10DT (§4A.2), which
 > carries the inspection contribution. The GP7 places cells. No OPW file ships
 > for the GP7 (verified), so derive its OPW parameters from the URDF joint
 > origins and check them against forward kinematics before trusting them.
@@ -1406,6 +1411,84 @@ genuinely novel engineering is.
  
 ---
  
+### 4A.7 — Welding station: GP25 + MOTOPAC-RL2D (decided 4 Nov 2026)
+
+> **Decision: the busbar laser weld is done by a Yaskawa GP25 carrying the
+> MOTOPAC-RL2D300-GP25JP remote laser package.** The GP4 stays on the line for
+> light handling: it places the busbar carrier, the CMC and the cover. The line
+> is now four arms: **GP7** places cells, **GP4** handles light parts, the
+> **HC10DT** inspects, and the **GP25** welds.
+
+**Why the GP4 could not weld.** Its payload is 4 kg. Every laser welding head
+found weighs more than that, before counting the fibre, the cable dress and the
+gas line (`cu_on_al_laser_welding.md` §3):
+
+| Head | Mass |
+|---|---|
+| TRUMPF PFO 33 (used in the green-laser Cu-on-Al study) | < 35 kg |
+| SCANLAB intelliWELD II PR | 21–37 kg |
+| Coherent 2DWeld | < 20 kg |
+| TRUMPF PFO SF | ≈ 13 kg |
+| FANUC FiberSCAN CRW, the lightest found | 5.5 kg |
+
+**The package** ([Yaskawa catalogue](https://dlc.e-mechatronics.com/catalog/chepc94111700/chepc94111700a_0_0.pdf)):
+
+| Item | Value |
+|---|---|
+| Arm | MOTOMAN-GP25, 25 kg payload, YRC1000 |
+| Mass on the wrist | scanner head 15.8 kg + air knife 2.5 kg = **18.3 kg** (driver 4 kg, off the wrist) |
+| Laser | fibre, 1050–1090 nm, up to 8 kW CW or quasi-CW |
+| Focal spot | 320 µm (theoretical, 100 µm fibre), 3× magnification |
+| Scanner field | 25 mm diameter at focus, work distance 329.5 mm |
+| Scanner | spot moves at up to 8 m/s, pattern up to 500 Hz, ±30 µm repeatability |
+| Welding method | **wobble welding.** Power can be modulated within one circle (e.g. high for half of it), set from the pendant |
+| Cabling | scanner control cable, cooling, shield gas and air purge built into the GP25's arm; the process fibre is routed separately |
+| Stated purpose | "laser welding with a wide gap tolerance for workpieces with misalignments or gaps" |
+
+**Why this one:**
+
+- **It carries a real head.** 18.3 kg on a 25 kg arm, with dress built in. It is
+  Yaskawa's own package, so the station is a product rather than an assumption.
+- **It matches how defectgen builds welds.** The robot holds still and the
+  scanner draws the seam (`cu_on_al_laser_welding.md` finding 3). `weld.py`
+  builds every bead from a beam trace. In the write-up, the trace's slow terms
+  (`weld_path_drift`) read as robot pose error during the hold, and its fast
+  pattern (`beam_wobble`) as scanner output.
+- **Its numbers replace assumptions.** The 320 µm spot, 500 Hz wobble and 25 mm
+  field can go into `weld_process` tagged S.
+- **It sets up an experiment.** Power varies along the wobble circle, so
+  "power along the trace" becomes the next weld parameter. Yaskawa's gap-tolerance
+  claim becomes testable in simulation: does wobble widen the gap window under
+  the `weld.py` gap model?
+- **ROS support exists.** `motoman_gp25_support` (URDF + meshes) is in the
+  vendored ROS-Industrial tree.
+
+**Rejected:**
+
+| Option | Why not |
+|---|---|
+| GP4 (as before) | 4 kg payload; no welding head fits |
+| GP7 | 7 kg payload; the package's 18.3 kg head does not fit |
+| GP12 | 12 kg payload; same problem |
+| HC10DT | 10 kg payload, and it is the inspector. Sharing it would serialise inspection and welding |
+| **GA50** | 50 kg, 2,038 mm reach, ±0.015 mm, 855 kg. A path-accuracy arm for 3D laser welding and cutting of *large* parts, where the **robot** traces the seam. Here the scanner draws the seam while the arm holds, so that accuracy goes unused. It would dwarf a 355 mm module. No ROS support package (only GP50) |
+| Fixed optics or gantry, arm presents the part | Works, but changes the cell layout and removes the robot from the weld story |
+| Keep the GP4 as a stand-in for a larger arm | Weakest for a controls and automation reader |
+
+**Accepted costs and open checks:**
+
+- **The laser is infrared, not green.** Copper absorbs green much better
+  (`cu_on_al_laser_welding.md` finding 8). Yaskawa's answer is power (8 kW) plus
+  wobble. That is a real industrial choice, so state it. It also makes the
+  welded copper harder to scan, which the sensor models in 1.3 have to handle.
+- **Unverified:** whether this package is rated for copper. The brochure does
+  not name materials.
+- **Payload margin:** 18.3 of 25 kg before the fibre and dress. Check it against
+  the head's real centre of mass in Phase 3.
+- **IK:** no OPW file ships for the GP25 (`urdf/` and `meshes/` only). Derive
+  the parameters from the URDF and check them against forward kinematics, as
+  for the GP7.
+
 ## 4B. ACTIVE WORK PLAN — defect generation and detection (no simulator)
 
 **Domain: battery module assembly line, per §3.7.** Runs entirely in numpy /

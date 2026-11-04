@@ -369,3 +369,65 @@ def test_a_reversed_cell_keeps_the_carrier_from_seating():
     plan = injected_plan("pre_weld", cfg, 0, [defects.reversed_polarity(1)], parts)
     lifted = plan.find(("carrier",)).origin[2] - build_plan(cfg, "pre_weld").find(("carrier",)).origin[2]
     assert lifted > 1.0
+
+
+# Welds from beam traces (weld.py).
+
+def _bead(seam_kwargs=None, gap=0.0):
+    from defectgen.plan import SeamPlan
+    from defectgen import weld
+
+    seam = SeamPlan(0, 0, np.zeros(3), cfg.weld_stitch_l, cfg.weld_stitch_w, cfg.weld_bead_h,
+                    **(seam_kwargs or {}))
+    n = len(weld.trace(seam, cfg.weld_trace_step))
+    return weld._shape(cfg, seam, np.full(n, gap))
+
+
+def test_a_straight_stitch_melts_its_commanded_width_and_crown():
+    """The spot size is derived so a steady straight pass melts exactly
+    weld_stitch_w wide; the crown peaks at weld_bead_h plus ripple."""
+    bead, cut, _, holed = _bead()
+    assert cut is None and not holed
+    lo, hi = bead.bounds
+    assert hi[1] - lo[1] == pytest.approx(cfg.weld_stitch_w, abs=2 * cfg.weld_grid)
+    assert hi[2] == pytest.approx(cfg.weld_bead_h + cfg.weld_ripple_amp, abs=0.01)
+    assert bead.is_watertight
+
+
+def test_the_bead_follows_the_beam_path():
+    """An arced path moves the bead off the commanded line by the sagitta.
+    Wobble at the same power spreads the same energy over a wider band: the
+    melt widens a little and the crown drops. (Real wobble welding raises the
+    power to make up for it; there is no power parameter yet.)"""
+    straight, *_ = _bead()
+    arced, *_ = _bead({"arc_sagitta": 0.6})
+    wobbled, *_ = _bead({"wobble_amp": 0.3})
+    assert arced.bounds[1][1] - straight.bounds[1][1] == pytest.approx(0.6, abs=0.1)
+    assert wobbled.extents[1] > straight.extents[1]
+    assert wobbled.bounds[1][2] < straight.bounds[1][2]
+
+
+def test_the_gap_decides_the_weld_and_is_named_as_its_cause():
+    """A chip under one end tilts the busbar; the welds over the widening gap
+    go from sound to underfilled to unfused, each labelled with the lift-off
+    that caused it rather than as a weld defect in its own right."""
+    _, labels = generate("post_weld", defects=[defects.busbar_liftoff(1, gap=0.4)])
+    gaps = [s.gap for s in labels.seams if s.busbar_index == 1]
+    assert min(gaps) < cfg.weld_gap_ok < max(gaps)
+    consequences = [d for d in labels.defects if d.cls != "busbar_liftoff"]
+    assert {d.cls for d in consequences} >= {"weld_underfill", "lack_of_fusion"}
+    assert all(d.cause == "busbar_liftoff" for d in consequences)
+
+
+def test_a_big_enough_gap_burns_through():
+    _, labels = generate("post_weld", defects=[defects.busbar_liftoff(1, gap=1.2)])
+    assert "burn_through" in {d.cls for d in labels.defects}
+
+
+def test_a_clean_module_has_sound_welds():
+    from defectgen.module import injected_plan
+    from defectgen.parts import load_all
+
+    plan = injected_plan("post_weld", cfg, 0, [], load_all(cfg))
+    assert plan.defects == [] and not plan.overrides
+    assert len(plan.beads) == len(plan.seams)

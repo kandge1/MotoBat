@@ -48,8 +48,9 @@ other sensing findings it produced, are recorded in
 | Station | Robot | Payload | Class | Job |
 |---|---|---|---|---|
 | 1. Cell Placer | Yaskawa **GP7** | 7 kg | Industrial (GP-series) | Picks prismatic cells (vision-located) and places them into the module |
-| 2. Busbar Placer / Welder | Yaskawa **GP4** | 4 kg | Industrial (GP-series) | Places busbars on terminals; performs the simulated laser weld pass |
+| 2. Carrier Placer | Yaskawa **GP4** | 4 kg | Industrial (GP-series) | Places the busbar carrier (CCS), the cell module controller and the cover |
 | 3. Inspector | Yaskawa **HC10DTP** | 10 kg | Collaborative (HC-series) | Multi-view 3D inspection before and after welding |
+| 4. Laser Welder | Yaskawa **GP25** + **MOTOPAC-RL2D** | 25 kg | Industrial (GP-series) + remote laser scanner | Holds a galvo scanner head over each joint while it draws a wobble weld; 8 kW fibre laser |
 | — | Fixed line-scan station | — | Sensor, no robot | The baseline the Inspector has to beat |
 
 ### Why these specific robots
@@ -58,9 +59,19 @@ other sensing findings it produced, are recorded in
 items handled on the line. The GP7 gives payload headroom for a cell plus gripper and enough reach
 to span a 12-cell module, while staying in the same GP-series programming model as the GP4.
 
-**GP4 (Busbar Placer / Welder) — precision over payload.** Busbars are light, and placing them
-is a short, repeatable, programmed-path task. The GP4's compact envelope and closed-form (OPW)
-inverse kinematics suit exactly that.
+**GP4 (Carrier Placer) — precision over payload.** The carrier with its copper busbars weighs
+about 0.3 kg, and placing it is a short, repeatable, programmed-path task. The GP4's compact
+envelope and closed-form (OPW) inverse kinematics suit exactly that.
+
+**GP25 + MOTOPAC-RL2D (Laser Welder) — the head decides the arm.** The GP4 originally welded too,
+but no laser welding head fits its 4 kg payload: the lightest found weighs 5.5 kg, and typical
+scanner heads weigh 13–37 kg. Yaskawa's own remote-laser package puts an 18.3 kg galvo scanner
+head on a GP25, with the dress routed through the arm. The arm holds still and the scanner draws
+the seam, at up to 500 Hz with wobble. That is how MotoBat's defect generator builds welds:
+every bead is the melt left by a beam trace. Rejected: the GP7 and GP12 (payload), the HC10DT
+(payload, and it is the inspector), and the **GA50**, a 50 kg, ±0.015 mm path-accuracy arm built
+for large parts where the *robot* traces the seam. Here the scanner traces it, so that accuracy
+would go unused. Full record: [`docs/project_plan.md` §4A.7](docs/project_plan.md).
 
 **HC10DTP (Inspector) — a deliberately different robot class.** Traditional industrial arms are
 built for repeatable, pre-programmed paths. Inspection of a large part with occluded features
@@ -125,8 +136,8 @@ quantified.
 4. **Correction loop** — the measured placement error of cell *k* offsets the placement of cell
    *k+1*, with a derived stability bound (`0 < K < 2/g`); defects that placement cannot fix
    (terminal height) trigger reject/rework *before* welding
-5. **Busbar Placer / Welder (GP4)** places busbars; the Inspector checks them; the weld runs only on
-   a module that passed
+5. **Carrier Placer (GP4)** places the busbar carrier; the Inspector checks the busbar-to-terminal
+   gap; the **Laser Welder (GP25 + MOTOPAC-RL2D)** welds only a module that passed
 6. **Logging** — every defect (type, location, severity, action taken) is logged like a real QA
    system, with before/after point clouds
 

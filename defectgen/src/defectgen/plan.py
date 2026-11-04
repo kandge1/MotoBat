@@ -56,8 +56,20 @@ class Placement:
 
 @dataclass
 class SeamPlan:
-    """A weld stitch. Held as parameters rather than a mesh so that seam defects
-    (short, offset, wrong width, sagging) are edits to numbers."""
+    """A weld stitch as commanded, plus how the beam actually moved.
+
+    `centre`, `length`, `width` and `height` are the commanded stitch (centre on
+    the busbar top). The bead is not drawn from them directly: weld.py builds
+    the beam trace from them and the motion terms below, and the bead is what
+    that trace melts. So seam defects stay edits to numbers -- a short weld is
+    a shorter trace, a wandering robot is `drift_amp`.
+
+    Motion terms, all in mm in the busbar's plane, across the seam unless said:
+    `drift_amp`/`drift_wavelength` -- slow lateral wander of the end effector;
+    `arc_sagitta` -- the path bowed into an arc; `wobble_amp`/`wobble_pitch` --
+    deliberate beam oscillation (circular wobble welding), the beam circling
+    with radius `wobble_amp` once per `wobble_pitch` of travel.
+    """
 
     busbar_index: int
     cell_index: int
@@ -66,6 +78,19 @@ class SeamPlan:
     width: float
     height: float
     present: bool = True
+    drift_amp: float = 0.0
+    drift_wavelength: float = 6.0
+    arc_sagitta: float = 0.0
+    wobble_amp: float = 0.0
+    wobble_pitch: float = 0.2
+    # Set by weld.py after settling: the largest busbar-to-terminal gap under
+    # the trace, for the labels.
+    gap: float = 0.0
+
+    @property
+    def envelope(self) -> float:
+        """How far the bead can stray from the commanded centreline, for boxes."""
+        return self.width / 2 + abs(self.drift_amp) + abs(self.arc_sagitta) + abs(self.wobble_amp)
 
 
 @dataclass
@@ -121,6 +146,13 @@ class Plan:
     defects: list[Defect] = field(default_factory=list)
     # Parallel to `defects`: what each one touched, for its bounding box.
     targets: list[Target] = field(default_factory=list)
+    # Which injected defect classes each part's final pose depends on, keyed
+    # by ref. Seeded from what each defect touched; settling adds the causes
+    # of whatever a part came to rest on (settle.py). weld.py reads it to name
+    # the cause of a bad weld through any chain of parts.
+    influence: dict = field(default_factory=dict)
+    # Weld beads, in module coordinates, keyed by seam index (weld.py).
+    beads: dict = field(default_factory=dict)
     # Deformed parts, in module coordinates, keyed by ref. Settling writes these
     # for the compliant parts (pads compress, side plates bulge); `realise`
     # uses them in place of transforming the CAD part.
@@ -148,6 +180,7 @@ class Plan:
         seams: tuple[SeamPlan, ...] = (),
         radius: float | None = None,
         particle: Particle | None = None,
+        cause: str | None = None,
     ) -> None:
         """`radius` boxes a sphere of that size around `location`. `particle`
         boxes that particle wherever settling leaves it."""
@@ -167,5 +200,6 @@ class Plan:
                 magnitude=float(magnitude),
                 location=tuple(float(v) for v in location),
                 stage=self.stage,
+                cause=cause,
             )
         )

@@ -73,6 +73,18 @@ class Config:
     weld_stitch_offset_y: float
     weld_bead_h: float
     weld_edge_margin: float
+    weld_speed: float
+    weld_trace_step: float
+    weld_melt_threshold: float
+    weld_ripple_pitch: float
+    weld_ripple_amp: float
+    weld_crater_depth: float
+    weld_grid: float
+    weld_gap_ok: float
+    weld_gap_fusion: float
+    weld_gap_hole: float
+    weld_fill_factor: float
+    weld_undercut_factor: float
 
     # Z levels. Each surface is named once here so no caller re-derives it.
 

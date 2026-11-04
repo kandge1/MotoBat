@@ -252,6 +252,48 @@ def reinforcement(busbar_index: int, cell_index: int, dh: float):
     return apply
 
 
+# 7b -- the beam's path. The bead is built from the trace (weld.py), so a
+# path error is a change to how the beam moved, and the bead follows it.
+
+@_from("post_weld")
+def weld_path_drift(busbar_index: int, cell_index: int, amp: float, wavelength: float = 6.0):
+    """Slow lateral wander of the end effector along the stitch -- the robot's
+    path is not a ruled line."""
+
+    def apply(plan: Plan, rng: np.random.Generator) -> None:
+        for seam in _seams(plan, busbar_index, cell_index):
+            seam.drift_amp, seam.drift_wavelength = amp, wavelength
+            plan.record("weld_path_drift", abs(amp), seam.centre, seams=(seam,))
+
+    return apply
+
+
+@_from("post_weld")
+def weld_arc(busbar_index: int, cell_index: int, sagitta: float):
+    """The stitch bowed into an arc: the path rises `sagitta` off the commanded
+    line at its middle and returns to it at both ends."""
+
+    def apply(plan: Plan, rng: np.random.Generator) -> None:
+        for seam in _seams(plan, busbar_index, cell_index):
+            seam.arc_sagitta = sagitta
+            plan.record("weld_arc", abs(sagitta), seam.centre, seams=(seam,))
+
+    return apply
+
+
+@_from("post_weld")
+def beam_wobble(amp: float, pitch: float = 0.2):
+    """Wobble welding on every seam: the beam circles with radius `amp` once
+    per `pitch` of travel. A process choice, common for Cu-Al lap joints to
+    widen the joint and stir the pool -- not a defect, so nothing is recorded."""
+
+    def apply(plan: Plan, rng: np.random.Generator) -> None:
+        for seam in plan.seams:
+            seam.wobble_amp, seam.wobble_pitch = amp, pitch
+
+    return apply
+
+
 # 8 -- landed spatter, scattered around the seams it came from.
 
 @_from("post_weld")

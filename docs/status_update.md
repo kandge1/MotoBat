@@ -31,16 +31,29 @@ Agreed with the user, in this order. Fixlist first: settling results are only
 meaningful once the busbar slots have their clearance (E7) and the standalone
 CMC and carrier match `module_assembled` (E6).
 
-1. **Gap → weld consequence.** Measure the actual busbar-to-terminal gap under
-   each seam after settling (a tilted busbar gives a different gap per
-   terminal), and derive the weld outcome from it: normal, sag/underfill +
-   undercut, or hole + lack of fusion. Each consequence is labelled with its
-   cause (`cause: busbar_liftoff`), so detection can be scored on catching the
-   root cause at the pre-weld gap check (spec §8 steps 8–9). Thresholds are
-   assumptions until sourced — and must be sourced for **Cu-on-Al**, not Al-on-Al.
-2. **Realistic weld bead** replacing the boxes: crown, width variation, ≈10 µm
-   ripples, end crater, at ≈50 µm resolution, riding on its busbar. Every
-   surface weld defect becomes an edit to the bead.
+1. ✅ **Gap → weld consequence** (4 Nov 2026, `weld.py`). The gap is measured
+   under every beam sample after settling, so a busbar tilted on a chip gives a
+   different gap at each terminal. The weld follows from it: underfill and toe
+   undercut above `weld_gap_ok`, `lack_of_fusion` (internal) above
+   `weld_gap_fusion`, `burn_through` above `weld_gap_hole`. Each consequence
+   carries `cause`. Causes propagate through settling by contact
+   (`plan.influence`), so a weld on a busbar resting on a carrier lifted by a
+   backwards cell names `reversed_polarity`. The thresholds are still assumptions
+   and must be sourced for **Cu-on-Al**.
+2. ◐ **Realistic weld bead — first version done** (4 Nov 2026). Beads are no
+   longer boxes. Each is built from a **beam trace**: the commanded stitch plus
+   robot drift (`weld_path_drift`), an arc (`weld_arc`) and circular beam
+   wobble (`beam_wobble`, a process setting). Energy deposited by a Gaussian
+   spot along the trace sets the melt. The spot size is derived so a straight
+   pass melts exactly `weld_stitch_w`. Crown, ≈10 µm ripples and an end crater
+   follow from it, on a 50 µm heightfield in the busbar's frame. **Still to do:**
+   a laser power / speed parameter, so wobble and slow passes change heat input
+   (now constant line energy), and the remaining ISO 13919-2 surface classes
+   (humping, surface pores, crater cracks). **Next, using the MOTOPAC-RL2D's
+   numbers** (`project_plan.md` §4A.7): 320 µm spot, wobble up to 500 Hz, a 25 mm
+   field, and **power modulated along the trace**, even within one wobble
+   circle. Then test Yaskawa's gap-tolerance claim: does wobble widen the
+   `weld.py` gap window?
 3. **Heat tint and soot — copper busbars** (decision and sources: `module_spec.md` §5, "Busbar material"; make the material a config parameter). Model heat input → peak temperature
    field (moving heat source) → oxide thickness (oxidation kinetics) → colour
    (thin-film interference; Cu₂O dark red, CuO black). Because tint and
@@ -48,6 +61,12 @@ CMC and carrier match `module_assembled` (E6).
    zone shows heavy oxidation colour *and* burn-through/excessive penetration,
    labelled as one cause with two symptoms. Tint is a colour effect (Zivid colour
    channel, RViz vertex colours), not profilometer geometry.
+   **Corrected 4 Nov 2026** (`cu_on_al_laser_welding.md` finding 2): on our 4 mm Al
+   pad, overheating does not burn through the way it does in foil studies. Its
+   second symptom is **excess Al melting and intermetallic growth**, which is
+   internal. So: overheat → Cu tint (visible) + `excess_penetration` / IMC
+   (internal label). The **hole** stays tied to the *gap* (melt dropping
+   through the top sheet), as `weld.py` already models it.
 4. **Materials library**, then **specular dropout** with `scan.py` (task 1.3):
    per-material reflectance (rough-conductor model) and roughness statistics,
    micro-texture applied at ray-hit time, not baked into the mesh.
@@ -108,8 +127,9 @@ each phase unblocks the next:
    coverage and view selection → dataset → metrics → correction-loop K-sweep
 2. **Phase 2, HC10DT in Gazebo:** MoveIt, flange, reachable view plan, real
    motion time, fixed vs arm with cycle time
-3. **Phase 3, the line:** GP7 places cells, GP4 places busbars, the loop is
-   closed in simulation, microScan3 safety zones
+3. **Phase 3, the line:** GP7 places cells, GP4 places the busbar carrier,
+   GP25 + MOTOPAC-RL2D welds, the loop is closed in simulation, microScan3
+   safety zones
 4. **Phase 4:** optional Isaac Sim fidelity, then the write-up and demo
 
 **Never trade away** the Phase 1 metrics or the fixed-vs-arm comparison.
@@ -200,13 +220,19 @@ from the MDPI paper itself.
 
 ---
 
-## Phase 3 — The line: GP7 cells, GP4 busbars, closed loop, safety
+## Phase 3 — The line: GP7 cells, GP4 carrier, GP25 weld, closed loop, safety
+
+> **Welder decided 4 Nov 2026: GP25 + MOTOPAC-RL2D300-GP25JP** (`project_plan.md`
+> §4A.7). The GP4 can't carry any laser head (4 kg payload; the lightest head
+> found is 5.5 kg). The GA50 was rejected as a path-accuracy arm for large parts,
+> because here the scanner draws the seam.
 
 | # | Task | § | Notes |
 |---|---|---|---|
 | 3.1 | GP7 MoveIt + OPW. **Derive the OPW parameters from the URDF** (none ship, verified) and check them against forward kinematics. | 4A.1 | |
 | 3.2 | GP7 cell pick-and-place, located by a fixed overhead 2D camera | 3.7.3 | same pattern as the myCobot vision pick-and-place |
-| 3.3 | GP4 MoveIt + OPW (vendor file exists); busbar placement + simulated weld pass | 4A.1 | |
+| 3.3 | GP4 MoveIt + OPW (vendor file exists); busbar-carrier, CMC and cover placement | 4A.1 | ≈ 0.3 kg loads |
+| 3.3b | GP25 MoveIt + OPW **derived from the URDF** (none ships); MOTOPAC-RL2D scanner as the end effector; the weld is a scanner pattern drawn while the arm holds | 4A.7 | payload 18.3 / 25 kg before fibre and dress |
 | 3.4 | Close the loop in simulation: `DefectReport` → `CorrectionCmd` → next cell's placement | 9.9 | |
 | 3.5 | microScan3 safety zones → HC10DT speed and separation monitoring | 3.7.3 | ISO/TS 15066; this is the controls-and-automation showpiece |
 | 3.6 | Latency instrumentation: sensor publish → registration → correction, from rosbag2 timestamps | 4A.5 | |

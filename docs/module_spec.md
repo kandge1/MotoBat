@@ -193,6 +193,10 @@ Sources: [Kumar et al., Warwick](https://wrap.warwick.ac.uk/id/eprint/168639/1/W
 [Al–Cu laser welding review](https://www.sciencedirect.com/science/article/abs/pii/S003039922300614X),
 [laser braze-welded Al–Cu resistance](https://www.sciencedirect.com/science/article/abs/pii/S152661251300131X),
 [E-Mobility Engineering](https://www.emobility-engineering.com/ev-battery-welding/).
+Further Cu-on-Al findings (foil studies, robot vs scanner roles, GP4 payload check):
+`docs/cu_on_al_laser_welding.md`. **Welding station** (4 Nov 2026): GP25 + MOTOPAC-RL2D,
+an 8 kW infrared fibre laser with a 320 µm spot and wobble welding. Infrared couples into copper
+worse than green; the package makes up for it with power and wobble (`project_plan.md` §4A.7).
 
 ### Stack-up — nothing adds to the envelope
 
@@ -506,11 +510,11 @@ placement → laser welding → end-of-line test
 | 2 | End plate A into fixture | GP7 | — |
 | 3 | Cells 1–12 with pads, orientation per 3P4S pattern | **GP7**, cells located by overhead 2D camera | per-cell placement check → **correction loop, k = cell index** |
 | 4 | End plate B, compress to ≈ 3 kN | GP7 + fixture | — |
-| 5 | Side plates placed and welded | GP7 places, GP4 welds (simulated) | — |
+| 5 | Side plates placed and welded | GP7 places, GP25 welds (simulated) | — |
 | 6 | **Pre-carrier inspection** | **HC10DT multi-view** vs **fixed Ranger3** | cell pose, terminal height and tilt, polarity, missing cell |
 | 7 | Busbar carrier (CCS subassembly) placed | GP4 | — |
 | 8 | **Pre-weld inspection** | HC10DT | busbar pose, busbar-to-terminal gap |
-| 9 | Laser weld every busbar–terminal joint | **GP4** (simulated weld head) | — |
+| 9 | Laser weld every busbar–terminal joint | **GP25 + MOTOPAC-RL2D** remote scanner (simulated; `project_plan.md` §4A.7) | — |
 | 10 | **Post-weld inspection** | HC10DT | seam continuity, width, spatter |
 | 11 | Cell module controller placed, cover placed | GP4 | final visual (2D) |
 | 12 | End-of-line electrical test | simulated pass/fail | — |
@@ -611,7 +615,7 @@ The belt surface is visual only.
 | S1 Cell placing | GP7, cell magazine/tray, pallet nest | overhead 2D camera (cell locating) |
 | S2 Line-scan gate | a fixed bridge the pallet passes under | **Ranger3 + laser** (the baseline) |
 | S3 Inspection cell | HC10DT, pallet stop, safety scanner | wrist: snapshot 3D + profilometer + 2D |
-| S4 Busbar + weld | GP4, carrier magazine, weld head | (weld monitoring out of scope, §4B.2) |
+| S4 Busbar + weld | GP4 (carrier, CMC, cover), carrier magazine; **GP25 + MOTOPAC-RL2D** scanner head | (weld monitoring out of scope, §4B.2) |
 | S5 Final | cover placing, EOL test stub | 2D camera |
 
 S2 and S3 inspect the **same** module at the same stage, which is what makes

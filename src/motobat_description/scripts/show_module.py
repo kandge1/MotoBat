@@ -26,6 +26,9 @@ defect touched -- where it should be and where it is -- and a tag giving class
 and magnitude. A short weld sits inside a box of full nominal length; a
 missing part leaves an empty box. In RViz, expand Defects -> Namespaces and
 untick a box to hide that group -- untick part/cover to see the busbars.
+Weld consequences (defects with a cause) are summarised: one box per stitch
+in consequence/<worst class>, and one tag per busbar row in
+consequence/labels -- untick that to see the welds without text.
 
 Markers are republished every second. RViz deletes a namespace's markers when
 it is unticked and does not keep a copy, so ticking it back shows nothing
@@ -96,6 +99,9 @@ UNITS = {
     'seam_deviation': 'mm', 'width_deviation': 'mm', 'reinforcement': 'mm',
     'spatter': 'mm', 'handling_damage': 'mm', 'missing_pad': None,
     'fod': 'mm', 'carrier_seating': 'mm', 'cover_misalignment': 'mm',
+    # weld.py: path errors, and what the gap under a seam did to it
+    'weld_path_drift': 'mm', 'weld_arc': 'mm', 'weld_underfill': 'mm',
+    'weld_undercut': 'mm', 'lack_of_fusion': 'mm', 'burn_through': None,
 }
 # Fixed class order so a class keeps its colour from run to run.
 CLASSES = tuple(UNITS)
@@ -135,11 +141,13 @@ def amount(cls, magnitude):
     return f'={magnitude:.2f}{unit}'
 
 
-def tag(cls, magnitude, count):
+def tag(cls, magnitude, count, cause=None):
     # No spaces: RViz2 lays out a space in a TEXT_VIEW_FACING marker far wider
     # than the font, which split the first version's tags into a name hanging
     # off one side of the module and a number off the other.
-    return f'{cls}{amount(cls, magnitude)}' + (f'(x{count})' if count > 1 else '')
+    text = f'{cls}{amount(cls, magnitude)}' + (f'(x{count})' if count > 1 else '')
+    # A consequence names what caused it: weld_underfill=262um<-busbar_liftoff
+    return text + (f'<-{cause}' if cause else '')
 
 
 def box_marker(ns, mid, lo, hi, rgb):
@@ -158,8 +166,62 @@ def box_marker(ns, mid, lo, hi, rgb):
     return m
 
 
-def defect_markers(defects):
+# Weld consequences from worst to mildest. A stitch with several gets one box,
+# in the colour of the worst.
+SEVERITY = ('burn_through', 'lack_of_fusion', 'weld_underfill', 'weld_undercut')
+SHORT = {'burn_through': 'burn_through', 'lack_of_fusion': 'no_fusion',
+         'weld_underfill': 'underfill', 'weld_undercut': 'undercut'}
+
+
+def consequence_markers(consequences):
+    """Weld consequences, summarised so they stay readable. One box per
+    stitch, coloured by its worst consequence, in namespace
+    consequence/<worst class> so each kind can be toggled. One tag per busbar
+    row, with counts and causes, e.g.
+    welds[burn_through4,no_fusion6,underfill12]<-busbar_liftoff,cell_placement.
+    A tag per consequence put up to eight on top of each other at every joint."""
     out = []
+    stitches = {}
+    for d in consequences:
+        lo, hi = d['bounds'] if d.get('bounds') else (
+            [c - 2.0 for c in d['location']], [c + 2.0 for c in d['location']])
+        key = tuple(round(v, 2) for v in lo + hi)
+        stitches.setdefault(key, (lo, hi, []))[2].append(d)
+
+    for i, (lo, hi, ds) in enumerate(stitches.values()):
+        worst = min((d['cls'] for d in ds), key=lambda c: SEVERITY.index(c) if c in SEVERITY else 99)
+        out.append(box_marker(f'consequence/{worst}', i, lo, hi, class_colour(worst)))
+
+    # One tag per busbar row. Causes combine differently at every joint
+    # (busbar_liftoff+cell_placement here, +terminal_tilt there), so grouping
+    # by the exact cause still left a tag per joint. The row tag lists every
+    # cause involved; the per-stitch detail is in the labels JSON.
+    rows = {}
+    for d in consequences:
+        rows.setdefault('pos' if d['location'][1] >= 0 else 'neg', []).append(d)
+    for j, (row, ds) in enumerate(sorted(rows.items())):
+        counts, causes = {}, set()
+        for d in ds:
+            counts[d['cls']] = counts.get(d['cls'], 0) + 1
+            causes |= set((d.get('cause') or '?').split('+'))
+        order = sorted(counts, key=lambda c: SEVERITY.index(c) if c in SEVERITY else 99)
+        parts = [f'{SHORT.get(c, c)}{counts[c]}' for c in order]
+        xs = [d['location'][0] for d in ds]
+        top = max(d['bounds'][1][2] if d.get('bounds') else d['location'][2] for d in ds)
+        t = _marker('consequence/labels', j, Marker.TEXT_VIEW_FACING)
+        t.pose.position.x = (min(xs) + max(xs)) / 2 * MM
+        t.pose.position.y = ds[0]['location'][1] * MM
+        t.pose.position.z = (top + 30) * MM
+        t.scale.z = 6 * MM
+        t.text = f"welds[{','.join(parts)}]<-{','.join(sorted(causes))}"
+        (t.color.r, t.color.g, t.color.b), t.color.a = class_colour(order[0]), 1.0
+        out.append(t)
+    return out
+
+
+def defect_markers(defects):
+    out = consequence_markers([d for d in defects if d.get('cause')])
+    defects = [d for d in defects if not d.get('cause')]
     by_class = {}
     for d in defects:
         by_class.setdefault(d['cls'], []).append(d)
@@ -185,7 +247,7 @@ def defect_markers(defects):
             t.pose.position.y = (lo[1] + hi[1]) / 2 * MM
             t.pose.position.z = (hi[2] + 8) * MM
             t.scale.z = 6 * MM
-            t.text = tag(cls, d['magnitude'], len(ds) if same else 1)
+            t.text = tag(cls, d['magnitude'], len(ds) if same else 1, d.get('cause'))
             (t.color.r, t.color.g, t.color.b), t.color.a = rgb, 1.0
             out.append(t)
     return out

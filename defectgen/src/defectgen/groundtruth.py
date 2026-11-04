@@ -55,6 +55,7 @@ class SeamGT:
     start: Vec3
     end: Vec3
     width: float
+    gap: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -69,6 +70,9 @@ class Defect:
     location: Vec3
     stage: Stage
     bounds: tuple[Vec3, Vec3] | None = None
+    # For a consequence rather than an injected defect: what produced it, e.g.
+    # "busbar_liftoff" for an underfilled weld over the gap the chip made.
+    cause: str | None = None
 
 
 @dataclass(frozen=True)

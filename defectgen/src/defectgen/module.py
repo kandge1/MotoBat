@@ -27,6 +27,7 @@ from .groundtruth import (
 )
 from .parts import PARTS, load_all, mesh_dir
 from .settle import particle_mesh, settle
+from .weld import lay
 from .plan import Dent, Placement, Plan, SeamPlan, rotation_z, translation
 
 
@@ -286,12 +287,9 @@ def _solids(plan: Plan, parts: dict[str, trimesh.Trimesh]):
         group = f"terminals_{placement.ref[2]}" if kind == "terminal" else GROUPS[kind]
         yield group, mesh
 
-    for seam in plan.seams:
-        if not seam.present:
-            continue
-        box = trimesh.creation.box(extents=(seam.length, seam.width, abs(seam.height)))
-        box.apply_translation(seam.centre + np.array([0.0, 0.0, seam.height / 2]))
-        yield "welds", box
+    # Beads are built from beam traces by weld.lay, after settling.
+    for index in sorted(plan.beads):
+        yield "welds", plan.beads[index].copy()
 
     for particle in plan.particles:
         yield "fod", particle_mesh(particle)
@@ -325,7 +323,7 @@ def _part_box(part: trimesh.Trimesh, transform: np.ndarray) -> np.ndarray:
 
 
 def _seam_box(seam: SeamPlan) -> np.ndarray:
-    half = np.array([seam.length / 2, seam.width / 2, 0.0])
+    half = np.array([seam.length / 2, seam.envelope, 0.0])
     lo = seam.centre - half
     hi = seam.centre + half
     lo[2], hi[2] = sorted((seam.centre[2], seam.centre[2] + seam.height))
@@ -424,6 +422,7 @@ def collect_labels(
                 start=tuple(seam.centre - half),
                 end=tuple(seam.centre + half),
                 width=seam.width,
+                gap=float(seam.gap),
             )
         )
 
@@ -484,7 +483,9 @@ def injected_plan(
         if STAGES.index(getattr(inject, "min_stage", STAGES[0])) > reached:
             continue
         inject(plan, rng)
-    settle(plan, parts if parts is not None else load_all(cfg))
+    parts = parts if parts is not None else load_all(cfg)
+    settle(plan, parts)
+    lay(plan, parts)
     return plan
 
 

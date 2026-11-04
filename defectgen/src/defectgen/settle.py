@@ -48,6 +48,8 @@ MAX_TILT = np.radians(15.0)
 EPS = 1e-7
 ITERATIONS = 8
 BULGE_MARGIN = 5e-3
+# A part and a support this close count as touching, for naming causes.
+CONTACT_TOL = 1e-6
 # Must be at least the side plate's remesh edge length (2.0).
 PLATEAU = 2.0
 # Spacing of points sampled along edges, where contact on a tilted face peaks.
@@ -223,27 +225,28 @@ def _rest_delta(points: np.ndarray, heights: np.ndarray, centre: np.ndarray, ref
     return shift @ rot
 
 
-def _settle_part(plan, parts, placement, support, spacing) -> np.ndarray:
+def _settle_part(plan, parts, placement, support, spacing):
     """Iterate the linearised rest until the pose stops changing. Returns the
-    total delta applied, so things riding on the part can follow it."""
+    total delta applied, so things riding on the part can follow it, and the
+    points where the part now touches its supports."""
     total = np.eye(4)
+    contacts = np.empty((0, 3))
     support_caster = AxisCaster(support, 2)
     for _ in range(ITERATIONS):
         mesh = world_mesh(plan, parts, placement)
         points = _underside(mesh, spacing)
         heights = _heights_below(support_caster, points)
         peak_points, peak_heights = _peaks_under(support, mesh)
-        delta = _rest_delta(
-            np.vstack([points, peak_points]),
-            np.concatenate([heights, peak_heights]),
-            mesh.center_mass,
-            placement.ref,
-        )
+        p_all = np.vstack([points, peak_points])
+        h_all = np.concatenate([heights, peak_heights])
+        delta = _rest_delta(p_all, h_all, mesh.center_mass, placement.ref)
         if np.allclose(delta, np.eye(4), atol=EPS):
-            return total
+            touching = np.abs(p_all[:, 2] - h_all) < CONTACT_TOL
+            contacts = np.column_stack([p_all[touching, :2], h_all[touching]])
+            return total, contacts
         placement.compose(delta)
         total = delta @ total
-    return total
+    return total, contacts
 
 
 def _seat(plan, parts, placement: Placement) -> None:
@@ -391,6 +394,9 @@ def settle(plan: Plan, parts: dict[str, trimesh.Trimesh], force: bool = False) -
     from .module import build_plan  # module imports this file
 
     nominal = build_plan(plan.cfg, plan.stage)
+    for d, t in zip(plan.defects, plan.targets):
+        for ref in t.refs:
+            plan.influence.setdefault(ref, set()).add(d.cls)
     dirty = {p.ref[0] for p in plan.placements if _moved(plan, nominal, p)}
     if any(p.kind in SUPPORT_PARTICLES for p in plan.particles):
         dirty.add("particle")
@@ -417,9 +423,10 @@ def settle(plan: Plan, parts: dict[str, trimesh.Trimesh], force: bool = False) -
         for placement in plan.of_kind(kind):
             if not placement.present or placement.pinned:
                 continue
-            delta = _settle_part(plan, parts, placement, support, spacing)
+            delta, contacts = _settle_part(plan, parts, placement, support, spacing)
             if not np.allclose(delta, np.eye(4), atol=EPS):
                 dirty.add(kind)
+                _inherit(plan, parts, placement, kinds, contacts)
                 if kind == "busbar":
                     _carry_seams(plan, placement.ref[1], delta)
                 if kind == "carrier":
@@ -434,6 +441,25 @@ def _carry_cmc(plan: Plan, delta: np.ndarray) -> None:
     for placement in plan.of_kind("cmc"):
         if placement.present:
             placement.compose(delta)
+            plan.influence.setdefault(placement.ref, set()).update(
+                plan.influence.get(("carrier",), set())
+            )
+
+
+def _inherit(plan: Plan, parts, placement: Placement, kinds, contacts: np.ndarray) -> None:
+    """A part that settling moved owes its pose to what it now rests on: take
+    on the causes of each support it actually touches. A carrier tilted up on
+    one backwards cell inherits `reversed_polarity` from that cell, not the
+    causes of every other cell it also sits on."""
+    if not len(contacts):
+        return
+    mine = plan.influence.setdefault(placement.ref, set())
+    for other in plan.placements:
+        if not other.present or other.ref[0] not in kinds or not plan.influence.get(other.ref):
+            continue
+        top = AxisCaster(world_mesh(plan, parts, other), 2).extreme(contacts, highest=True)
+        if np.any(np.abs(top - contacts[:, 2]) < CONTACT_TOL):
+            mine |= plan.influence[other.ref]
 
 
 def _carry_seams(plan: Plan, busbar_index: int, delta: np.ndarray) -> None:
