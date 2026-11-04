@@ -67,9 +67,12 @@ CMC and carrier match `module_assembled` (E6).
    internal. So: overheat → Cu tint (visible) + `excess_penetration` / IMC
    (internal label). The **hole** stays tied to the *gap* (melt dropping
    through the top sheet), as `weld.py` already models it.
-4. **Materials library**, then **specular dropout** with `scan.py` (task 1.3):
-   per-material reflectance (rough-conductor model) and roughness statistics,
-   micro-texture applied at ray-hit time, not baked into the mesh.
+4. ◐ **Materials library and specular dropout — first version in `scan.py`**
+   (4 Nov 2026): reflectance per material and band, and dark/glare dropout.
+   Micro-roughness (Ra ≈ 0.2–0.5 µm) sits below every sensor's Z noise, so it
+   enters only through the lobe width `alpha`, not as geometry. Still open:
+   measured BRDFs (RGL-EPFL / MERL) in place of the assumed `kd`/`alpha`/`r0`,
+   multipath inside weld beads, and the heat-tint colour layer (item 3).
 
 Parked, not scheduled: injection-moulding defects in the carrier/cover
 (short shot, warpage, sink, flash) as a defect source.
@@ -180,7 +183,7 @@ the contribution.
 | 1.0 | Resolution gate + scope decision | 3.7 | ✅ 15 Sep, in `project_plan.md` |
 | 1.1 | Mesh-native module generator, three stages, `(mesh, labels)` seam | 4B.1 | ✅ 1 Nov 2026 — `defectgen/`, 65 tests passing. Loads the real CAD, normalising each mesh into the §7 frame on the way in. Terminal placement corrected 3 Nov against the Fusion `cell_assembled` (fixlist E1); the module is 151.0 wide. |
 | 1.2 | Defect injection: cell pose, terminal height/tilt, missing cell, reversed polarity, busbar pose/gap, weld seam, adhesive bead, FOD | 4B.2 | ✅ 3 Nov 2026 — `defects.py`, 13 of 15 in-scope classes. Each injector is tagged with the §4B.2 stage it first applies at, so one recipe describes all three stages. **Not done:** class 10 (gap-filler bead — no pre-cell stage exists yet) and class 12 (insulation film — deliberately never modelled as geometry, `module_spec.md` §3). |
-| 1.3 | Three ray-cast sensor models: fixed Ranger3 line-scan, wrist Zivid-class snapshot, wrist LJ-X8200-class profilometer. Both occlusions, dropout, noise; parameters **frozen and hashed before any results**. | 4B.3 | `scan.py` |
+| 1.3 | Three ray-cast sensor models: fixed Ranger3 line-scan, wrist Zivid-class snapshot, wrist LJ-X8200-class profilometer. Both occlusions, dropout, noise; parameters **frozen and hashed before any results**. | 4B.3 | ✅ 4 Nov 2026 — `scan.py`. Two models: laser-line triangulation (LJ-X8200 and Ranger3 share it) and structured-light snapshot (Zivid). Each covers both occlusions, the range window, grazing-angle cut, and **per-material reflectance** (`configs/materials.yaml`: diffuse plus Beckmann specular lobe per wavelength band) giving dark and glare dropout on bare Cu/Al. Noise grows as the returned signal weakens; height is quantised. Parameters live in `configs/sensors.yaml` and are tagged S/D/A. LJ-X8200 values are datasheet; the Zivid baseline (117 mm) is scaled off datasheet fig. 5; the Ranger3 station geometry is assumed design. **Frozen: hash `a95aee280172`**, pinned in `tests/test_scan.py` and written into every scan. **Open:** LJ triangulation angle (measure from the AS_108261 STEP), multipath on concave beads, speckle. |
 | 1.4 | Detection: align → ICP → per-feature fits within one capture → residual segmentation → classify | 4B.4 | `detect.py` |
 | 1.5 | Coverage metric + greedy view selection (no kinematics yet) | 4B.5 | `coverage.py` |
 | 1.6 | `motobat_interfaces`: `DefectReport`, `ScanResult`, `CorrectionCmd` | §7 | first ROS package |
@@ -214,7 +217,7 @@ from the MDPI paper itself.
 | 2.3 | Flange: snapshot 3D + profilometer (**+ 2D camera only if 1.11 requires it**), poses as variables | 4A.4, 3.7.3 | **◀ IN PROGRESS, ahead of sequence.** `inspector_flange` exists, with HC10DT flange alignment features, carrying the Zivid 2+ M60 and the Keyence LJ-X8200 on an AL-5052 plate. Keep it **parametric** (sensor poses as Fusion User Parameters) so 1.11's result can swap the sensor class without a remodel. Check FOV occlusion and standoff compatibility. **Payload ≈ 2.5–3.0 kg of 10** (Zivid 1.0 + Keyence 1.2 + plate + cabling) — take sensor masses from datasheets, not from the CAD shells. Flange is the **DT** pattern, 63 mm PCD (§4A.4). |
 | 2.4 | `inspector_flange.xacro` — flange + sensor frames on `s3_tool0` | 4A.4 | derive origins from CAD **numerically**; a 2° eyeball error corrupts every registration downstream and will look like an algorithm bug |
 | 2.5 | Reachable view plan: Phase 1 viewpoints filtered by IK and collision, ordered to minimise motion | 4B.5 | the arm earns its place here. Must account for: **two different standoffs** (Zivid ≈ 600 mm nominal, 300–1100; LJ-X8200 ≈ 245 mm) implying separate poses per sensor; the **≈ 39° wall-occlusion limit** on outer terminal edges (`module_spec.md` §5); and housing-to-housing occlusion. **Needs 2.1 first** — scan poses cannot be checked for reach or collision without the HC10DT MoveIt config. |
-| 2.6 | Module meshes in Gazebo; depth camera + narrow-fan `gpu_lidar` as the sensors; fixed line-scan station alongside | 4B.8, 4A.3 | The CAD exists, so this loads real meshes. **Gazebo cannot load STEP** (STL/OBJ/DAE/glTF only), and **STL has no units while Gazebo assumes metres** — every mesh tag needs `<scale>0.001 0.001 0.001</scale>` or the module is 1000× too large. |
+| 2.6 | Module meshes in Gazebo; depth camera + narrow-fan `gpu_lidar` as the sensors; fixed line-scan station alongside | 4B.8, 4A.3 | The CAD exists, so this loads real meshes. **Gazebo cannot load STEP** (STL/OBJ/DAE/glTF only), and **STL has no units while Gazebo assumes metres** — every mesh tag needs `<scale>0.001 0.001 0.001</scale>` or the module is 1000× too large. **(4 Nov 2026)** A defectgen module is ≈ 1 M triangles, mostly weld beads (`weld.py`). Gazebo needs a decimated or plain-bead export, with the fine bead detail left to the numpy sensor models. Gazebo also cannot drop points on specular copper, which strengthens §3.7.8 (fidelity lives in Phase 1). |
 | 2.7 | **Fixed vs arm with real cycle time** (motion + capture per module) | 3.7.6 | completes the central comparison |
 | 2.8 | Verify TF tree: `ros2 run tf2_tools view_frames` | 4A.4 | |
 
@@ -233,8 +236,10 @@ from the MDPI paper itself.
 | 3.2 | GP7 cell pick-and-place, located by a fixed overhead 2D camera | 3.7.3 | same pattern as the myCobot vision pick-and-place |
 | 3.3 | GP4 MoveIt + OPW (vendor file exists); busbar-carrier, CMC and cover placement | 4A.1 | ≈ 0.3 kg loads |
 | 3.3b | GP25 MoveIt + OPW **derived from the URDF** (none ships); MOTOPAC-RL2D scanner as the end effector; the weld is a scanner pattern drawn while the arm holds | 4A.7 | payload 18.3 / 25 kg before fibre and dress |
-| 3.4 | Close the loop in simulation: `DefectReport` → `CorrectionCmd` → next cell's placement | 9.9 | |
+| 3.4 | Close the loop in simulation: `DefectReport` → `CorrectionCmd` → next cell's placement | 9.9 | Labels now carry `cause` (`weld.py`), so a reject at the pre-weld gap check can be credited with the weld defects it prevented |
+| 3.0 | `motobat_line.urdf.xacro`: replace the second GP4 with the **GP25** (welder, §4A.7), giving GP7 + GP4 + HC10DT + GP25; rebuild, relaunch headless | 4A.7 | `motoman_gp25_support` is vendored |
 | 3.5 | microScan3 safety zones → HC10DT speed and separation monitoring | 3.7.3 | ISO/TS 15066; this is the controls-and-automation showpiece |
+| 3.5b | **Laser cell safety.** The GP25 carries an 8 kW infrared fibre laser: an enclosed, interlocked cell (ISO 11553). The collaborative HC10DT cannot share space with people while the beam is live, so S3 (inspection) and S4 (weld) are physically separate. The laser enable is interlocked with the enclosure and the pallet stop | 4A.7 | added 4 Nov 2026 |
 | 3.6 | Latency instrumentation: sensor publish → registration → correction, from rosbag2 timestamps | 4A.5 | |
 
 ---

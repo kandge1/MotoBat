@@ -23,59 +23,166 @@ cd ~/projects/MotoBat && source motobat_env.sh
 /usr/bin/python3 src/motobat_description/scripts/show_module.py data/preview_clean --hide cover cmc
 
 
-## Terminal 2 options ##
-# Ctrl-C the running show_module.py before starting another; each run clears
-# the old markers. Always /usr/bin/python3, never mb-venv (rclpy needs 3.12,
-# the venv is 3.11).
+## More things Terminal 2 can show ##
 
-# realistic severities (tenths of a mm) -- read them off the boxes and tags
+# Only one show_module.py at a time. Ctrl-C the one that is running, then
+# start the next -- it wipes the old markers out of RViz by itself.
+# Always /usr/bin/python3 here, never mb-venv: ROS's rclpy is built for
+# Python 3.12 and the venv is 3.11, so it will not import inside the venv.
+
+# the same defects at the size a real line makes them (tenths of a mm).
+# Too small to see by eye -- read them off the boxes and labels instead.
 /usr/bin/python3 src/motobat_description/scripts/show_module.py data/preview_realistic
 
-# an earlier stage: pre_busbar | pre_weld | post_weld (default)
+# the module at an earlier step of the line. The default is post_weld.
+#   pre_busbar = cells, terminals and housing only
+#   pre_weld   = busbars placed, not welded yet
 /usr/bin/python3 src/motobat_description/scripts/show_module.py data/preview_defective --stage pre_busbar
 /usr/bin/python3 src/motobat_description/scripts/show_module.py data/preview_defective --stage pre_weld
 
-# overlay the clean module, translucent blue, to see what moved
+# lay a see-through blue copy of the perfect module over the defective one,
+# so anything that moved shows up as a step between the two
 /usr/bin/python3 src/motobat_description/scripts/show_module.py data/preview_defective --ghost data/preview_clean
 
-# hide bodies before publishing (or untick them live in RViz)
+# leave parts out from the start (you can also untick them live in RViz)
 /usr/bin/python3 src/motobat_description/scripts/show_module.py data/preview_defective --hide cover cmc carrier
-#   groups: cooling_plate cells terminals_pos terminals_neg pads end_plates
-#           side_plates carrier busbars welds cmc cover fod
+#   parts you can hide: cooling_plate cells terminals_pos terminals_neg pads
+#                       end_plates side_plates carrier busbars welds cmc cover fod
 
-# see-through bodies (0 = invisible, 1 = opaque)
+# make every part see-through (0 = invisible, 1 = solid)
 /usr/bin/python3 src/motobat_description/scripts/show_module.py data/preview_defective --alpha 0.4
 
-# one cell + its terminals against the Fusion cell_assembled (placement check)
+# placement check: one normal cell and one flipped cell with their terminals,
+# overlaid on the cell_assembled from Fusion. If they don't line up, the
+# generator is placing terminals wrong.
 /usr/bin/python3 src/motobat_description/scripts/show_module.py data/cell_check --stage pre_busbar --ghost data/cell_check/reference
 
-# In RViz: Defects -> Namespaces toggles any part/, defect/ or consequence/
-# group live. Untick consequence/labels to see the welds without text.
+# In RViz, under Defects -> Namespaces, every part (part/...), every defect
+# type (defect/...) and every weld result (consequence/...) has its own tick
+# box. Untick consequence/labels to see the welds without the text.
+
+
+## Preliminary sensor scans (task 1.3) ##
+# Simulated sensor point clouds of a generated module, shown on top of it.
+# Post-weld scans leave the CMC and cover off: inspection happens before
+# they go on.
+#
+# Four terminals. Terminals 1 and 2 are exactly the ones from the top of
+# this file -- RViz, and the module you want to scan. Terminal 3 runs the
+# scan, which is a one-off: it writes a file and finishes. Terminal 4 puts
+# that file into RViz on top of the module.
+#
+# Scan the same module Terminal 2 is showing (data/preview_welds below),
+# otherwise the cloud won't line up with the parts.
+
+# Terminal 1 #start rviz
+cd ~/projects/MotoBat && source motobat_env.sh
+rviz2 -d src/motobat_description/rviz/defects.rviz
+
+# Terminal 2 #the module to scan, here the welding defects
+cd ~/projects/MotoBat && source motobat_env.sh
+/usr/bin/python3 src/motobat_description/scripts/show_module.py data/preview_welds --hide cover cmc
+
+# Terminal 3 #run the scans
+# This one DOES use the venv (mb-venv): the scanner needs Open3D, which only
+# lives in the venv. Pick whichever sensors you want. Each one prints what it
+# is doing as it goes: the sensor settings, the scan plan, a progress line per
+# batch (how many rays, how many points kept, what the rest were lost to),
+# then a table by surface material: points kept, noise, how much light came
+# back, and why points were lost (miss, range, grazing, shadow, dark, glare).
+cd ~/projects/MotoBat && source motobat_env.sh && mb-venv
+python -m defectgen.scan data/preview_welds --sensor line_scan      # the fixed Ranger3 station: the whole module passes under it
+python -m defectgen.scan data/preview_welds --sensor profilometer   # the Keyence on the robot wrist: one sweep along the +Y busbar row
+python -m defectgen.scan data/preview_welds --sensor snapshot       # the Zivid on the robot wrist: one picture from above
+# each writes data/preview_welds/scans/post_weld_<sensor>.npz (and a .ply you
+# can open in MeshLab; the snapshot also writes post_weld_snapshot_2d.png).
+
+# speed knob for the two line sensors: how fast the robot sweeps (or the
+# conveyor moves, for line_scan) in mm/s, and how many profiles the sensor
+# fires per second. Points along the sweep land speed/rate mm apart, so
+# slower = denser, and the log prints how long the real scan would take.
+python -m defectgen.scan data/preview_welds --sensor profilometer --speed 50  --rate 1000   # 0.05 mm apart (the default spacing)
+python -m defectgen.scan data/preview_welds --sensor profilometer --speed 200 --rate 1000   # 4x faster, 4x sparser
+python -m defectgen.scan data/preview_welds --sensor line_scan    --speed 100 --rate 1000   # conveyor at 100 mm/s
+# Without --speed/--rate, the spacing comes from the frozen sensor config.
+# The motion is perfect for now -- no robot vibration yet.
+
+# other options: --stage pre_busbar|pre_weld, --seed N for different noise,
+# --out somewhere/else.npz, --quiet for just the last line
+
+# Every run also leaves a record in data/sensor_logs/:
+#   <date>_<time>_<run>_<stage>_<sensor>.log   everything it printed
+#   <date>_<time>_<run>_<stage>_<sensor>.json  the numbers: settings, sensor
+#                                              params hash, points kept and
+#                                              lost per reason and per material
+# (the point clouds themselves stay in data/<run>/scans/, they are big)
+
+# Terminal 4 #show the scans in rviz, on top of the module
+# Back to system python (no mb-venv) -- same reason as Terminal 2.
+# Each sensor shows up as its own display in RViz's left panel:
+# "Line scan (Ranger3)", "Profilometer (LJ-X8200)", "Snapshot (Zivid)", plus
+# "Zivid 2D", the picture the Zivid takes. Tick and untick them to compare.
+# (Restart RViz from Terminal 1 once after updating, to pick these up.)
+cd ~/projects/MotoBat && source motobat_env.sh
+
+# one sensor
+/usr/bin/python3 src/motobat_description/scripts/show_scan.py data/preview_welds/scans/post_weld_profilometer.npz
+
+# all three at once, on top of the module (toggle them in RViz)
+/usr/bin/python3 src/motobat_description/scripts/show_scan.py data/preview_welds/scans/post_weld_*.npz
+
+# all three next to each other instead of stacked: line scan on one side,
+# profilometer in the middle (on the module), snapshot on the other side
+/usr/bin/python3 src/motobat_description/scripts/show_scan.py data/preview_welds/scans/post_weld_*.npz --side-by-side
+
+# To change what is shown, Ctrl-C and run it again.
+#   --colour height     (default) rainbow by height -- these colours are NOT the
+#                       parts, every dot is a measured point coloured by how high it is
+#   --colour material   one colour per surface it landed on: copper, aluminium, plastic, ...
+#   --colour signal     how much laser light came back to the camera:
+#                       blue = barely enough (nearly dropped), red = nearly glare
+#   --max 2000000       show at most this many points per sensor (RViz slows above ~2 M)
+#
+# What you are looking at: each dot is one simulated measurement. The grain is
+# sensor noise. The dark outline around terminals and busbars is triangulation
+# shadow -- spots the laser lit but the camera could not see, so the sensor
+# returns nothing there. Untick "Defects" to see the clouds on their own.
+#
+# The Zivid 2D picture is also saved as a file you can open directly:
+#   data/preview_welds/scans/post_weld_snapshot_2d.png
+# The washed-out white on the metal under the camera is glare -- the same
+# glare that drops 3D points there.
 
 
 ## Regenerate the preview data ##
-# data/ is gitignored: run after a fresh clone or any defectgen change
+# Everything under data/ is generated, not in git. Run these after a fresh
+# clone, or after any change to defectgen, or the viewers show old modules.
+# Uses the venv.
 
-cd ~/projects/MotoBat && mb-venv
-python -m defectgen --out data/preview_clean
-python -m defectgen --out data/preview_defective --demo-defects
-python -m defectgen --out data/preview_realistic --demo-defects realistic
-python -m defectgen --out data/preview_welds --demo-defects welds
-python -m defectgen --out data/cell_check --cells 0 3
+cd ~/projects/MotoBat && source motobat_env.sh && mb-venv
+python -m defectgen --out data/preview_clean                                # no defects
+python -m defectgen --out data/preview_defective --demo-defects             # every defect class, exaggerated
+python -m defectgen --out data/preview_realistic --demo-defects realistic   # every class, real-line sizes
+python -m defectgen --out data/preview_welds --demo-defects welds           # weld defects only
+python -m defectgen --out data/cell_check --cells 0 3                       # the placement check
 
-# a different random scatter (spatter positions only)
+# same defects, different random scatter (only the spatter moves)
 python -m defectgen --out data/preview_defective --demo-defects --seed 7
 
 
 ## Tests ##
+# Run these after changing anything in defectgen. Uses the venv.
 
 cd ~/projects/MotoBat/defectgen && mb-venv
-pytest -p no:launch_testing -p no:launch_ros            # full suite, ~2.5 min
-pytest -p no:launch_testing -p no:launch_ros -k weld    # just the weld tests
-# -p no:... -- ROS's pytest plugins load when ROS is sourced and break collection
+pytest -p no:launch_testing -p no:launch_ros            # everything, a few minutes
+pytest -p no:launch_testing -p no:launch_ros -k weld    # only the weld tests
+pytest -p no:launch_testing -p no:launch_ros -k scan    # only the sensor tests
+# The -p no:... flags matter: with ROS sourced, pytest picks up ROS's own
+# test plugins and dies before running anything.
 
 
-## If RViz shows stale markers ##
-# an old show_module.py is still publishing
-pgrep -af show_module.py
+## If RViz shows old markers or an old point cloud ##
+# Something from an earlier run is still publishing. Find it and stop it.
+pgrep -af "show_module.py|show_scan.py"
 pkill -f show_module.py
+pkill -f show_scan.py

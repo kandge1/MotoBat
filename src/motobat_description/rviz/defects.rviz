@@ -33,6 +33,65 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /defectgen/markers
       Value: true
+    - Alpha: 1
+      Class: rviz_default_plugins/PointCloud2
+      Color Transformer: RGB8
+      Enabled: true
+      Name: Line scan (Ranger3)
+      Position Transformer: XYZ
+      Size (Pixels): 2
+      Style: Points
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /defectgen/scan/line_scan
+      Use Fixed Frame: true
+      Value: true
+    - Alpha: 1
+      Class: rviz_default_plugins/PointCloud2
+      Color Transformer: RGB8
+      Enabled: true
+      Name: Profilometer (LJ-X8200)
+      Position Transformer: XYZ
+      Size (Pixels): 2
+      Style: Points
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /defectgen/scan/profilometer
+      Use Fixed Frame: true
+      Value: true
+    - Alpha: 1
+      Class: rviz_default_plugins/PointCloud2
+      Color Transformer: RGB8
+      Enabled: true
+      Name: Snapshot (Zivid)
+      Position Transformer: XYZ
+      Size (Pixels): 2
+      Style: Points
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /defectgen/scan/snapshot
+      Use Fixed Frame: true
+      Value: true
+    - Class: rviz_default_plugins/Image
+      Enabled: true
+      Name: Zivid 2D
+      Normalize Range: true
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /defectgen/snapshot_2d
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48

@@ -1,0 +1,73 @@
+# Surface reflectance for scan.py: what fraction of the sensor's light comes
+# back to its camera. Hashed with sensors.yaml (scan.params_hash).
+#
+# Model per material: a Lambertian part `kd` plus a rough-metal specular lobe
+# (Beckmann roughness `alpha`, normal-incidence reflectance `r0` per band).
+# Bare metal has kd near zero and a strong lobe: seen off the mirror angle it
+# returns almost nothing, and seen on it, it saturates -- the two ways a
+# triangulation sensor loses points on copper and aluminium.
+#
+# Tags: S sourced, D derived, A assumed. Bands: blue 405 nm (LJ-X8200),
+# red 660 nm (Ranger3 line laser), white (Zivid projector).
+#
+# Surface micro-roughness (Ra ~0.2-0.5 um on rolled sheet) is below every
+# sensor's Z noise, so it enters only through `alpha`, not as geometry.
+
+materials:
+  copper_rolled:             # busbars
+    kd: 0.02                 # A
+    alpha: 0.20              # S  busbar roughness fitted for laser-weld renders (PMC12693759)
+    r0: {blue: 0.55, red: 0.95, white: 0.75}   # A  typical Cu reflectance; verify vs refractiveindex.info
+  copper_weld:               # weld beads, spatter
+    kd: 0.03                 # A
+    alpha: 0.18              # S  weld roughness fitted in PMC12693759
+    r0: {blue: 0.50, red: 0.90, white: 0.70}   # A  oxidised, rippled Cu; below bulk
+  aluminium_terminal:        # terminal pads, machined
+    kd: 0.04                 # A
+    alpha: 0.12              # A
+    r0: {blue: 0.92, red: 0.90, white: 0.91}   # A  typical Al reflectance
+  aluminium_cap:             # cell cap
+    kd: 0.06                 # A
+    alpha: 0.15              # A
+    r0: {blue: 0.90, red: 0.88, white: 0.89}   # A
+  aluminium_sheet:           # side plates
+    kd: 0.08                 # A
+    alpha: 0.25              # A  brushed/rolled
+    r0: {blue: 0.90, red: 0.88, white: 0.89}   # A
+  aluminium_cast:            # end plates, cooling plate
+    kd: 0.25                 # A  cast/anodised, much more diffuse
+    alpha: 0.40              # A
+    r0: {blue: 0.60, red: 0.60, white: 0.60}   # A
+  cell_wrap:                 # blue PET insulation on the cell sides
+    kd: 0.35                 # A
+    alpha: 0.30              # A
+    r0: {blue: 0.05, red: 0.05, white: 0.05}   # A  dielectric, ~4-5% Fresnel
+  plastic_black:             # carrier, cover (PA66 or similar)
+    kd: 0.06                 # A  black, matte
+    alpha: 0.35              # A
+    r0: {blue: 0.04, red: 0.04, white: 0.04}   # A
+  pcb:                       # CMC, solder mask
+    kd: 0.20                 # A
+    alpha: 0.15              # A
+    r0: {blue: 0.05, red: 0.05, white: 0.05}   # A
+  foam:                      # interface pads
+    kd: 0.60                 # A
+    alpha: 0.60              # A
+    r0: {blue: 0.03, red: 0.03, white: 0.03}   # A
+
+# Body group (as defectgen writes them) -> material. `cells` splits by face:
+# upward faces are the bare cap, the rest is the wrap.
+parts:
+  cooling_plate: aluminium_cast
+  cells: {top: aluminium_cap, other: cell_wrap}
+  terminals_pos: aluminium_terminal
+  terminals_neg: aluminium_terminal
+  pads: foam
+  end_plates: aluminium_cast
+  side_plates: aluminium_sheet
+  carrier: plastic_black
+  busbars: copper_rolled
+  welds: copper_weld
+  cmc: pcb
+  cover: plastic_black
+  fod: copper_weld

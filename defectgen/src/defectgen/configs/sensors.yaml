@@ -1,0 +1,63 @@
+# Sensor models for scan.py (task 1.3, project_plan.md §4B.3).
+#
+# FROZEN: these numbers are hashed (scan.params_hash) and the hash is pinned in
+# tests/test_scan.py. Change a value only before looking at detection results,
+# and update the pinned hash in the same commit -- that is the audit trail.
+#
+# Tags: S sourced (datasheet), D derived from sourced values, A assumed.
+# Millimetres and degrees. Sensor frame: z along the optical/laser axis toward
+# the scene, x along the laser line (or image width), y the scan direction.
+
+profilometer:                # Keyence LJ-X8200 class, on the HC10DT wrist
+  kind: line
+  reference_distance: 245.0  # S  LJ-X8200 reference distance
+  z_range: 34.0              # S  +/-34 mm about the reference (F.S. 68 mm)
+  line_width: 72.0           # S  X width at the reference distance (64 near, 80 far)
+  points: 3200               # S  points per profile, 25 um interval at reference
+  triangulation_angle: 23.0  # A  laser-to-camera angle; measure from the AS_108261 STEP
+  profile_pitch: 0.05        # A  mm between profiles along the sweep (plan §4B.3 worked example)
+  sigma_z: 0.001             # S  Z repeatability 1 um, used as per-point noise
+  sigma_x: 0.003             # S  X repeatability 3 um
+  quantum_z: 0.0005          # A  height output resolution
+  band: blue                 # S  405 nm laser
+  max_incidence: 80.0        # A  degrees off the surface normal, laser and camera
+  min_signal: 0.02           # A  returned signal below this (white diffuse at normal = 1) drops
+  saturation: 4.0            # A  above this the spot saturates the sensor (glare) and drops
+  noise_ref_signal: 0.5      # A  noise grows as sqrt(noise_ref_signal / signal) below this
+
+line_scan:                   # SICK Ranger3 class, fixed over the conveyor (the baseline)
+  kind: line
+  reference_distance: 500.0  # A  laser exit to module top; station design, not datasheet
+  z_range: 50.0              # A  +/- about the reference
+  line_width: 180.0          # A  across the 151 mm module plus margin
+  points: 2560               # S  Ranger3 columns
+  triangulation_angle: 30.0  # A  camera off the laser plane
+  profile_pitch: 0.1         # A  conveyor travel per profile
+  sigma_z: 0.010             # D  ~70 um pixel footprint, 1/16 px sub-pixel peak, / sin(30)
+  sigma_x: 0.020             # D  ~0.3 px of the 70 um footprint
+  quantum_z: 0.002           # A
+  band: red                  # A  660 nm line laser, the common choice with Ranger3
+  max_incidence: 80.0        # A
+  min_signal: 0.02           # A
+  saturation: 4.0            # A
+  noise_ref_signal: 0.5      # A
+
+snapshot:                    # Zivid 2+ M60 class, on the HC10DT wrist
+  kind: area
+  resolution: [2448, 2048]   # S  5.0 MP
+  stride: 2                  # A  cast every 2nd pixel each way, for speed (1224 x 1024 rays)
+  hfov: 52.84                # S  camera HFOV (datasheet fig. 5)
+  vfov: 45.14                # S  camera VFOV
+  projector_hfov: 56.83      # S  projector HFOV
+  projector_vfov: 42.57      # S  projector VFOV
+  baseline: 117.0            # D  projector-to-camera, scaled off datasheet fig. 5 by the 169 mm body
+  working_distance: [300.0, 1100.0]  # S  recommended
+  focus_distance: 600.0      # S
+  point_precision: 0.080     # S  1 sigma at focus distance
+  precision_exponent: 2.0    # D  triangulation: depth noise grows with distance squared
+  quantum_z: 0.001           # A
+  band: white                # S  white-light projector
+  max_incidence: 80.0        # A
+  min_signal: 0.02           # A
+  saturation: 4.0            # A
+  noise_ref_signal: 0.5      # A

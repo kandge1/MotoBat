@@ -1488,6 +1488,10 @@ gas line (`cu_on_al_laser_welding.md` §3):
 - **IK:** no OPW file ships for the GP25 (`urdf/` and `meshes/` only). Derive
   the parameters from the URDF and check them against forward kinematics, as
   for the GP7.
+- **Laser safety:** an 8 kW infrared laser means an enclosed, interlocked cell
+  (ISO 11553). The collaborative HC10DT (S3) and the weld cell (S4) must be
+  physically separate; the laser enable is interlocked with the enclosure and
+  pallet stop (status_update.md 3.5b).
 
 ## 4B. ACTIVE WORK PLAN — defect generation and detection (no simulator)
 

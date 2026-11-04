@@ -1,0 +1,19 @@
+# Display colours for the Zivid-style 2D render (scan.render_2d) -- linear RGB,
+# 0..1, roughly what each surface looks like under white light.
+#
+# NOT part of the frozen sensor model and NOT hashed: the plan defers the 2D
+# camera (project_plan.md §4B.3), so this is for looking at, not for training
+# or measuring anything. When 2D becomes a real sensor (polarity, heat tint),
+# these move into materials.yaml and the hash.
+colours:
+  copper_rolled:      [0.78, 0.45, 0.25]
+  copper_weld:        [0.70, 0.48, 0.32]
+  aluminium_terminal: [0.82, 0.82, 0.84]
+  aluminium_cap:      [0.78, 0.78, 0.80]
+  aluminium_sheet:    [0.74, 0.75, 0.77]
+  aluminium_cast:     [0.55, 0.56, 0.58]
+  cell_wrap:          [0.12, 0.30, 0.70]
+  plastic_black:      [0.06, 0.06, 0.07]
+  pcb:                [0.04, 0.32, 0.14]
+  foam:               [0.85, 0.83, 0.75]
+ambient: 0.08          # light that is not the projector's

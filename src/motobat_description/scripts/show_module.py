@@ -58,6 +58,7 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile
 from geometry_msgs.msg import Point
+from sensor_msgs.msg import PointCloud2, PointField
 from visualization_msgs.msg import Marker, MarkerArray
 
 MM = 0.001
@@ -265,6 +266,64 @@ def part_markers(run_dir, stage, hide, alpha):
              for p in shown], [p.stem for p in shown])
 
 
+SCAN_TOPIC = '/defectgen/scan'
+
+
+def scan_topic(sensor):
+    """One topic per sensor, so each has its own RViz display to toggle."""
+    return f'{SCAN_TOPIC}/{sensor}' if sensor else SCAN_TOPIC
+
+
+def _turbo(t):
+    """A compact rainbow for 0..1 (blue low, red high)."""
+    import numpy as np
+    t = np.clip(t, 0.0, 1.0)
+    r = np.clip(1.5 - np.abs(4 * t - 3), 0, 1)
+    g = np.clip(1.5 - np.abs(4 * t - 2), 0, 1)
+    b = np.clip(1.5 - np.abs(4 * t - 1), 0, 1)
+    return np.column_stack([r, g, b])
+
+
+def scan_cloud(path, colour, limit, offset=(0.0, 0.0, 0.0)):
+    """A defectgen scan as a PointCloud2 (x, y, z, rgb), in metres, frame
+    'module'. Coloured by height, by material (fixed hue per material), or by
+    returned signal (dark blue = barely returned, red = near saturation) --
+    the last shows where specular copper and aluminium will lose points."""
+    import numpy as np
+
+    data = np.load(path)
+    meta = json.loads(str(data['meta']))
+    pts = data['points']
+    keep = np.arange(len(pts))
+    if len(pts) > limit:
+        keep = np.random.default_rng(0).choice(len(pts), limit, replace=False)
+    pts = pts[keep]
+    if colour == 'height':
+        z = pts[:, 2]
+        rgb = _turbo((z - z.min()) / max(np.ptp(z), 1e-9))
+    elif colour == 'material':
+        names = meta['material_names']
+        hues = np.array([colorsys.hsv_to_rgb(i / max(len(names), 1), 0.8, 1.0) for i in range(len(names))])
+        rgb = hues[data['material'][keep]]
+    else:
+        rgb = _turbo(np.log10(np.clip(data['signal'][keep], 1e-3, 10.0)) / 4 + 0.75)
+    c = (rgb * 255).astype(np.uint32)
+    packed = ((c[:, 0] << 16) | (c[:, 1] << 8) | c[:, 2]).view(np.float32)
+    buf = np.column_stack([((pts + np.asarray(offset)) * MM).astype(np.float32), packed]).astype(np.float32)
+
+    msg = PointCloud2()
+    msg.header.frame_id = FRAME
+    msg.height, msg.width = 1, len(buf)
+    msg.fields = [PointField(name=n, offset=4 * i, datatype=PointField.FLOAT32, count=1)
+                  for i, n in enumerate(('x', 'y', 'z', 'rgb'))]
+    msg.is_bigendian, msg.point_step = False, 16
+    msg.row_step, msg.is_dense = 16 * len(buf), True
+    msg.data = buf.tobytes()
+    note = (f"{meta['sensor'] or 'scan'} {len(data['points'])} points (showing {len(buf)}), "
+            f"dropped {meta['dropped']}, params {meta['params_hash'][:12]}")
+    return msg, note, meta['sensor']
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__.split('\n')[1])
     p.add_argument('dir', type=Path, help='a defectgen --out directory')
@@ -273,6 +332,11 @@ def main():
                    help='a clean defectgen --out directory to overlay translucent')
     p.add_argument('--hide', nargs='+', default=[], metavar='GROUP',
                    help=f'body groups not to publish: {" ".join(PART_RGB)}')
+    p.add_argument('--scan', type=Path, default=None,
+                   help='a scan .npz from python -m defectgen.scan, published as a PointCloud2')
+    p.add_argument('--scan-colour', choices=('height', 'material', 'signal'), default='height')
+    p.add_argument('--scan-max', type=int, default=2_000_000,
+                   help='decimate the cloud to at most this many points (RViz gets slow above ~2 M)')
     p.add_argument('--alpha', type=float, default=1.0,
                    help='opacity of the module bodies (default 1.0, opaque)')
     args, ros_args = p.parse_known_args()
@@ -309,6 +373,12 @@ def main():
     # DELETEALL goes out once only: repeating it every second would blank the
     # display between messages. The timer brings back re-ticked namespaces.
     node.create_timer(1.0, lambda: pub.publish(MarkerArray(markers=markers)))
+    if args.scan:
+        cloud, note, sensor = scan_cloud(args.scan, args.scan_colour, args.scan_max)
+        topic = scan_topic(sensor)
+        scan_pub = node.create_publisher(PointCloud2, topic, qos)
+        scan_pub.publish(cloud)
+        node.get_logger().info(f'scan {args.scan}: {note} -> {topic}')
 
     log = node.get_logger()
     log.info(f"{args.dir}/{args.stage} -> {TOPIC} (frame '{FRAME}')")
