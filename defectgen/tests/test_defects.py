@@ -320,14 +320,12 @@ def _overlaps(stage, injectors):
     meshes = [
         (p.ref, world_mesh(plan, parts, p))
         for p in plan.placements
-        # cmc is non-manifold (spec §7) and terminal_neg's plug sits in the
-        # carrier by design until fixlist E5 is resolved.
+        # cmc is non-manifold where its components meet the board (spec §7),
+        # so it has no volume to intersect.
         if p.present and p.ref[0] != "cmc"
     ]
     found = []
     for (ra, a), (rb, b) in itertools.combinations(meshes, 2):
-        if "carrier" in (ra[0], rb[0]) and "terminal" in (ra[0], rb[0]):
-            continue
         lo, hi = np.maximum(a.bounds[0], b.bounds[0]), np.minimum(a.bounds[1], b.bounds[1])
         if np.any(hi - lo <= 1e-6):
             continue
@@ -357,3 +355,17 @@ def test_a_cell_pushed_sideways_bulges_the_side_plate():
 def test_a_cell_error_no_pad_can_absorb_is_refused():
     with pytest.raises(ValueError, match="would collide"):
         generate("pre_busbar", defects=[defects.cell_placement(4, dx=2.0)])
+
+
+def test_a_reversed_cell_keeps_the_carrier_from_seating():
+    """The carrier is keyed to the terminals' asymmetry: a cell put in
+    backwards puts its fill plug where the carrier has no pocket, so the
+    carrier rides up on it. Nothing in the code knows about keying -- this
+    emerges from the CAD and the settling, which is the point."""
+    from defectgen.module import build_plan, injected_plan
+    from defectgen.parts import load_all
+
+    parts = load_all(cfg)
+    plan = injected_plan("pre_weld", cfg, 0, [defects.reversed_polarity(1)], parts)
+    lifted = plan.find(("carrier",)).origin[2] - build_plan(cfg, "pre_weld").find(("carrier",)).origin[2]
+    assert lifted > 1.0

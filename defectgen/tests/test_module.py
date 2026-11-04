@@ -33,7 +33,8 @@ def test_each_busbar_stays_on_one_terminal_row():
 
 
 def test_alternate_groups_are_flipped():
-    assert [is_flipped(cfg, k) for k in (0, 3, 6, 9)] == [False, True, False, True]
+    """Even groups flipped, as in module_assembled (module + on group 0)."""
+    assert [is_flipped(cfg, k) for k in (0, 3, 6, 9)] == [True, False, True, False]
 
 
 def test_cells_span_the_stack():
@@ -206,3 +207,37 @@ def test_a_clean_module_is_already_at_rest(stage):
     for p, q in zip(plan.placements, nominal.placements):
         np.testing.assert_allclose(p.transform, q.transform, atol=1e-6, err_msg=str(p.ref))
     assert not plan.overrides
+
+
+@needs_meshes
+def test_module_matches_the_fusion_assembly():
+    """Every placed part must coincide with a body of the user's Fusion
+    module_assembled, to 0.05 mm on its bounding box. The assembly's frame is
+    the module's turned 90 deg about Z (its Y runs along the stack); that is
+    the only mapping under which all five busbars land.
+
+    The CMC is the one exception: the assembly splits it into a board and
+    separate components, which together span what the single CMC part does.
+    """
+    import trimesh
+
+    from defectgen.module import build_plan
+    from defectgen.parts import load_all
+
+    parts = load_all(cfg)
+    ref = trimesh.load_mesh(mesh_dir() / "module_assembled.stl")
+    turn = trimesh.transformations.rotation_matrix(np.pi / 2, [0, 0, 1])
+    boxes = []
+    for body in ref.split(only_watertight=False):
+        corners = trimesh.transform_points(trimesh.bounds.corners(body.bounds), turn)
+        boxes.append([corners.min(axis=0), corners.max(axis=0)])
+    boxes = np.array(boxes)
+
+    missing = []
+    for placement in build_plan(cfg, "post_weld").placements:
+        if placement.ref == ("cmc",):
+            continue
+        built = parts[placement.part].copy().apply_transform(placement.transform)
+        if np.abs(boxes - built.bounds[None]).max(axis=(1, 2)).min() >= 0.05:
+            missing.append(placement.ref)
+    assert missing == []

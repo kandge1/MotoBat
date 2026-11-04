@@ -234,27 +234,30 @@ green today and will fail loudly the moment each is fixed — telling you to del
       defect on a `−` terminal also moves the plug, which is part of the can. *Blocks: nothing.*
       Tests: `test_parts.py::test_terminals_have_matching_footprints` (strict xfail),
       `test_module.py::test_terminals_sit_where_the_fusion_cell_has_them`.
+      *4 Nov 2026:* still open — `cell_can` and `terminal_neg` were not part of the 6fb58f8 re-export.
 
 - [x] **E2 — The CMC overruns the cover by 0.2 mm.** *Not real (3 Nov 2026).* The arithmetic used the
       carrier's top (102.0) as the CMC seat. In `module_assembled` the CMC sits flush on the carrier
       deck at 98.0 → 101.2, between the pegs, leaving 3.8 to the wall top. Fixed with
       `carrier_deck_h: 3.0`; `test_budgets.py::test_cmc_clears_the_cover` now passes.
 
-- [ ] **E3 — `busbar_carrier.stl` is 7.0 tall; the carrier inside `module_assembled` is 8.0.** The
+- [x] **E3 — `busbar_carrier.stl` is 7.0 tall; the carrier inside `module_assembled` is 8.0.** The
       assembly's carrier has CMC mounting pegs to z = 103.0 (223.6 mm² of top faces) that the
       standalone export lacks. Re-export the carrier from the current Fusion design and set
       `carrier_h` to match. The standalone export also has wide bosses at z +5.6 that reach under
       solid CMC board (48 of 264 sampled points), so on it the CMC would ride 2.6 high on the
       bosses. Until the re-export, `settle.py` leaves the CMC at the assembly's deck height
       instead of settling it.
+      *Resolved 4 Nov 2026:* the user re-exported the carrier (commit 6fb58f8). Both it and the assembly's carrier are 7.0 tall; the 8.0 seen earlier came from the previous assembly. One mismatch is left, see E6.
 
-- [ ] **E4 — Six cells in `module_assembled` face the wrong way for 3P4S.** Cells 3, 6, 7, 9, 10
+- [x] **E4 — Six cells in `module_assembled` face the wrong way for 3P4S.** Cells 3, 6, 7, 9, 10
       and 11 are rotated against the rest of their parallel group. By fill-plug side the assembly
       is three blocks of four — cells 0–3 one way, 4–7 the other, 8–11
       the first — which is a 4P3S layout, while its busbars are 3P4S. 3P4S needs
       [0–2][3–5][6–8][9–11] alternating. The generator follows spec §2.
+      *Resolved 4 Nov 2026:* module_assembled is now 3P4S. `test_module.py::test_module_matches_the_fusion_assembly` checks every generated part against a body of it to 0.05 mm. It runs the chain from group 0's positive end, so the generator now flips the even groups (`module.is_flipped`).
 
-- [ ] **E5 — The carrier sits on the fill plugs.** The plug merged into `terminal_neg` stands 5.0
+- [x] **E5 — The carrier sits on the fill plugs.** The plug merged into `terminal_neg` stands 5.0
       above the cap; the carrier's underside is on the cap with no pocket over the plug, so every
       negative terminal overlaps the carrier by ≈ 1426 mm³ — in `module_assembled` too. Either
       pocket the carrier over the plugs or model the plug at its real (much lower) height as a
@@ -262,6 +265,7 @@ green today and will fail loudly the moment each is fixed — telling you to del
       no keying pockets at present (the user recalls designing keying that may have been lost
       while simplifying the carrier). Until fixed, `settle.py` rests the carrier on the terminal
       pads only (`_pad_only`).
+      *Resolved 4 Nov 2026:* the re-exported carrier clears every fill plug, and `settle.py` no longer rests the carrier on the pads alone. A cell put in backwards does not fit: its plug lifts the carrier 2.9 mm (realistic demo) to 5.0 mm, which is the keying working (`test_a_reversed_cell_keeps_the_carrier_from_seating`).
 
 - [x] ~~**E3 — `cmc` is non-manifold**~~ — **closed as not-a-defect.** It has no holes, so a ray
       cannot leak through it. The generator checks for holes rather than strict two-manifoldness,
@@ -271,3 +275,18 @@ green today and will fail loudly the moment each is fixed — telling you to del
 **Six dimension corrections** also came out of this and are already written into
 `module_spec.md` §5 — walls 101.0, carrier 7.0, busbar width 12, busbar lengths 64.5 / 148.5,
 CMC 250 × 50 × 3.2, overhang rule `n × 28 + 8.5`. Z now closes at 107.0, not 107.5.
+
+- [ ] **E6 — The standalone `cmc.stl` and `busbar_carrier.stl` disagree with `module_assembled`.**
+      `cmc.stl` was last exported at 2de6caa; its twelve 6 mm peg holes sit about 0.5 mm off the
+      carrier's pegs along X, so half of every peg is under solid board. `busbar_carrier.stl` also
+      has 12 pegs where the carrier in `module_assembled` has 8 (none at x ≈ ±22.5). The assembly
+      itself is consistent. Re-export both standalone files from the assembly. Until then the CMC
+      is left at its deck height and not settled (`settle.ORDER`).
+
+- [ ] **E7 — Busbars sit in carrier slots with zero side clearance.** A busbar moved 0.2 mm / 0.1°
+      can no longer drop into its slot, so settling rests it on top of the carrier, exactly 1.000 mm
+      high. That is what a zero-clearance part does, but real slots have a sliding fit for exactly
+      this reason, and it makes realistic busbar errors read as 1 mm lift-off. Zero clearance is
+      right for *mating* faces (spec §7: the gap is the measurement); it is wrong for *locating*
+      fits. Give the busbar slots (and any other locating feature: terminal windows, CMC pegs) a
+      design clearance in Fusion. A typical starting point is 0.2–0.3 mm per side; the user decides.

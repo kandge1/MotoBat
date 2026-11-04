@@ -31,9 +31,15 @@ from .plan import Dent, Placement, Plan, SeamPlan, rotation_z, translation
 
 
 def is_flipped(cfg: Config, cell_index: int) -> bool:
-    """Odd parallel groups face the other way, which is what makes the busbar
-    pattern non-trivial and a reversed cell a meaningful defect (spec §2)."""
-    return cfg.group_of(cell_index) % 2 == 1
+    """Alternate groups face opposite ways, which is what makes the busbar
+    pattern non-trivial and a reversed cell a meaningful defect (spec §2).
+
+    Even groups are the flipped ones, matching the user's module_assembled:
+    the module's positive end is on group 0. Which group starts flipped is a
+    free choice in the spec; the Fusion assembly fixes it, and
+    test_module_matches_the_fusion_assembly holds the generator to it.
+    """
+    return cfg.group_of(cell_index) % 2 == 0
 
 
 # Where each terminal sits on an unflipped cell, in the cell's own frame. Read
@@ -61,19 +67,23 @@ def terminal_y(cfg: Config, cell_index: int, polarity: Polarity) -> float:
 
 def busbar_plan(cfg: Config) -> list[tuple[str, tuple[tuple[int, Polarity], ...]]]:
     """3P4S: a series busbar bridges each adjacent pair of parallel groups, and
-    an end busbar caps the first group's negative and the last group's positive.
-    For 3P4S that is three series plus two end busbars."""
+    an end busbar caps the first group's positive and the last group's negative.
+    For 3P4S that is three series plus two end busbars.
+
+    The chain runs from group 0's positive end, as in module_assembled: each
+    series busbar joins group g's negatives to group g+1's positives.
+    """
     size = cfg.n_parallel
     groups = [tuple(range(g * size, (g + 1) * size)) for g in range(cfg.n_series)]
 
     plan: list[tuple[str, tuple[tuple[int, Polarity], ...]]] = []
     for g in range(cfg.n_series - 1):
         terminals = tuple(
-            [(c, "pos") for c in groups[g]] + [(c, "neg") for c in groups[g + 1]]
+            [(c, "neg") for c in groups[g]] + [(c, "pos") for c in groups[g + 1]]
         )
         plan.append(("series", terminals))
-    plan.append(("end", tuple((c, "neg") for c in groups[0])))
-    plan.append(("end", tuple((c, "pos") for c in groups[-1])))
+    plan.append(("end", tuple((c, "pos") for c in groups[0])))
+    plan.append(("end", tuple((c, "neg") for c in groups[-1])))
     return plan
 
 

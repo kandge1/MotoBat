@@ -39,6 +39,7 @@ import trimesh
 from scipy.optimize import linprog
 
 from .plan import Placement, Plan
+from .raycast import AxisCaster
 
 # A part needing more than this to come to rest has nothing under one side and
 # would fall off, which is a broken setup rather than a defect.
@@ -46,22 +47,26 @@ MAX_TILT = np.radians(15.0)
 # Below this a pose change is numerical noise, not movement.
 EPS = 1e-7
 ITERATIONS = 8
-FAR = 1.0e3
 BULGE_MARGIN = 5e-3
 # Must be at least the side plate's remesh edge length (2.0).
 PLATEAU = 2.0
 # Spacing of points sampled along edges, where contact on a tilted face peaks.
 EDGE_STEP = 0.1
+# The rest LP starts from this many of the nearest contacts and adds back, in
+# batches of the same size, the ones its answer would push through. The far
+# ones never bind, and leaving them out is most of the LP's cost.
+ACTIVE_START = 500
 
 # What each part rests on, in assembly order. Particles flagged as supports
 # (debris, FOD) are added to every list.
 ORDER: list[tuple[str, tuple[str, ...]]] = [
-    ("carrier", ("cell", "terminal_pad", "pad", "end_plate", "side_plate")),
+    ("carrier", ("cell", "terminal", "pad", "end_plate", "side_plate")),
     ("busbar", ("cell", "terminal", "carrier")),
-    # The CMC is not settled yet (fixlist E3): the standalone busbar_carrier.stl
-    # has wide bosses where module_assembled has slim pegs through the CMC's
-    # holes, so settled on this carrier the CMC rides 2.6 high. It stays at the
-    # assembly's deck height until the carrier is re-exported. Then add:
+    # The CMC is not settled (fixlist E6): it is located by pegs through its
+    # holes, and the standalone cmc.stl's holes sit 0.5 mm off the standalone
+    # carrier's pegs, so settled it would ride 2.6 high on them. It stays at the
+    # assembly's deck height -- where module_assembled has it -- until cmc.stl
+    # is re-exported. Then add:
     #   ("cmc", ("carrier", "busbar")),
     ("cover", ("end_plate", "side_plate", "carrier", "busbar", "cmc", "cell", "terminal")),
 ]
@@ -73,23 +78,6 @@ def world_mesh(plan: Plan, parts: dict[str, trimesh.Trimesh], placement: Placeme
     if placement.ref in plan.overrides:
         return plan.overrides[placement.ref].copy()
     return parts[placement.part].copy().apply_transform(placement.transform)
-
-
-def _pad_only(parts, placement: Placement) -> trimesh.Trimesh:
-    """terminal_neg without its merged fill plug, as a support for the carrier.
-
-    Workaround for fixlist E5: the plug stands 5 mm proud with no pocket in the
-    carrier above it, so a carrier settled onto the full part would ride 5 mm
-    high in a clean module. Remove this once the carrier is re-exported with
-    its pockets.
-    """
-    mesh = parts[placement.part]
-    if placement.part != "terminal_neg":
-        return mesh.copy().apply_transform(placement.transform)
-    lo, hi = mesh.bounds
-    box = trimesh.creation.box(bounds=[[lo[0] - 1, -11.0, lo[2] - 1], [hi[0] + 1, 11.0, hi[2] + 1]])
-    pad = trimesh.boolean.intersection([mesh, box], engine="manifold")
-    return pad.apply_transform(placement.transform)
 
 
 def particle_mesh(particle) -> trimesh.Trimesh:
@@ -109,8 +97,6 @@ def _supports(plan: Plan, parts, kinds: tuple[str, ...]) -> trimesh.Trimesh | No
         kind = placement.ref[0]
         if kind in kinds:
             meshes.append(world_mesh(plan, parts, placement))
-        elif kind == "terminal" and "terminal_pad" in kinds:
-            meshes.append(_pad_only(parts, placement))
     meshes += [particle_mesh(p) for p in plan.particles if p.kind in SUPPORT_PARTICLES]
     return trimesh.util.concatenate(meshes) if meshes else None
 
@@ -130,8 +116,8 @@ def _edge_points(mesh: trimesh.Trimesh, faces: np.ndarray, step: float) -> np.nd
 
 def _underside(mesh: trimesh.Trimesh, spacing: float) -> np.ndarray:
     """Points on the part's underside: dense samples along the edges of every
-    downward face, which catch edge and corner contact, plus a grid of upward
-    rays, which catches contact in the middle of a face."""
+    downward face, which catch edge and corner contact, plus a grid where the
+    lowest surface of the part is, which catches contact mid-face."""
     down = mesh.face_normals[:, 2] < -0.5
     corners = _edge_points(mesh, down, EDGE_STEP)
 
@@ -139,63 +125,91 @@ def _underside(mesh: trimesh.Trimesh, spacing: float) -> np.ndarray:
     xs = np.arange(lo[0] + spacing / 2, hi[0], spacing)
     ys = np.arange(lo[1] + spacing / 2, hi[1], spacing)
     gx, gy = np.meshgrid(xs, ys)
-    origins = np.column_stack([gx.ravel(), gy.ravel(), np.full(gx.size, lo[2] - 1.0)])
-    hits, rays, _ = mesh.ray.intersects_location(
-        origins, np.tile([0.0, 0.0, 1.0], (len(origins), 1)), multiple_hits=False
-    )
-    grid = hits if len(rays) else np.empty((0, 3))
-    return np.vstack([corners, grid])
+    grid = np.column_stack([gx.ravel(), gy.ravel(), np.zeros(gx.size)])
+    grid[:, 2] = AxisCaster(mesh, 2).extreme(grid, highest=False)
+    return np.vstack([corners, grid[~np.isnan(grid[:, 2])]])
 
 
-def _heights_below(support: trimesh.Trimesh, points: np.ndarray) -> np.ndarray:
+def _heights_below(support: AxisCaster, points: np.ndarray) -> np.ndarray:
     """Top of the support directly below each point's (x, y); NaN where none."""
-    origins = np.column_stack([points[:, :2], np.full(len(points), FAR)])
-    hits, rays, _ = support.ray.intersects_location(
-        origins, np.tile([0.0, 0.0, -1.0], (len(points), 1)), multiple_hits=False
-    )
-    out = np.full(len(points), np.nan)
-    out[rays] = hits[:, 2]
-    return out
+    return support.extreme(points, highest=True)
 
 
 def _peaks_under(support: trimesh.Trimesh, part: trimesh.Trimesh):
-    """The other side of the contact: every upward-facing vertex of the
-    support that lies under the part, paired with the part's underside height
-    directly above it. A grid on the part alone misses any support narrower
+    """The other side of the contact: points along every upward-facing edge of
+    the support that lies under the part, paired with the part's underside
+    height directly above. A grid on the part alone misses any support narrower
     than its spacing -- a 0.4 mm chip under a 12 mm busbar."""
     lo, hi = part.bounds
     up = support.face_normals[:, 2] > 0.5
     tri = support.triangles
     near = np.all((tri.max(axis=1)[:, :2] >= lo[:2]) & (tri.min(axis=1)[:, :2] <= hi[:2]), axis=1)
-    tops = _edge_points(support, up & near, EDGE_STEP)
-    inside = np.all((tops[:, :2] >= lo[:2]) & (tops[:, :2] <= hi[:2]), axis=1)
-    tops = tops[inside]
-    if not len(tops):
+    if not (up & near).any():
         return np.empty((0, 3)), np.empty(0)
-    origins = np.column_stack([tops[:, :2], np.full(len(tops), lo[2] - 1.0)])
-    hits, rays, _ = part.ray.intersects_location(
-        origins, np.tile([0.0, 0.0, 1.0], (len(tops), 1)), multiple_hits=False
-    )
-    return hits, tops[rays, 2]
+    tops = _edge_points(support, up & near, EDGE_STEP)
+    tops = tops[np.all((tops[:, :2] >= lo[:2]) & (tops[:, :2] <= hi[:2]), axis=1)]
+    under = AxisCaster(part, 2).extreme(tops, highest=False)
+    keep = ~np.isnan(under)
+    return np.column_stack([tops[keep, :2], under[keep]]), tops[keep, 2]
+
+
+def _hull_reduce(points: np.ndarray, heights: np.ndarray):
+    """Drop contact constraints that can never bind. All points at the same gap
+    give constraints that differ only in (x, y), and a linear function of
+    (x, y) peaks on the convex hull -- so per gap level only the hull's
+    vertices matter. A busbar flat on three pads goes from thousands of rows to
+    a few dozen, with the same optimum."""
+    from scipy.spatial import ConvexHull, QhullError
+
+    gap = np.round(points[:, 2] - heights, 9)
+    order = np.argsort(gap, kind="stable")
+    levels, starts = np.unique(gap[order], return_index=True)
+    bounds = np.append(starts, len(order))
+    keep = []
+    for a, b in zip(bounds[:-1], bounds[1:]):
+        idx = order[a:b]
+        if len(idx) > 3:
+            try:
+                idx = idx[ConvexHull(points[idx, :2]).vertices]
+            except QhullError:
+                # Collinear: the two ends of the line are all that can bind.
+                xy = points[idx, :2]
+                along = (xy - xy[0]) @ (xy[-1] - xy[0])
+                idx = idx[[np.argmin(along), np.argmax(along)]]
+        keep.append(idx)
+    keep = np.concatenate(keep)
+    return points[keep], heights[keep]
 
 
 def _rest_delta(points: np.ndarray, heights: np.ndarray, centre: np.ndarray, ref) -> np.ndarray:
     keep = ~np.isnan(heights)
     if not keep.any():
         raise ValueError(f"{ref} has nothing under it to rest on")
-    p, s = points[keep], heights[keep]
+    p, s = _hull_reduce(points[keep], heights[keep])
     dx, dy = p[:, 0] - centre[0], p[:, 1] - centre[1]
     a_ub = -np.column_stack([np.ones(len(p)), dy, -dx])
     b_ub = p[:, 2] - s
-    result = linprog(
-        c=[1.0, 0.0, 0.0],
-        A_ub=a_ub,
-        b_ub=b_ub,
-        bounds=[(None, None), (-MAX_TILT, MAX_TILT), (-MAX_TILT, MAX_TILT)],
-        method="highs",
-    )
-    if not result.success:
-        raise ValueError(f"{ref} cannot come to rest: {result.message}")
+    # Active set: solve on the near contacts, then add back any far one the
+    # answer would push through, until none is violated. Same optimum as the
+    # full LP, a fraction of the rows.
+    active = np.zeros(len(b_ub), bool)
+    active[np.argsort(b_ub)[:ACTIVE_START]] = True
+    while True:
+        result = linprog(
+            c=[1.0, 0.0, 0.0],
+            A_ub=a_ub[active],
+            b_ub=b_ub[active],
+            bounds=[(None, None), (-MAX_TILT, MAX_TILT), (-MAX_TILT, MAX_TILT)],
+            method="highs",
+        )
+        if not result.success:
+            raise ValueError(f"{ref} cannot come to rest: {result.message}")
+        excess = np.where(active, -np.inf, a_ub @ result.x - b_ub)
+        violated = np.where(excess > 1e-12)[0]
+        if not len(violated):
+            break
+        worst = violated[np.argsort(excess[violated])[::-1][:ACTIVE_START]]
+        active[worst] = True
     dz, rx, ry = result.x
     if max(abs(rx), abs(ry)) > MAX_TILT - 1e-6:
         raise ValueError(
@@ -215,10 +229,11 @@ def _settle_part(plan, parts, placement, support, spacing) -> np.ndarray:
     """Iterate the linearised rest until the pose stops changing. Returns the
     total delta applied, so things riding on the part can follow it."""
     total = np.eye(4)
+    support_caster = AxisCaster(support, 2)
     for _ in range(ITERATIONS):
         mesh = world_mesh(plan, parts, placement)
         points = _underside(mesh, spacing)
-        heights = _heights_below(support, points)
+        heights = _heights_below(support_caster, points)
         peak_points, peak_heights = _peaks_under(support, mesh)
         delta = _rest_delta(
             np.vstack([points, peak_points]),
@@ -239,7 +254,7 @@ def _seat(plan, parts, placement: Placement) -> None:
     can = world_mesh(plan, parts, plan.find(("cell", k)))
     mesh = world_mesh(plan, parts, placement)
     points = _underside(mesh, 0.5)
-    heights = _heights_below(can, points)
+    heights = _heights_below(AxisCaster(can, 2), points)
     keep = ~np.isnan(heights)
     lift = float(np.max(heights[keep] - points[keep, 2])) if keep.any() else 0.0
     if lift > EPS:
@@ -254,15 +269,10 @@ def _z(dz: float) -> np.ndarray:
 
 # -- compliant parts -------------------------------------------------------
 
-def _face_x(mesh: trimesh.Trimesh, yz: np.ndarray, from_x: float, direction: float) -> np.ndarray:
-    """First X a ray at each (y, z) meets on `mesh`, travelling from `from_x`."""
-    origins = np.column_stack([np.full(len(yz), from_x), yz])
-    hits, rays, _ = mesh.ray.intersects_location(
-        origins, np.tile([direction, 0.0, 0.0], (len(yz), 1)), multiple_hits=False
-    )
-    out = np.full(len(yz), np.nan)
-    out[rays] = hits[:, 0]
-    return out
+def _face_x(mesh: trimesh.Trimesh, yz: np.ndarray, highest: bool) -> np.ndarray:
+    """The mesh's furthest +X (or -X) surface at each (y, z); NaN where none."""
+    points = np.column_stack([np.zeros(len(yz)), yz])
+    return AxisCaster(mesh, 0).extreme(points, highest)
 
 
 def _check_and_compress_stack(plan: Plan, parts) -> None:
@@ -282,15 +292,15 @@ def _check_and_compress_stack(plan: Plan, parts) -> None:
     for k in range(cfg.n_cells):
         if k not in meshes:
             continue
-        right = _face_x(meshes[k], yz, FAR, -1.0)
-        left = _face_x(meshes[k], yz, -FAR, 1.0)
+        right = _face_x(meshes[k], yz, highest=True)
+        left = _face_x(meshes[k], yz, highest=False)
         if k == 0 and np.nanmin(left) < -end_x - 1e-6:
             raise ValueError(f"cell 0 passes {-end_x - np.nanmin(left):.2f} mm into end plate a")
         if k == cfg.n_cells - 1 and np.nanmax(right) > end_x + 1e-6:
             raise ValueError(f"cell {k} passes {np.nanmax(right) - end_x:.2f} mm into end plate b")
         if k + 1 not in meshes:
             continue
-        nxt = _face_x(meshes[k + 1], yz, -FAR, 1.0)
+        nxt = _face_x(meshes[k + 1], yz, highest=False)
         gap = nxt - right
         pad = next((p for p in plan.of_kind("pad") if p.ref[1] == k and p.present), None)
         floor = cfg.pad_min_t if pad else 0.0
@@ -323,7 +333,7 @@ def _bulge_side_plates(plan: Plan, parts) -> None:
     cells = [world_mesh(plan, parts, p) for p in plan.of_kind("cell") if p.present]
     if not cells:
         return
-    stack = trimesh.util.concatenate(cells)
+    stack = AxisCaster(trimesh.util.concatenate(cells), 1)
     xs = np.arange(-cfg.module_l / 2, cfg.module_l / 2, 1.0)
     zs = np.arange(cfg.z_cell_bottom + 0.5, cfg.z_cell_top, 1.0)
     gx, gz = np.meshgrid(xs, zs)
@@ -334,15 +344,9 @@ def _bulge_side_plates(plan: Plan, parts) -> None:
         if not placement.present:
             continue
         sign = 1.0 if placement.ref[1] == "right" else -1.0
-        origins = np.column_stack([xz[:, 0], np.zeros(len(xz)), xz[:, 1]])
-        hits, rays, _ = stack.ray.intersects_location(
-            origins, np.tile([0.0, sign, 0.0], (len(xz), 1)), multiple_hits=True
-        )
-        if not len(rays):
-            continue
-        reach = np.zeros(len(xz))
-        np.maximum.at(reach, rays, sign * hits[:, 1])
-        push = reach - inner
+        points = np.column_stack([xz[:, 0], np.zeros(len(xz)), xz[:, 1]])
+        reach = sign * stack.extreme(points, highest=sign > 0)
+        push = np.nan_to_num(reach - inner, nan=0.0)
         contact = push > 1e-6
         # Contacts are sampled on a 1 mm grid; between samples a yawed can
         # can stand a few um prouder. Overshooting by 5 um closes that.
@@ -406,7 +410,7 @@ def settle(plan: Plan, parts: dict[str, trimesh.Trimesh], force: bool = False) -
             dirty.add("terminal")
 
     for kind, kinds in ORDER:
-        if not (dirty & ({kind, "particle"} | set(kinds) | ({"terminal"} if "terminal_pad" in kinds else set()))):
+        if not (dirty & ({kind, "particle"} | set(kinds))):
             continue
         support = _supports(plan, parts, kinds)
         if support is None:
@@ -438,12 +442,15 @@ def _land_spatter(plan: Plan, parts) -> None:
     if not spatter:
         return
     # Welding happens before the CMC and cover go on.
-    everything = trimesh.util.concatenate(
-        [
-            world_mesh(plan, parts, p)
-            for p in plan.placements
-            if p.present and p.ref[0] not in ("cmc", "cover")
-        ]
+    everything = AxisCaster(
+        trimesh.util.concatenate(
+            [
+                world_mesh(plan, parts, p)
+                for p in plan.placements
+                if p.present and p.ref[0] not in ("cmc", "cover")
+            ]
+        ),
+        2,
     )
     centres = np.array([p.centre for p in spatter])
     tops = _heights_below(everything, centres)
