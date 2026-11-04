@@ -9,12 +9,12 @@ FILE_DESCRIPTION(
 /* implementation_level */ '2;1');
 
 FILE_NAME(
-/* name */ 'VDA PHEV2 Prismatic Cell.step',
-/* time_stamp */ '2026-11-01T01:23:35-04:00',
+/* name */ 'cell_assembled.step',
+/* time_stamp */ '2026-11-03T21:31:30-05:00',
 /* author */ (''),
 /* organization */ (''),
 /* preprocessor_version */ 'ST-DEVELOPER v20.2',
-/* originating_system */ 'Autodesk Translation Framework v15.15.0.0',
+/* originating_system */ 'Autodesk Translation Framework v15.17.0.0',
 /* authorisation */ '');
 
 FILE_SCHEMA (('AUTOMOTIVE_DESIGN { 1 0 10303 214 3 1 1 }'));
