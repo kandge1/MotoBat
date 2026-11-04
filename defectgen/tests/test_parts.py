@@ -41,23 +41,18 @@ def test_part_has_no_holes(name):
     assert is_closed(load_part(name, cfg))
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="terminal_neg exports 38.5 wide against terminal_pos's 22.0 -- the "
-    "fill plug is merged into it. Placement is no longer affected (the pad "
-    "centre is the datum), but a terminal_height or terminal_tilt defect on a "
-    "negative terminal also lifts the plug, which is part of the can. Fix by "
-    "re-exporting the terminal alone.",
-)
-def test_terminals_have_matching_footprints():
-    """Spec §4 sources both pads from the vendor drawing at 22.0 x 18.5."""
+def test_terminals_are_asymmetric_so_the_carrier_can_key_them():
+    """The negative terminal carries the fill plug on its inboard side, so it
+    is 38.5 wide against the positive's 22.0 pad. That asymmetry is a design
+    feature, not an export error: the carrier is pocketed to fit it, so a cell
+    put in backwards cannot take the carrier (fixlist E1, closed 4 Nov 2026).
+    Both pads are still the vendor drawing's 22.0 x 18.5 -- the datum test
+    checks the top face."""
     pos = load_part("terminal_pos", cfg).extents
     neg = load_part("terminal_neg", cfg).extents
-    assert neg[1] == pytest.approx(pos[1], abs=0.05), (
-        "terminal_neg is wider than terminal_pos, which means the fill plug is "
-        "merged into it. Re-export the terminal alone; the plug belongs as a "
-        "feature on the can (spec §4)."
-    )
+    assert pos[1] == pytest.approx(cfg.terminal_w, abs=0.05)
+    assert neg[1] == pytest.approx(cfg.terminal_neg_w, abs=0.05)
+    assert neg[1] > pos[1] + 10.0
 
 
 def test_merged_cell_is_not_a_part():

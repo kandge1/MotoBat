@@ -224,7 +224,7 @@ Loading every mesh and comparing it against `module_spec.md` turned up things no
 reading would have. Both are recorded as strict `xfail`s in `defectgen/tests/`, so the suite is
 green today and will fail loudly the moment each is fixed — telling you to delete the marker.
 
-- [ ] **E1 — Re-export `terminal_neg` without the fill plug.** It exports 38.5 wide against
+- [x] ~~**E1 — Re-export `terminal_neg` without the fill plug.**~~ It exports 38.5 wide against
       `terminal_pos`'s 22, so the plug is merged in. *Downgraded 3 Nov 2026.* The 153.5-wide
       module this was blamed for was a generator bug: the part was placed by its bounding-box
       centre instead of its pad centre, which pushed the plug outboard. Measured against the
@@ -235,6 +235,11 @@ green today and will fail loudly the moment each is fixed — telling you to del
       Tests: `test_parts.py::test_terminals_have_matching_footprints` (strict xfail),
       `test_module.py::test_terminals_sit_where_the_fusion_cell_has_them`.
       *4 Nov 2026:* still open — `cell_can` and `terminal_neg` were not part of the 6fb58f8 re-export.
+      *Closed 4 Nov 2026 — by design.* The fill plug on the negative terminal is a feature: the
+      terminals' asymmetric lengths key into the carrier, which is pocketed for the plug, so a cell
+      put in backwards cannot take the carrier. A height or tilt defect on a `−` terminal moving the
+      plug with it is therefore correct. The strict xfail is replaced by
+      `test_parts.py::test_terminals_are_asymmetric_so_the_carrier_can_key_them`.
 
 - [x] **E2 — The CMC overruns the cover by 0.2 mm.** *Not real (3 Nov 2026).* The arithmetic used the
       carrier's top (102.0) as the CMC seat. In `module_assembled` the CMC sits flush on the carrier
@@ -276,17 +281,19 @@ green today and will fail loudly the moment each is fixed — telling you to del
 `module_spec.md` §5 — walls 101.0, carrier 7.0, busbar width 12, busbar lengths 64.5 / 148.5,
 CMC 250 × 50 × 3.2, overhang rule `n × 28 + 8.5`. Z now closes at 107.0, not 107.5.
 
-- [ ] **E6 — The standalone `cmc.stl` and `busbar_carrier.stl` disagree with `module_assembled`.**
+- [x] **E6 — The standalone `cmc.stl` and `busbar_carrier.stl` disagree with `module_assembled`.**
       `cmc.stl` was last exported at 2de6caa; its twelve 6 mm peg holes sit about 0.5 mm off the
       carrier's pegs along X, so half of every peg is under solid board. `busbar_carrier.stl` also
       has 12 pegs where the carrier in `module_assembled` has 8 (none at x ≈ ±22.5). The assembly
       itself is consistent. Re-export both standalone files from the assembly. Until then the CMC
       is left at its deck height and not settled (`settle.ORDER`).
+      *Closed 4 Nov 2026:* the user re-exported both from the assembly. The 0.5 mm hole offset was never in the CAD: the CMC can be laid in at 90 or 270 deg with identical extents, and the loader picked the wrong one. Its hole pattern is 0.5 mm off-centre, so it showed as offset. `parts.py` now turns it 270 deg, and `test_cmc_holes_sit_on_the_carrier_pegs` checks all 12 holes against the pegs to 0.05 mm. The CMC is held by its pegs and rides with the carrier (`settle._carry_cmc`) instead of being settled.
 
-- [ ] **E7 — Busbars sit in carrier slots with zero side clearance.** A busbar moved 0.2 mm / 0.1°
+- [x] **E7 — Busbars sit in carrier slots with zero side clearance.** A busbar moved 0.2 mm / 0.1°
       can no longer drop into its slot, so settling rests it on top of the carrier, exactly 1.000 mm
       high. That is what a zero-clearance part does, but real slots have a sliding fit for exactly
       this reason, and it makes realistic busbar errors read as 1 mm lift-off. Zero clearance is
       right for *mating* faces (spec §7: the gap is the measurement); it is wrong for *locating*
       fits. Give the busbar slots (and any other locating feature: terminal windows, CMC pegs) a
       design clearance in Fusion. A typical starting point is 0.2–0.3 mm per side; the user decides.
+      *Closed 4 Nov 2026:* the user added 1.5 mm relief per side on the busbar slots. A busbar moved 0.2 mm / 0.1 deg, or 1.2 mm sideways, now drops into its slot.

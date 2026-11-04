@@ -241,3 +241,37 @@ def test_module_matches_the_fusion_assembly():
         if np.abs(boxes - built.bounds[None]).max(axis=(1, 2)).min() >= 0.05:
             missing.append(placement.ref)
     assert missing == []
+
+
+@needs_meshes
+def test_cmc_holes_sit_on_the_carrier_pegs():
+    """Every 6 mm carrier peg must pass through a CMC hole: the centre of the
+    open area of the board around each peg lands on the peg centre. This is
+    what catches the CMC loaded 180 deg out, which its extents cannot."""
+    from defectgen.module import build_plan
+    from defectgen.parts import load_all
+    from defectgen.raycast import AxisCaster
+    from defectgen.settle import world_mesh
+
+    parts = load_all(cfg)
+    plan = build_plan(cfg, "post_weld")
+    carrier = AxisCaster(world_mesh(plan, parts, plan.find(("carrier",))), 2)
+    board = AxisCaster(world_mesh(plan, parts, plan.find(("cmc",))), 2)
+
+    xs, ys = np.meshgrid(np.arange(-130, 130, 0.25), np.arange(-20, 20, 0.25))
+    grid = np.column_stack([xs.ravel(), ys.ravel(), np.zeros(xs.size)])
+    peg_top = cfg.z_cell_top + cfg.carrier_deck_h + 2.6
+    on_peg = np.isclose(carrier.extreme(grid, True), peg_top, atol=1e-3)
+    assert on_peg.any(), "no peg tops found"
+
+    from scipy import ndimage
+
+    labels, count = ndimage.label(on_peg.reshape(xs.shape))
+    assert count == 12
+    for k in range(1, count + 1):
+        c = grid[(labels.ravel() == k), :2].mean(axis=0)
+        g = np.arange(-4, 4.001, 0.05)
+        gx, gy = np.meshgrid(c[0] + g, c[1] + g)
+        q = np.column_stack([gx.ravel(), gy.ravel(), np.zeros(gx.size)])
+        open_ = np.isnan(board.extreme(q, False))
+        np.testing.assert_allclose(q[open_, :2].mean(axis=0), c, atol=0.05)

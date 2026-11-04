@@ -139,7 +139,7 @@ every tilt drag the contact point sideways, injecting two defects where one was 
 | **Bottom cooling plate** ("liquid cooling structure") | 355 × 151, ≈ 3–5 thick, internal channels | A | channels matter only visually; the thermal gap-filler bead on top of it is a defect class |
 | **Thermal gap filler bead** | bead width ≈ 5–8, height ≈ 2 before compression | A | adhesive-bead defect target. **Not a CAD part — generated geometry (§7).** |
 | **Busbar carrier** ("support structure", CCS frame) | **333 L × 146.5 W × 7.0 H**, windows over each terminal | A | as built, 27 Sep 2026. Terminals span 14.25 → 340.75, so 333 centred covers them with ≈ 3 spare each end. The 146.5 leaves 0.75 clearance to each side plate — tight on purpose: that is the threshold at which a mis-placed carrier contacts a side plate, which §10 wants geometry behind. Industry supplies carrier + busbars + sense wiring as **one subassembly** (cell contacting system). |
-| **Busbars** | 1060 Al, **1.5 thick** | S | weld study above |
+| **Busbars** | **Copper** (C110/Cu-ETP class), **1.5 thick** | S/A | *Material corrected 4 Nov 2026:* the busbars are copper; the earlier "1060 Al" came from a Fusion appearance overriding the material. Thickness still from the weld study above, which was Al-on-Al — a Cu-busbar-on-Al-terminal lap weld is a dissimilar Cu–Al joint (intermetallic-forming, a different process window), so the weld parameters and gap tolerance must be re-sourced for Cu–Al. |
 | — busbar pattern (3P4S) | end busbars span 3 terminals; series busbars span 6 terminals (3 + 3) | D | computed from config by the generator |
 | — busbar width | **12** | A | as built, 22 Oct 2026. Replaces "≈ 20–25 (≥ pad width)", which had no basis: a busbar narrower than the 22 mm pad sits entirely on aluminium, so the weld cannot miss. Leaves ≈ 5.5 of bare pad each side, which the step-8 gap check uses as a direct height step. |
 | — busbar lengths | short (end, 3 terminals) **64.5**; long (series, 6 terminals) **148.5** | B | as built, measured from the CAD 1 Nov 2026. Previously recorded as 63.5 / 147.5. |
@@ -166,6 +166,33 @@ so each busbar ends **4.25 past the centre** of its outermost terminal and cover
 pad's 18.5** in X. Generated weld seams on an end pad must lie inside the busbar ∩ pad overlap —
 this binds the *generator*, not the CAD. (A suggestion to lengthen the busbars to 74.5 / 158.5
 was considered and rejected; the as-built lengths stand.)
+
+### Busbar material — copper on aluminium, decided 4 Nov 2026
+
+**Copper busbars on the cells' aluminium terminal pads**, lap-welded with the beam entering
+through the copper. Al-on-Al was the alternative and is the more common prismatic practice
+(3000-series Al busbars). It was rejected for this project, not for being wrong, for three reasons:
+
+- **Physically real and broader:** a dissimilar Cu–Al joint adds the defect mechanisms that make
+  busbar welding hard. Al–Cu intermetallics grow with heat input. Above roughly 3–5 µm they raise
+  contact resistance and make the joint brittle (sources disagree on the exact figure). Copper's
+  conductivity narrows the process window.
+- **Visible heat history:** copper oxidises dark red → brown → black with temperature and time at
+  temperature, so discolouration is a real overheating cue. Aluminium shows only soot and a frosted
+  band.
+- **Harder for the sensors:** bare copper is more reflective than aluminium, so specular dropout
+  matters more (task 1.3).
+
+Costs accepted: Cu-on-top needs high power or a green/blue laser in practice, and reviews prefer
+entering from the Al side. The weld limits must be sourced for Cu–Al. Busbar material should be a
+config parameter, so Al-on-Al stays one switch away.
+
+Sources: [Kumar et al., Warwick](https://wrap.warwick.ac.uk/id/eprint/168639/1/WRAP-In-depth-evaluation-of-laser-welded-similar-and-dissimilar-material-tab-to-busbar-electrical-interconnects-for-electric-vehicle-battery-pack-Kumar-2021.pdf),
+[dual-mode tab-to-busbar](https://www.sciencedirect.com/science/article/pii/S2666330924000669),
+[tab-to-busbar review](https://pmc.ncbi.nlm.nih.gov/articles/PMC12843912),
+[Al–Cu laser welding review](https://www.sciencedirect.com/science/article/abs/pii/S003039922300614X),
+[laser braze-welded Al–Cu resistance](https://www.sciencedirect.com/science/article/abs/pii/S152661251300131X),
+[E-Mobility Engineering](https://www.emobility-engineering.com/ev-battery-welding/).
 
 ### Stack-up — nothing adds to the envelope
 

@@ -56,7 +56,11 @@ PARTS: dict[str, PartSpec] = {
     "busbar_carrier": PartSpec(90, ("carrier_l", "carrier_w", "carrier_h")),
     "busbar_end": PartSpec(90, ("busbar_end_l", "busbar_w", "busbar_t")),
     "busbar_series": PartSpec(90, ("busbar_series_l", "busbar_w", "busbar_t")),
-    "cmc": PartSpec(90, ("cmc_l", "cmc_w", "cmc_t")),
+    # 270, not 90: both give the same extents, but the CMC's peg-hole pattern
+    # is 0.5 mm off-centre, and only 270 puts every hole on its carrier peg
+    # (test_cmc_holes_sit_on_the_carrier_pegs). The extent check cannot see a
+    # 180 deg error on a part that is symmetric in size -- this test can.
+    "cmc": PartSpec(270, ("cmc_l", "cmc_w", "cmc_t")),
 }
 
 # cell_assembled and module_assembled are deliberately absent. They are merged

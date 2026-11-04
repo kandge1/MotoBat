@@ -62,12 +62,10 @@ ACTIVE_START = 500
 ORDER: list[tuple[str, tuple[str, ...]]] = [
     ("carrier", ("cell", "terminal", "pad", "end_plate", "side_plate")),
     ("busbar", ("cell", "terminal", "carrier")),
-    # The CMC is not settled (fixlist E6): it is located by pegs through its
-    # holes, and the standalone cmc.stl's holes sit 0.5 mm off the standalone
-    # carrier's pegs, so settled it would ride 2.6 high on them. It stays at the
-    # assembly's deck height -- where module_assembled has it -- until cmc.stl
-    # is re-exported. Then add:
-    #   ("cmc", ("carrier", "busbar")),
+    # The CMC is not settled: it is located by 6 mm pegs in 6 mm holes, which
+    # fixes its position exactly, and with zero clearance the two tessellated
+    # circles graze at the rim, which settling would read as contact. It
+    # rides with the carrier instead (`_carry_cmc`).
     ("cover", ("end_plate", "side_plate", "carrier", "busbar", "cmc", "cell", "terminal")),
 ]
 
@@ -424,8 +422,18 @@ def settle(plan: Plan, parts: dict[str, trimesh.Trimesh], force: bool = False) -
                 dirty.add(kind)
                 if kind == "busbar":
                     _carry_seams(plan, placement.ref[1], delta)
+                if kind == "carrier":
+                    _carry_cmc(plan, delta)
+                    dirty.add("cmc")
 
     _land_spatter(plan, parts)
+
+
+def _carry_cmc(plan: Plan, delta: np.ndarray) -> None:
+    """The CMC is pegged to the carrier, so wherever the carrier goes it goes."""
+    for placement in plan.of_kind("cmc"):
+        if placement.present:
+            placement.compose(delta)
 
 
 def _carry_seams(plan: Plan, busbar_index: int, delta: np.ndarray) -> None:

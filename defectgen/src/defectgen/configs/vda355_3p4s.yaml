@@ -60,7 +60,7 @@ carrier:
   carrier_deck_h: 3.0        # B  Z, the deck the CMC sits flush on (module_assembled, 3 Nov)
 
 busbar:
-  busbar_t: 1.5              # S  weld study, 1060 Al
+  busbar_t: 1.5              # S  weld study thickness; material is copper (spec §5, 4 Nov)
   busbar_w: 12.0             # B  Y, was 11
   busbar_end_l: 64.5         # B  X, spans 3 terminals
   busbar_series_l: 148.5     # B  X, spans 6 terminals

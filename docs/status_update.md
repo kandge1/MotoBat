@@ -25,6 +25,36 @@ suite revised (28 Oct).*
 > double-click for the Windows 3D Viewer. The demo severities are exaggerated on purpose —
 > real ones are tenths of a millimetre and invisible by eye.
 
+## ⏭ QUEUED — after fixlist E6 and E7 are closed (4 Nov 2026)
+
+Agreed with the user, in this order. Fixlist first: settling results are only
+meaningful once the busbar slots have their clearance (E7) and the standalone
+CMC and carrier match `module_assembled` (E6).
+
+1. **Gap → weld consequence.** Measure the actual busbar-to-terminal gap under
+   each seam after settling (a tilted busbar gives a different gap per
+   terminal), and derive the weld outcome from it: normal, sag/underfill +
+   undercut, or hole + lack of fusion. Each consequence is labelled with its
+   cause (`cause: busbar_liftoff`), so detection can be scored on catching the
+   root cause at the pre-weld gap check (spec §8 steps 8–9). Thresholds are
+   assumptions until sourced — and must be sourced for **Cu-on-Al**, not Al-on-Al.
+2. **Realistic weld bead** replacing the boxes: crown, width variation, ≈10 µm
+   ripples, end crater, at ≈50 µm resolution, riding on its busbar. Every
+   surface weld defect becomes an edit to the bead.
+3. **Heat tint and soot — copper busbars** (decision and sources: `module_spec.md` §5, "Busbar material"; make the material a config parameter). Model heat input → peak temperature
+   field (moving heat source) → oxide thickness (oxidation kinetics) → colour
+   (thin-film interference; Cu₂O dark red, CuO black). Because tint and
+   burn-through share a cause, **too much heat produces both**: an over-heated
+   zone shows heavy oxidation colour *and* burn-through/excessive penetration,
+   labelled as one cause with two symptoms. Tint is a colour effect (Zivid colour
+   channel, RViz vertex colours), not profilometer geometry.
+4. **Materials library**, then **specular dropout** with `scan.py` (task 1.3):
+   per-material reflectance (rough-conductor model) and roughness statistics,
+   micro-texture applied at ray-hit time, not baked into the mesh.
+
+Parked, not scheduled: injection-moulding defects in the carrier/cover
+(short shot, warpage, sink, flash) as a defect source.
+
 ## ▶ CURRENT TASK
 
 > **§4B.1 — Procedural battery-module generator, mesh-native.** Pure numpy +
