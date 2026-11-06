@@ -37,6 +37,7 @@ class TerminalGT:
     centre: Vec3
     top_z: float
     normal: Vec3
+    pin: int = 0  # 1..24, DIP-chip numbering (module.terminal_pin, module_spec §4)
 
 
 @dataclass(frozen=True)

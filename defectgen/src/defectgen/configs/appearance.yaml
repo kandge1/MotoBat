@@ -13,7 +13,22 @@ colours:
   aluminium_sheet:    [0.74, 0.75, 0.77]
   aluminium_cast:     [0.55, 0.56, 0.58]
   cell_wrap:          [0.12, 0.30, 0.70]
-  plastic_black:      [0.06, 0.06, 0.07]
+  plastic_black:      [0.10, 0.10, 0.11]
   pcb:                [0.04, 0.32, 0.14]
   foam:               [0.85, 0.83, 0.75]
 ambient: 0.08          # light that is not the projector's
+sensor_noise: 0.006    # photo grain, in linear 0..1 units after exposure
+
+# Surface texture for the 2D render, so flat CAD faces don't read as flat
+# paint. streak = rolling/brushing marks running `along` x or y, as a +/-
+# brightness fraction; grain = fine speckle. Periods in mm.
+texture:
+  copper_rolled:      {streak: 0.06, streak_period: 0.35, along: x}
+  copper_weld:        {grain: 0.10, grain_period: 0.12}
+  aluminium_terminal: {streak: 0.05, streak_period: 0.25, along: x}
+  aluminium_cap:      {streak: 0.04, streak_period: 0.5, along: y}
+  aluminium_sheet:    {streak: 0.05, streak_period: 0.6, along: x}
+  aluminium_cast:     {grain: 0.08, grain_period: 0.4}
+  plastic_black:      {grain: 0.55, grain_period: 0.5}    # textured moulded finish (VDI-style matte)
+  pcb:                {grain: 0.12, grain_period: 0.5}
+  cell_wrap:          {grain: 0.04, grain_period: 0.6}

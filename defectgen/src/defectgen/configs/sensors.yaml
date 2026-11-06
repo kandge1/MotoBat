@@ -14,9 +14,15 @@ profilometer:                # Keyence LJ-X8200 class, on the HC10DT wrist
   z_range: 34.0              # S  +/-34 mm about the reference (F.S. 68 mm)
   line_width: 72.0           # S  X width at the reference distance (64 near, 80 far)
   points: 3200               # S  points per profile, 25 um interval at reference
-  triangulation_angle: 23.0  # A  laser-to-camera angle; measure from the AS_108261 STEP
+  triangulation_angle: 22.0  # D  receiver-window tilt in the Keyence model (AS_108261) inside
+                             #    cad/inspector/inspector_flange.step; windows ~96 mm apart, which
+                             #    puts the reference point at 20.5-22.6 deg depending on the datum
   profile_pitch: 0.05        # A  mm between profiles along the sweep (plan §4B.3 worked example)
-  sigma_z: 0.001             # S  Z repeatability 1 um, used as per-point noise
+  reference_rate: 1000.0     # A  profiles/s at which min_signal and noise_ref_signal hold; faster
+                             #    = proportionally shorter exposure = proportionally less light
+  max_rate: 16000.0          # A  profiles/s; third-party listings, not confirmed by Keyence
+  sigma_z: 0.001             # S  Z repeatability 1 um at the reference distance
+  noise_distance_exponent: 2.0  # D  triangulation: height noise grows with distance squared
   sigma_x: 0.003             # S  X repeatability 3 um
   quantum_z: 0.0005          # A  height output resolution
   band: blue                 # S  405 nm laser
@@ -33,7 +39,10 @@ line_scan:                   # SICK Ranger3 class, fixed over the conveyor (the 
   points: 2560               # S  Ranger3 columns
   triangulation_angle: 30.0  # A  camera off the laser plane
   profile_pitch: 0.1         # A  conveyor travel per profile
+  reference_rate: 1000.0     # A  profiles/s at which min_signal and noise_ref_signal hold
+  max_rate: 7000.0           # S  Ranger3 full-frame 3D profile rate (46 k with a reduced AOI)
   sigma_z: 0.010             # D  ~70 um pixel footprint, 1/16 px sub-pixel peak, / sin(30)
+  noise_distance_exponent: 2.0  # D  triangulation: height noise grows with distance squared
   sigma_x: 0.020             # D  ~0.3 px of the 70 um footprint
   quantum_z: 0.002           # A
   band: red                  # A  660 nm line laser, the common choice with Ranger3

@@ -1660,6 +1660,26 @@ frozen and hashed before results, per task 1.3):
 > Terminals, busbars and weld seams are all bright Al. Either model it or
 > state it in the README's Limitations section. Do not omit it silently.
 
+**What the sensor models include and leave out — frozen 4 Nov 2026, params hash `779e2255dc4c`.**
+
+Included (`scan.py`, `configs/sensors.yaml`, `configs/materials.yaml`):
+- Both occlusions: laser/projector reach plus camera visibility.
+- The range window and a grazing-angle cut.
+- Per-material reflectance (diffuse plus Beckmann specular lobe, per wavelength band), giving dark and glare dropout.
+- Noise from the datasheet. It grows as the returned light weakens and, for triangulation, with distance squared.
+- Exposure falls as the line-sensor profile rate rises, up to each sensor's maximum rate.
+- Height quantisation.
+- Profilometer triangulation angle 22.0°, measured from the receiver-window tilt of the Keyence model in `cad/inspector/inspector_flange.step`.
+
+**Left out, as stated limitations rather than silent omissions:**
+- **Multipath / interreflection.** Laser light bouncing inside a concave weld bead, or between a busbar and the carrier wall, returns false points. This matters most on bright copper beads, and it is the biggest known gap after specular dropout. It needs a second-bounce ray model.
+- **Speckle.** Coherent-light graininess on rough surfaces. Its effect is partly covered by the datasheet noise.
+- **Motion during capture.** No robot vibration, no motion blur within a profile, no encoder jitter. Robot pose error enters only through `weld_path_drift`-style perturbations, not through the sensor.
+- **Sub-surface scattering and translucency** in plastics.
+- **Temperature drift and warm-up** (Zivid trueness changes during warm-up).
+
+The README's Limitations section should carry this list.
+
 **Architecture:** sensor models live **once, in `defectgen`** — ray cast with
 Open3D `RaycastingScene` against the exported meshes, then the post-processing
 above. Gazebo and Isaac supply only poses and raw rays/depth. This mirrors the

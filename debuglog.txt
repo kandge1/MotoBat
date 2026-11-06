@@ -1,0 +1,107 @@
+Terminal 3
+
+python -m defectgen.scan data/preview_welds --sensor profilometer --distance 215
+python -m defectgen.scan data/preview_welds --sensor profilometer --speed 500 --rate 10000
+
+(venv) ewok@titan:~/projects/MotoBat$ python -m defectgen.scan data/preview_welds --sensor profilometer --distance 215
+python -m defectgen.scan data/preview_welds --sensor profilometer --speed 500 --rate 10000
+17:33:21.982 defectgen.scan profilometer on data/preview_welds / post_weld
+17:33:21.987 sensor model: params 779e2255dc4c (configs/sensors.yaml + materials.yaml, frozen)
+17:33:21.987   kind=line, reference_distance=245.0, z_range=34.0, line_width=72.0, points=3200, triangulation_angle=22.0, profile_pitch=0.05, reference_rate=1000.0, max_rate=16000.0, sigma_z=0.001, noise_distance_exponent=2.0, sigma_x=0.003, quantum_z=0.0005, band=blue, max_incidence=80.0, min_signal=0.02, saturation=4.0, noise_ref_signal=0.5
+17:33:25.314 scene: loaded in 3.3 s; materials in use: aluminium_cap, aluminium_cast, aluminium_sheet, aluminium_terminal, cell_wrap, copper_rolled, copper_weld, foam, pcb, plastic_black
+17:33:25.314 standoff: 215.0 mm above the terminal tops (reference 245, -30.0)
+17:33:25.328 plan: profilometer sweep 335.0 mm at 0.050 mm pitch -> 6701 profiles x 3200 points = 21.4 M rays
+17:33:26.073   profiles   400/6701 (  6%) | rays   1.28 M | kept   0.78 M (61.1%) | lost: miss 268.4k range 24.5k grazing 27.3k shadow 176.7k dark 1.1k | 1.7 M rays/s
+17:33:26.600   profiles   800/6701 ( 12%) | rays   2.56 M | kept   1.73 M (67.5%) | lost: miss 536.8k range 40.1k grazing 52.5k shadow 200.3k dark 1.3k | 2.0 M rays/s
+17:33:27.119   profiles  1200/6701 ( 18%) | rays   3.84 M | kept   2.68 M (69.9%) | lost: miss 805.2k range 55.7k grazing 77.7k shadow 217.1k dark 1.3k | 2.1 M rays/s
+17:33:27.620   profiles  1600/6701 ( 24%) | rays   5.12 M | kept   3.60 M (70.4%) | lost: miss 1073.6k range 71.3k grazing 108.2k shadow 260.5k dark 2.6k | 2.2 M rays/s
+17:33:28.127   profiles  2000/6701 ( 30%) | rays   6.40 M | kept   4.54 M (71.0%) | lost: miss 1342.0k range 86.9k grazing 133.9k shadow 292.4k dark 3.3k | 2.3 M rays/s
+17:33:28.612   profiles  2400/6701 ( 36%) | rays   7.68 M | kept   5.49 M (71.5%) | lost: miss 1610.4k range 102.5k grazing 155.7k shadow 314.9k dark 4.0k | 2.3 M rays/s
+17:33:29.097   profiles  2800/6701 ( 42%) | rays   8.96 M | kept   6.45 M (72.0%) | lost: miss 1878.8k range 118.1k grazing 178.8k shadow 325.0k dark 5.2k | 2.4 M rays/s
+17:33:29.579   profiles  3200/6701 ( 48%) | rays  10.24 M | kept   7.41 M (72.4%) | lost: miss 2147.2k range 133.7k grazing 202.3k shadow 337.8k dark 5.8k | 2.4 M rays/s
+17:33:30.062   profiles  3600/6701 ( 54%) | rays  11.52 M | kept   8.36 M (72.6%) | lost: miss 2415.6k range 149.3k grazing 226.5k shadow 361.3k dark 6.3k | 2.4 M rays/s
+17:33:30.540   profiles  4000/6701 ( 60%) | rays  12.80 M | kept   9.31 M (72.8%) | lost: miss 2684.0k range 164.9k grazing 251.8k shadow 378.1k dark 7.0k | 2.5 M rays/s
+17:33:31.009   profiles  4400/6701 ( 66%) | rays  14.08 M | kept  10.26 M (72.9%) | lost: miss 2952.4k range 180.5k grazing 282.0k shadow 394.4k dark 7.9k | 2.5 M rays/s
+17:33:31.479   profiles  4800/6701 ( 72%) | rays  15.36 M | kept  11.22 M (73.0%) | lost: miss 3220.8k range 196.1k grazing 307.4k shadow 408.1k dark 9.1k | 2.5 M rays/s
+17:33:31.944   profiles  5200/6701 ( 78%) | rays  16.64 M | kept  12.12 M (72.8%) | lost: miss 3489.2k range 211.7k grazing 335.4k shadow 476.8k dark 9.1k | 2.5 M rays/s
+17:33:32.440   profiles  5600/6701 ( 84%) | rays  17.92 M | kept  13.08 M (73.0%) | lost: miss 3757.6k range 227.3k grazing 358.5k shadow 486.8k dark 12.0k | 2.5 M rays/s
+17:33:32.924   profiles  6000/6701 ( 90%) | rays  19.20 M | kept  14.03 M (73.1%) | lost: miss 4026.0k range 242.9k grazing 384.8k shadow 499.4k dark 21.3k | 2.5 M rays/s
+17:33:33.407   profiles  6400/6701 ( 96%) | rays  20.48 M | kept  14.96 M (73.1%) | lost: miss 4294.4k range 258.5k grazing 409.4k shadow 523.2k dark 32.5k | 2.5 M rays/s
+17:33:33.734   profiles  6701/6701 (100%) | rays  21.44 M | kept  15.50 M (72.3%) | lost: miss 4496.4k range 279.2k grazing 430.3k shadow 701.4k dark 40.6k | 2.6 M rays/s
+17:33:34.086 simulated in 8.8 s
+17:33:34.771 result: profilometer kept 15,495,382 of 21,443,200 rays (72.3%)
+17:33:34.771   lost to miss                  4,496,371  (21.0%)
+17:33:34.771   lost to range                   279,195  ( 1.3%)
+17:33:34.771   lost to grazing                 430,252  ( 2.0%)
+17:33:34.771   lost to shadow                  701,371  ( 3.3%)
+17:33:34.771   lost to dark                     40,629  ( 0.2%)
+17:33:34.771   material                   kept   kept% Z noise um   signal  lost by reason
+17:33:34.771   plastic_black         8,551,153   97.3%       1.55    0.123  grazing 167,904, shadow 66,784
+17:33:34.771   copper_rolled         3,051,204   98.7%       0.81    1.253  grazing 8,012, shadow 1,095, dark 31,309
+17:33:34.771   aluminium_terminal    2,707,046   98.2%       0.78    0.663  grazing 13, shadow 50,833
+17:33:34.771   aluminium_cap           570,497   49.5%       0.83    1.465  shadow 582,556
+17:33:34.771   copper_weld             266,624   96.6%       2.40    0.053  grazing 141, shadow 1, dark 9,320
+17:33:34.771   aluminium_sheet         261,339   33.6%       0.76    1.882  range 261,339, grazing 254,182
+17:33:34.771   foam                     75,963   99.9%       0.83    0.622  shadow 102
+17:33:34.771   aluminium_cast           11,556   39.3%       0.75    1.074  range 17,856
+17:33:44.604 saved data/preview_welds/scans/post_weld_profilometer.npz, data/preview_welds/scans/post_weld_profilometer.ply in 9.8 s
+17:33:44.604 data/preview_welds/scans/post_weld_profilometer.npz: 15,495,382 points kept of 21,443,200 rays, params 779e2255dc4c -- log and summary in data/scan_logs/20261106_173321_preview_welds_post_weld_profilometer/
+17:33:45.326 defectgen.scan profilometer on data/preview_welds / post_weld
+17:33:45.331 sensor model: params 779e2255dc4c (configs/sensors.yaml + materials.yaml, frozen)
+17:33:45.331   kind=line, reference_distance=245.0, z_range=34.0, line_width=72.0, points=3200, triangulation_angle=22.0, profile_pitch=0.05, reference_rate=1000.0, max_rate=16000.0, sigma_z=0.001, noise_distance_exponent=2.0, sigma_x=0.003, quantum_z=0.0005, band=blue, max_incidence=80.0, min_signal=0.02, saturation=4.0, noise_ref_signal=0.5
+17:33:46.963 scene: loaded in 1.6 s; materials in use: aluminium_cap, aluminium_cast, aluminium_sheet, aluminium_terminal, cell_wrap, copper_rolled, copper_weld, foam, pcb, plastic_black
+17:33:46.963 standoff: 245.0 mm above the terminal tops (reference 245, +0.0)
+17:33:46.977 plan: profilometer sweep 335.0 mm at 0.050 mm pitch -> 6701 profiles x 3200 points = 21.4 M rays, 500 mm/s at 10000 Hz = 0.67 s of sensor time, exposure x0.10 of the reference
+17:33:47.685   profiles   400/6701 (  6%) | rays   1.28 M | kept   0.37 M (28.8%) | lost: miss 314.8k grazing 21.1k shadow 155.0k dark 420.8k | 1.8 M rays/s
+17:33:48.158   profiles   800/6701 ( 12%) | rays   2.56 M | kept   0.71 M (27.7%) | lost: miss 629.6k grazing 40.7k shadow 175.6k dark 1003.9k | 2.2 M rays/s
+17:33:48.609   profiles  1200/6701 ( 18%) | rays   3.84 M | kept   1.06 M (27.6%) | lost: miss 944.4k grazing 60.3k shadow 190.4k dark 1586.8k | 2.4 M rays/s
+17:33:49.058   profiles  1600/6701 ( 24%) | rays   5.12 M | kept   1.45 M (28.4%) | lost: miss 1259.2k grazing 84.0k shadow 227.5k dark 2097.7k | 2.5 M rays/s
+17:33:49.508   profiles  2000/6701 ( 30%) | rays   6.40 M | kept   1.87 M (29.3%) | lost: miss 1574.0k grazing 103.8k shadow 249.6k dark 2599.1k | 2.5 M rays/s
+17:33:49.966   profiles  2400/6701 ( 36%) | rays   7.68 M | kept   2.22 M (28.9%) | lost: miss 1888.8k grazing 120.8k shadow 269.2k dark 3184.4k | 2.6 M rays/s
+17:33:50.425   profiles  2800/6701 ( 42%) | rays   8.96 M | kept   2.60 M (29.0%) | lost: miss 2203.6k grazing 138.7k shadow 278.0k dark 3741.0k | 2.6 M rays/s
+17:33:50.891   profiles  3200/6701 ( 48%) | rays  10.24 M | kept   2.99 M (29.2%) | lost: miss 2518.4k grazing 156.9k shadow 289.0k dark 4286.8k | 2.6 M rays/s
+17:33:51.348   profiles  3600/6701 ( 54%) | rays  11.52 M | kept   3.33 M (28.9%) | lost: miss 2833.2k grazing 175.7k shadow 309.5k dark 4868.7k | 2.6 M rays/s
+17:33:51.816   profiles  4000/6701 ( 60%) | rays  12.80 M | kept   3.68 M (28.7%) | lost: miss 3148.0k grazing 195.4k shadow 324.3k dark 5455.5k | 2.6 M rays/s
+17:33:52.281   profiles  4400/6701 ( 66%) | rays  14.08 M | kept   4.09 M (29.0%) | lost: miss 3462.8k grazing 218.8k shadow 338.4k dark 5970.6k | 2.7 M rays/s
+17:33:52.736   profiles  4800/6701 ( 72%) | rays  15.36 M | kept   4.44 M (28.9%) | lost: miss 3777.6k grazing 238.5k shadow 350.2k dark 6558.0k | 2.7 M rays/s
+17:33:53.186   profiles  5200/6701 ( 78%) | rays  16.64 M | kept   4.83 M (29.0%) | lost: miss 4092.4k grazing 260.2k shadow 403.9k dark 7052.7k | 2.7 M rays/s
+17:33:53.657   profiles  5600/6701 ( 84%) | rays  17.92 M | kept   5.21 M (29.1%) | lost: miss 4407.2k grazing 278.1k shadow 412.7k dark 7608.7k | 2.7 M rays/s
+17:33:54.137   profiles  6000/6701 ( 90%) | rays  19.20 M | kept   5.59 M (29.1%) | lost: miss 4722.0k grazing 298.6k shadow 423.5k dark 8164.6k | 2.7 M rays/s
+17:33:54.630   profiles  6400/6701 ( 96%) | rays  20.48 M | kept   5.93 M (29.0%) | lost: miss 5036.8k grazing 318.1k shadow 444.0k dark 8751.6k | 2.7 M rays/s
+17:33:54.989   profiles  6701/6701 (100%) | rays  21.44 M | kept   6.22 M (29.0%) | lost: miss 5273.7k grazing 334.4k shadow 589.5k dark 9024.9k | 2.7 M rays/s
+17:33:55.063 simulated in 8.1 s
+17:33:55.329 result: profilometer kept 6,220,684 of 21,443,200 rays (29.0%)
+17:33:55.329   lost to miss                  5,273,687  (24.6%)
+17:33:55.329   lost to grazing                 334,391  ( 1.6%)
+17:33:55.329   lost to shadow                  589,550  ( 2.7%)
+17:33:55.329   lost to dark                  9,024,888  (42.1%)
+17:33:55.329   material                   kept   kept% Z noise um   signal  lost by reason
+17:33:55.329   copper_rolled         2,649,796   97.9%       1.76    0.156  grazing 6,875, shadow 796, dark 50,093
+17:33:55.329   aluminium_terminal    2,385,869   98.4%       1.98    0.129  grazing 10, shadow 39,666
+17:33:55.329   aluminium_cap           553,399   53.0%       1.60    0.218  shadow 490,376
+17:33:55.329   aluminium_sheet         455,668   70.1%       1.47    0.218  grazing 193,981
+17:33:55.329   copper_weld              80,282   33.1%       2.58    0.107  grazing 133, shadow 1, dark 162,161
+17:33:55.329   foam                     67,530   99.9%       2.99    0.062  shadow 52
+17:33:55.329   aluminium_cast           28,140  100.0%       2.07    0.110  
+17:33:55.329   plastic_black                 0    0.0%          -        -  grazing 133,392, shadow 58,659, dark 8,812,634
+17:33:58.984 saved data/preview_welds/scans/post_weld_profilometer.npz, data/preview_welds/scans/post_weld_profilometer.ply in 3.7 s
+17:33:58.984 data/preview_welds/scans/post_weld_profilometer.npz: 6,220,684 points kept of 21,443,200 rays, params 779e2255dc4c -- log and summary in data/scan_logs/20261106_173345_preview_welds_post_weld_profilometer/
+(venv) ewok@titan:~/projects/MotoBat$ 
+
+
+
+Terminal 4
+
+^Cewok@titan:~/projects/MotoBat$ /usr/bin/python3 src/motobat_description/scripts/show_scan.py data/preview_welds/scans/post_weld_*.npz --side-by-side --colour signal
+[WARN] [1794004508.810438156] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1794004508.810449915] [rcl]: 'localhost_only' is disabled, 'automatic_discovery_range' and 'static_peers' will be used.
+[INFO] [1794004510.743797939] [show_scan]: post_weld_line_scan.npz: line_scan 7160578 points (showing 2000000), dropped {'miss': 1664360, 'range': 0, 'grazing': 248794, 'shadow': 261391, 'dark': 6402, 'glare': 5035}, params 779e2255dc4c -> /defectgen/scan/line_scan
+[INFO] [1794004512.305293639] [show_scan]: post_weld_profilometer.npz: profilometer 6220684 points (showing 2000000), dropped {'miss': 5273687, 'range': 0, 'grazing': 334391, 'shadow': 589550, 'dark': 9024888, 'glare': 0}, params 779e2255dc4c -> /defectgen/scan/profilometer
+[INFO] [1794004512.414799135] [show_scan]: post_weld_snapshot.npz: snapshot 203007 points (showing 203007), dropped {'miss': 1029768, 'range': 0, 'outside_projector': 0, 'grazing': 4691, 'shadow': 4396, 'dark': 1146, 'glare': 10368}, params 779e2255dc4c -> /defectgen/scan/snapshot
+[INFO] [1794004512.433945383] [show_scan]: post_weld_snapshot_2d.png -> /defectgen/snapshot_2d
+[INFO] [1794004512.499570688] [show_scan]: post_weld_photos_annotated.png -> /defectgen/photos
+[INFO] [1794004512.499796971] [show_scan]: Ctrl-C to stop; clouds stay in RViz until another run replaces them.
+^Cewok@titan:~/projects/MotoBat$ 
+
+
+

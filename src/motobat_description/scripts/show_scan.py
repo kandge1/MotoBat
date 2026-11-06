@@ -6,7 +6,9 @@ Each scan written by `python -m defectgen.scan` is published as a PointCloud2
 on its own topic, /defectgen/scan/<sensor>, so RViz has one display per
 sensor (Line scan, Profilometer, Snapshot) that can be ticked on and off.
 A snapshot's 2D picture, if one was saved next to it, goes to
-/defectgen/snapshot_2d for RViz's Image display.
+/defectgen/snapshot_2d, and the stitched quadrant photos (from
+`--sensor photos`), if the scans folder has them, go to /defectgen/photos --
+each to its own Image display in RViz.
 
     /usr/bin/python3 src/motobat_description/scripts/show_scan.py \
         data/preview_welds/scans/post_weld_*.npz --colour signal
@@ -33,6 +35,7 @@ from show_module import FRAME, scan_cloud, scan_topic  # noqa: E402
 ORDER = {'line_scan': 0, 'profilometer': 1, 'snapshot': 2}
 SPACING_MM = 200.0  # module is 151 wide; this leaves a gap between copies
 IMAGE_TOPIC = '/defectgen/snapshot_2d'
+PHOTOS_TOPIC = '/defectgen/photos'
 
 
 def image_msg(png):
@@ -50,7 +53,9 @@ def image_msg(png):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__.split('\n')[1])
-    p.add_argument('scans', type=Path, nargs='+', help='one or more .npz from python -m defectgen.scan')
+    p.add_argument('scans', type=Path, nargs='+',
+                   help='one or more .npz from python -m defectgen.scan, and/or a .png to show '
+                        'in the Zivid 2D panel (e.g. the photo mosaic)')
     p.add_argument('--colour', choices=('height', 'material', 'signal'), default='height')
     p.add_argument('--max', type=int, default=2_000_000, help='decimate each cloud to this many points')
     p.add_argument('--side-by-side', action='store_true',
@@ -66,6 +71,13 @@ def main():
     log = node.get_logger()
     keep = []
     for f in args.scans:
+        if f.suffix == '.png':
+            topic = PHOTOS_TOPIC if 'photos' in f.name else IMAGE_TOPIC
+            ipub = node.create_publisher(Image, topic, qos)
+            ipub.publish(image_msg(f))
+            keep.append(ipub)
+            log.info(f'{f.name} -> {topic}')
+            continue
         cloud, note, sensor = scan_cloud(f, args.colour, args.max)
         if args.side_by_side:
             slot = ORDER.get(sensor, len(ORDER)) - 1
@@ -81,6 +93,17 @@ def main():
             ipub.publish(image_msg(png))
             keep.append(ipub)
             log.info(f'{png.name} -> {IMAGE_TOPIC}')
+    # The stitched quadrant photos, if `--sensor photos` has been run on this
+    # module, sit in the same scans folder: show them too.
+    folders = {f.parent for f in args.scans if f.suffix == '.npz'}
+    for d in folders:
+        for png in sorted(d.glob('*_photos_annotated.png'))[-1:]:
+            if png in args.scans:
+                continue
+            ppub = node.create_publisher(Image, PHOTOS_TOPIC, qos)
+            ppub.publish(image_msg(png))
+            keep.append(ppub)
+            log.info(f'{png.name} -> {PHOTOS_TOPIC}')
     log.info('Ctrl-C to stop; clouds stay in RViz until another run replaces them.')
     try:
         rclpy.spin(node)

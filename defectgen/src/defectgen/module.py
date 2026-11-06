@@ -66,6 +66,17 @@ def terminal_y(cfg: Config, cell_index: int, polarity: Polarity) -> float:
     return float((cell_transform(cfg, cell_index) @ terminal_local(cfg, polarity))[1, 3])
 
 
+def terminal_pin(cfg: Config, cell_index: int, y: float) -> int:
+    """Terminal number, counted like the pins of a DIP chip (module_spec §4).
+
+    View the module from above with the cell-0 end (-X) at the top, so the
+    -Y terminal row is on the left. Pin 1 is the top-left terminal; pins run
+    down the left row (cell 0 -> 11) and back up the right row (cell 11 -> 0),
+    counter-clockwise: 1..12 on -Y, 13..24 on +Y for 12 cells."""
+    n = cfg.n_cells
+    return cell_index + 1 if y < 0 else 2 * n - cell_index
+
+
 def busbar_plan(cfg: Config) -> list[tuple[str, tuple[tuple[int, Polarity], ...]]]:
     """3P4S: a series busbar bridges each adjacent pair of parallel groups, and
     an end busbar caps the first group's positive and the last group's negative.
@@ -392,6 +403,7 @@ def collect_labels(
                 centre=tuple(placement.origin),
                 top_z=float(top[2]),
                 normal=tuple(normal),
+                pin=terminal_pin(cfg, k, terminal_y(cfg, k, polarity)),
             )
         )
 

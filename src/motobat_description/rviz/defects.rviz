@@ -92,6 +92,17 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /defectgen/snapshot_2d
       Value: true
+    - Class: rviz_default_plugins/Image
+      Enabled: true
+      Name: Zivid photos (stitched)
+      Normalize Range: true
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /defectgen/photos
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48

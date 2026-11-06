@@ -108,6 +108,13 @@ It resolves what §6 was written to measure. Note §3 and §4 were originally as
 *different* sources — the can from the VDA table, the terminal from an LFP-cell guide — which is
 why they did not agree. This drawing makes them one cell.
 
+**Terminal numbering — 4 Nov 2026.** Terminals are numbered like the pins of a 24-pin DIP chip.
+View the module from above with the cell-0 end (−X) at the top, so the −Y terminal row is on the
+left. **T1 is the top-left terminal.** Numbers run down the left row (T1–T12, cells 0 → 11) and back
+up the right row (T13–T24, cells 11 → 0), counter-clockwise. In code: `module.terminal_pin`, and
+every terminal label carries its `pin`. The Zivid photos use the same view and are named by pins:
+four quadrant shots centred between T3/T4, T9/T10, T15/T16 and T21/T22 (`defectgen.photos`).
+
 **The terminals are rigidly fixed to the can — the CAD split is not a joint.** Separating them is
 an *authoring-time* degree of freedom, not a runtime one. The defect is a real manufacturing
 variation (cap seating, weld penetration, a proud terminal) that is baked in when the cell is

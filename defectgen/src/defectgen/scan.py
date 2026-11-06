@@ -113,7 +113,7 @@ class Scene:
         the CMC and cover: inspection (module_spec §8 step 10) happens before
         they are placed (step 11), so the sensors see the welds."""
         if without is None:
-            without = ("cmc", "cover") if stage == "post_weld" else ()
+            without = without_groups(stage)
         groups = {
             p.stem: trimesh.load_mesh(p)
             for p in sorted((Path(run_dir) / stage).glob("*.stl"))
@@ -156,6 +156,14 @@ class Scene:
         rays = np.hstack([start, eye - start]).astype(np.float32)
         blocked = self.raycaster.test_occlusions(o3d.core.Tensor(rays), tnear=0.0, tfar=1.0).numpy()
         return ~blocked
+
+
+def without_groups(stage: str, include=()) -> tuple:
+    """Body groups a scan of `stage` leaves out by default: after welding the
+    CMC and cover are not on yet when inspection happens (module_spec §8,
+    steps 10 and 11). `include` puts any of them back."""
+    default = ("cmc", "cover") if stage == "post_weld" else ()
+    return tuple(g for g in default if g not in include)
 
 
 # -- reflectance -----------------------------------------------------------
@@ -241,7 +249,11 @@ def _finish(name, cfg, materials, scene, pts, normal, mat, to_light, to_cam, alo
     """Shared tail: reflectance cut, noise, quantisation. `normals` is (2, N)
     standard-normal draws fixed per ray upstream, so the noise on a point does
     not depend on how a sweep was split into chunks."""
+    # Exposure: a line sensor run faster than its reference rate integrates
+    # each profile for proportionally less time, so less light per point --
+    # more dark dropout and noisier points, less glare. 1.0 for the snapshot.
     s = signal(materials, scene.material_names, mat, normal, to_light, to_cam, cfg["band"])
+    s = s * cfg.get("_exposure", 1.0)
     dark, glare = s < cfg["min_signal"], s > cfg["saturation"]
     by_mat = {} if by_mat is None else by_mat
     n_mat = len(scene.material_names)
@@ -287,7 +299,11 @@ def line_scan(scene: Scene, sensor: str, start: np.ndarray, length: float, seed:
     cfg = sensors[sensor]
     if (speed is None) != (rate is None):
         raise ValueError("give both speed (mm/s) and rate (profiles/s), or neither")
+    if rate is not None and rate > cfg["max_rate"]:
+        raise ValueError(f"{sensor} cannot fire {rate:g} profiles/s; its maximum is {cfg['max_rate']:g}")
     pitch = speed / rate if speed else cfg["profile_pitch"]
+    exposure = cfg["reference_rate"] / rate if rate else 1.0
+    cfg = dict(cfg, _exposure=exposure)
     steps = np.arange(0.0, length + 1e-9, pitch)
     poses = []
     for s in steps:
@@ -297,11 +313,13 @@ def line_scan(scene: Scene, sensor: str, start: np.ndarray, length: float, seed:
     settings = {"length_mm": length, "pitch_mm": pitch, "profiles": len(poses),
                 "points_per_profile": cfg["points"], "seed": seed}
     if speed:
-        settings.update(speed_mm_s=speed, rate_hz=rate, scan_time_s=length / speed)
+        settings.update(speed_mm_s=speed, rate_hz=rate, scan_time_s=length / speed,
+                        exposure_vs_reference=exposure)
     rays = len(poses) * cfg["points"]
     log.info("plan: %s sweep %.1f mm at %.3f mm pitch -> %d profiles x %d points = %.1f M rays%s",
              sensor, length, pitch, len(poses), cfg["points"], rays / 1e6,
-             f", {speed:g} mm/s at {rate:g} Hz = {length / speed:.2f} s of sensor time" if speed else "")
+             f", {speed:g} mm/s at {rate:g} Hz = {length / speed:.2f} s of sensor time, "
+             f"exposure x{exposure:.2f} of the reference" if speed else "")
 
     parts, dropped, by_mat = [], {}, {}
     t0, kept = time.perf_counter(), 0
@@ -377,7 +395,9 @@ def _line_profiles(scene: Scene, cfg: dict, materials: dict, poses: list, seed: 
         [np.random.default_rng([seed, first + k]).standard_normal((2, n)) for k in range(len(poses))],
         axis=1,
     )[:, idx]
-    sigma = np.full(len(idx), cfg["sigma_z"])
+    # Triangulation noise grows with range: sigma_z holds at the reference
+    # distance and scales by (distance / reference) ** exponent.
+    sigma = cfg["sigma_z"] * (depth[idx] / d0) ** cfg["noise_distance_exponent"]
     return _finish("", cfg, materials, scene, pts[idx], normal[idx], mat[idx], to_light[idx],
                    to_cam[idx], axis[idx], normals, poses, dropped, sigma, xdir[idx], cfg["sigma_x"],
                    by_mat=by_mat)
@@ -448,12 +468,17 @@ def snapshot(scene: Scene, pose: np.ndarray, sensor: str = "snapshot", seed: int
     return result
 
 
-def render_2d(scene, materials, cfg, hit, pts, normal, mat, to_light, to_cam, projector, shape):
+def render_2d(scene, materials, cfg, hit, pts, normal, mat, to_light, to_cam, projector, shape,
+              exposure: float | str = 1.0):
     """The snapshot camera's 2D picture: every pixel that hit something, lit
     by the projector (the Zivid uses it as the flash for its 2D capture), in
     the surface's display colour (configs/appearance.yaml), scaled by the light
     the reflectance model says comes back. Shadowed pixels get ambient only.
-    Bright metal can clip to white -- the same glare that drops 3D points."""
+    Bright metal can clip to white -- the same glare that drops 3D points.
+
+    `exposure` scales the light before display. "auto" sets it so the
+    brightest 0.5% of lit pixels just reach white, as a camera's auto
+    exposure would; 1.0 shows the raw model, glare clipping included."""
     look = yaml.safe_load((CONFIG_DIR / "appearance.yaml").read_text())
     colours = np.array([look["colours"][n] for n in scene.material_names])
     img = np.zeros((len(pts), 3))
@@ -462,7 +487,9 @@ def render_2d(scene, materials, cfg, hit, pts, normal, mat, to_light, to_cam, pr
     light = signal(materials, scene.material_names, mat[idx], normal[idx], to_light[idx],
                    to_cam[idx], cfg["band"])
     light = np.where(lit, light, 0.0) + look["ambient"]
-    img[idx] = colours[mat[idx]] * light[:, None]
+    if exposure == "auto":
+        exposure = 1.0 / max(float(np.percentile(light, 99.5)), 1e-6)
+    img[idx] = colours[mat[idx]] * (light * exposure)[:, None]
     # Linear to display: clip, then sRGB-like gamma.
     img = np.clip(img, 0.0, 1.0) ** (1 / 2.2)
     return (img.reshape(*shape, 3) * 255).astype(np.uint8)
@@ -499,7 +526,8 @@ def summary(result: ScanResult) -> dict:
             "kept": kept,
             "lost": lost,
             "kept_pct": round(100 * kept / max(kept + sum(lost.values()), 1), 1),
-            "noise_um": round(float(np.linalg.norm(err[sel], axis=1).std()) * 1000, 2) if kept else None,
+            # Height error (module Z) -- what a height or gap measurement feels.
+            "noise_um": round(float(err[sel][:, 2].std()) * 1000, 2) if kept else None,
             "median_signal": round(float(np.median(result.signal[sel])), 3) if kept else None,
         }
     return {
@@ -520,7 +548,7 @@ def _report(info: dict) -> None:
     for reason, n in info["dropped"].items():
         if n:
             log.info("  lost to %-18s %12s  (%4.1f%%)", reason, f"{n:,}", 100 * n / info["rays"])
-    log.info("  %-20s %10s %7s %10s %8s  lost by reason", "material", "kept", "kept%", "noise um", "signal")
+    log.info("  %-20s %10s %7s %10s %8s  lost by reason", "material", "kept", "kept%", "Z noise um", "signal")
     for name, m in sorted(info["by_material"].items(), key=lambda kv: -kv[1]["kept"]):
         lost = ", ".join(f"{r} {n:,}" for r, n in m["lost"].items())
         log.info("  %-20s %10s %6.1f%% %10s %8s  %s", name, f"{m['kept']:,}", m["kept_pct"],
@@ -530,40 +558,47 @@ def _report(info: dict) -> None:
 
 def main() -> None:
     import argparse
-    import datetime
 
+    from . import scanlog
     from .config import load
 
     p = argparse.ArgumentParser(prog="python -m defectgen.scan", description=__doc__.split("\n")[0])
     p.add_argument("run", type=Path, help="a defectgen --out directory")
     p.add_argument("--stage", default="post_weld")
-    p.add_argument("--sensor", choices=["line_scan", "profilometer", "snapshot"], default="line_scan")
+    p.add_argument("--sensor", choices=["line_scan", "profilometer", "snapshot", "photos"], default="line_scan",
+                   help="photos = the four Zivid 2D quadrant photos (same as python -m defectgen.photos)")
+    p.add_argument("--include", nargs="+", default=[], metavar="GROUP",
+                   help="put back groups the stage leaves out for inspection (post_weld: cmc cover)")
+    p.add_argument("--no-stitch", dest="stitch", action="store_false",
+                   help="photos: skip the stitched whole-module image")
     p.add_argument("--speed", type=float, default=None,
                    help="line sensors: travel speed in mm/s (robot sweep, or conveyor for line_scan)")
     p.add_argument("--rate", type=float, default=None,
-                   help="line sensors: profiles per second; pitch = speed / rate")
+                   help="line sensors: profiles per second; pitch = speed / rate. Faster than the "
+                        "sensor's reference_rate means a shorter exposure and less light per point")
+    p.add_argument("--distance", type=float, default=None,
+                   help="line sensors: height of the sensor above the terminal tops, mm "
+                        "(default: its reference distance). Farther = wider line, coarser and noisier")
     p.add_argument("--out", type=Path, default=None)
     p.add_argument("--seed", type=int, default=0)
-    p.add_argument("--log-dir", type=Path, default=Path("data/sensor_logs"),
-                   help="where each run's log and summary go")
+    p.add_argument("--log-dir", type=Path, default=scanlog.LOG_ROOT,
+                   help="each run gets its own folder here (scanlog.py)")
     p.add_argument("--quiet", action="store_true", help="only the final line")
     args = p.parse_args()
     if args.sensor != "snapshot" and (args.speed is None) != (args.rate is None):
         p.error("give both --speed and --rate, or neither (then the frozen profile_pitch is used)")
 
-    stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    args.log_dir.mkdir(parents=True, exist_ok=True)
-    stem = f"{stamp}_{args.run.name}_{args.stage}_{args.sensor}"
-    fmt = logging.Formatter("%(asctime)s.%(msecs)03d %(message)s", "%H:%M:%S")
-    root = logging.getLogger("defectgen")
-    root.setLevel(logging.INFO)
-    console = logging.StreamHandler()
-    console.setFormatter(fmt)
-    console.setLevel(logging.WARNING if args.quiet else logging.INFO)
-    logfile = logging.FileHandler(args.log_dir / f"{stem}.log")
-    logfile.setFormatter(fmt)
-    root.addHandler(console)
-    root.addHandler(logfile)
+    folder = scanlog.start(args.run, args.stage, args.sensor, args.log_dir, args.quiet)
+    if args.sensor == "photos":
+        from .photos import capture
+
+        log.info("defectgen.scan photos on %s / %s -> %s", args.run, args.stage, folder)
+        t0 = time.perf_counter()
+        info = capture(args.run, args.stage, folder, stitch=args.stitch, include=args.include)
+        scanlog.write_summary(folder, info)
+        log.warning("done in %.1f s: %d photos%s, %d defect close-ups -> %s", time.perf_counter() - t0,
+                    len(info["shots"]), " + stitched" if args.stitch else "", len(info["close_ups"]), folder)
+        return
 
     cfg = load()
     sensors, materials = load_params()
@@ -573,7 +608,7 @@ def main() -> None:
     log.info("  %s", ", ".join(f"{k}={v}" for k, v in sc.items()))
 
     t0 = time.perf_counter()
-    scene = Scene.from_run(args.run, args.stage)
+    scene = Scene.from_run(args.run, args.stage, without=without_groups(args.stage, args.include))
     log.info("scene: loaded in %.1f s; materials in use: %s", time.perf_counter() - t0,
              ", ".join(scene.material_names))
 
@@ -581,17 +616,24 @@ def main() -> None:
     t0 = time.perf_counter()
     if args.sensor == "snapshot":
         result = snapshot(scene, looking_down(0.0, 0.0, top + sc["focus_distance"]), seed=args.seed)
-    elif args.sensor == "line_scan":
-        # The fixed station: the module passes under it end to end.
-        result = line_scan(scene, "line_scan",
-                           looking_down(-cfg.module_l / 2 - 5, 0.0, cfg.z_terminal_top + sc["reference_distance"]),
-                           cfg.module_l + 10, seed=args.seed, speed=args.speed, rate=args.rate)
     else:
-        # One wrist sweep along the +Y busbar row, at the reference distance.
-        result = line_scan(scene, "profilometer",
-                           looking_down(-cfg.module_l / 2 + 10, cfg.terminal_y,
-                                        cfg.z_terminal_top + sc["reference_distance"]),
-                           cfg.module_l - 20, seed=args.seed, speed=args.speed, rate=args.rate)
+        d = args.distance if args.distance is not None else sc["reference_distance"]
+        off = d - sc["reference_distance"]
+        if abs(off) > sc["z_range"]:
+            log.warning("distance %.0f mm puts the terminal tops %.0f mm from the reference distance, "
+                        "outside the +/-%.0f mm range: they will drop out as 'range'", d, off, sc["z_range"])
+        log.info("standoff: %.1f mm above the terminal tops (reference %.0f, %+.1f)",
+                 d, sc["reference_distance"], off)
+        if args.sensor == "line_scan":
+            # The fixed station: the module passes under it end to end.
+            start = looking_down(-cfg.module_l / 2 - 5, 0.0, cfg.z_terminal_top + d)
+            length = cfg.module_l + 10
+        else:
+            # One wrist sweep along the +Y busbar row.
+            start = looking_down(-cfg.module_l / 2 + 10, cfg.terminal_y, cfg.z_terminal_top + d)
+            length = cfg.module_l - 20
+        result = line_scan(scene, args.sensor, start, length, seed=args.seed, speed=args.speed, rate=args.rate)
+        result.settings["distance_mm"] = d
     log.info("simulated in %.1f s", time.perf_counter() - t0)
 
     info = summary(result)
@@ -602,10 +644,10 @@ def main() -> None:
     info["files"] = [str(out), str(out.with_suffix(".ply"))] + (
         [str(out.with_name(out.stem + "_2d.png"))] if result.image is not None else [])
     info["run"], info["stage"] = str(args.run), args.stage
-    (args.log_dir / f"{stem}.json").write_text(json.dumps(info, indent=2))
+    scanlog.write_summary(folder, info)
     log.info("saved %s in %.1f s", ", ".join(info["files"]), time.perf_counter() - t0)
-    log.warning("%s: %s points kept of %s rays, params %s -- log and summary in %s/%s.{log,json}",
-                out, f"{info['kept']:,}", f"{info['rays']:,}", result.params_hash[:12], args.log_dir, stem)
+    log.warning("%s: %s points kept of %s rays, params %s -- log and summary in %s/",
+                out, f"{info['kept']:,}", f"{info['rays']:,}", result.params_hash[:12], folder)
 
 
 if __name__ == "__main__":

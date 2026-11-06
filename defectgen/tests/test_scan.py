@@ -16,7 +16,7 @@ from defectgen.scan import Scene, line_scan, load_params, looking_down, params_h
 # number in configs/sensors.yaml or configs/materials.yaml changes this --
 # which is the point: do it before looking at detection results, and update
 # this line in the same commit so the change is on the record.
-FROZEN = "a95aee280172"
+FROZEN = "779e2255dc4c"
 
 SENSORS, _ = load_params()
 
@@ -98,3 +98,58 @@ def test_scans_are_reproducible_and_carry_the_hash():
     b = line_scan(scene, "profilometer", pose, 1.0, seed=3, chunk=7)
     np.testing.assert_array_equal(a.points, b.points)
     assert a.params_hash == params_hash()
+
+
+def test_photos_take_four_close_shots_and_stitch_them(tmp_path):
+    """A clean module through the photo capture: one shot per quadrant, as
+    close as the Zivid allows, cropped to it, and a mosaic of the whole module
+    at the shots' resolution (portrait: rows along the module's length)."""
+    from PIL import Image
+
+    from defectgen.config import load
+    from defectgen.module import export
+    from defectgen.photos import capture, shot_layout
+
+    cfg = load()
+    quads, distance, fit, mm_px = shot_layout(cfg)
+    # Centred between pins 3-4, 9-10, 15-16, 21-22 (DIP numbering, module.terminal_pin).
+    assert [q["between"] for q in quads] == [(3, 4), (9, 10), (15, 16), (21, 22)]
+    assert [q["pins"] for q in quads] == [(1, 6), (7, 12), (13, 18), (19, 24)]
+    assert fit < SENSORS["snapshot"]["working_distance"][0] == distance  # clamped to 300 mm
+
+    run = tmp_path / "run"
+    export(run, cfg=cfg)
+    folder = tmp_path / "log"
+    folder.mkdir()
+    info = capture(run, "post_weld", folder, stitch=True, aa=1)
+    shots = sorted((folder / "photos").glob("q*.png"))
+    assert len(shots) == 4
+    mosaic = Image.open(folder / "photos" / "stitched.png")
+    assert mosaic.height == pytest.approx((cfg.module_l + 12) / mm_px, abs=2)
+    assert info["defects_boxed"] == 0 and not list((folder / "defects").glob("*.png"))
+
+
+def test_line_sensor_noise_grows_with_distance():
+    """Triangulation: height noise scales with range squared, so the same
+    plate 30 mm beyond the reference distance is noisier than 30 mm inside it."""
+    cfg = SENSORS["profilometer"]
+    scene = Scene.from_groups({"end_plates": plate()})
+    d0 = cfg["reference_distance"]
+    near = line_scan(scene, "profilometer", looking_down(0, 0, d0 - 30), 2.0)
+    far = line_scan(scene, "profilometer", looking_down(0, 0, d0 + 30), 2.0)
+    std = lambda r: (r.points - r.truth)[:, 2].std()  # noqa: E731
+    assert std(far) / std(near) == pytest.approx(((d0 + 30) / (d0 - 30)) ** 2, rel=0.2)
+
+
+def test_faster_profiles_get_less_light():
+    """Ten times the reference rate is a tenth of the exposure: on tilted
+    copper, far more points come back too dark to use."""
+    cfg = SENSORS["line_scan"]
+    tilt = trimesh.transformations.rotation_matrix(np.radians(20), [1, 0, 0])
+    scene = Scene.from_groups({"busbars": plate().apply_transform(tilt)})
+    pose = looking_down(0, 0, cfg["reference_distance"])
+    slow = line_scan(scene, "line_scan", pose, 2.0, speed=100.0, rate=cfg["reference_rate"])
+    fast = line_scan(scene, "line_scan", pose, 2.0, speed=1000.0, rate=cfg["reference_rate"] * 7)
+    assert fast.dropped["dark"] > 2 * max(slow.dropped["dark"], 1)
+    with pytest.raises(ValueError, match="maximum"):
+        line_scan(scene, "line_scan", pose, 2.0, speed=100.0, rate=cfg["max_rate"] * 2)
