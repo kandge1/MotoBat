@@ -212,7 +212,7 @@ from the MDPI paper itself.
 
 | # | Task | § | Notes |
 |---|---|---|---|
-| 2.1 | HC10DT MoveIt config — **KDL, not OPW** | 4A.2 | `joint_5_b` offset 162 mm in Y; wrist axes do not intersect. No OPW file exists. Do not hunt for one. |
+| 2.1 | HC10DT MoveIt config — **KDL, not OPW** ✅ 6 Nov | 4A.2 | `motobat_hc10dt_moveit_config`, group `inspector_arm`, pose `ready`, mock hardware via `FollowJointTrajectory`. **KDL kept by measurement:** benchmarked against TRAC-IK and pick_ik on 3 × 1000 targets. KDL matched the best on inspection-like poses at 10–100× less time. TRAC-IK's MoveIt plugin gives up when its first answer collides (§4A.2 "As built"). Station poses moved to `line_layout.xacro`. **Acceleration limits assumed (A); revisit before 2.7.** |
 | 2.2 | `ros2_control` + `joint_trajectory_controller`, HC10DT in Gazebo | 4A.3 | |
 | 2.3 | Flange: snapshot 3D + profilometer (**+ 2D camera only if 1.11 requires it**), poses as variables | 4A.4, 3.7.3 | **◀ IN PROGRESS, ahead of sequence.** `inspector_flange` exists, with HC10DT flange alignment features, carrying the Zivid 2+ M60 and the Keyence LJ-X8200 on an AL-5052 plate. Keep it **parametric** (sensor poses as Fusion User Parameters) so 1.11's result can swap the sensor class without a remodel. Check FOV occlusion and standoff compatibility. **Payload ≈ 2.5–3.0 kg of 10** (Zivid 1.0 + Keyence 1.2 + plate + cabling) — take sensor masses from datasheets, not from the CAD shells. Flange is the **DT** pattern, 63 mm PCD (§4A.4). |
 | 2.4 | `inspector_flange.xacro` — flange + sensor frames on `s3_tool0` | 4A.4 | derive origins from CAD **numerically**; a 2° eyeball error corrupts every registration downstream and will look like an algorithm bug |

@@ -1,0 +1,41 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>motobat_hc10dt_moveit_config</name>
+  <version>0.1.0</version>
+  <description>
+    MoveIt configuration for MotoBat Station 3, the Inspector (Yaskawa HC10DT).
+    KDL inverse kinematics, because the HC10DT's offset wrist rules out OPW.
+    Laid out as the MoveIt Setup Assistant generates it, so it can still be
+    opened and edited there.
+  </description>
+  <maintainer email="rhishi.kandge@gmail.com">Rhishikesh Kandge</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <exec_depend>motobat_description</exec_depend>
+  <exec_depend>moveit_ros_move_group</exec_depend>
+  <exec_depend>moveit_kinematics</exec_depend>
+  <!-- IK candidates compared by scripts/compare_ik.py -->
+  <exec_depend>trac_ik_kinematics_plugin</exec_depend>
+  <exec_depend>pick_ik</exec_depend>
+  <exec_depend>moveit_planners</exec_depend>
+  <exec_depend>moveit_simple_controller_manager</exec_depend>
+  <exec_depend>moveit_ros_visualization</exec_depend>
+  <exec_depend>moveit_configs_utils</exec_depend>
+  <exec_depend>moveit_msgs</exec_depend>
+  <exec_depend>controller_manager</exec_depend>
+  <exec_depend>joint_state_broadcaster</exec_depend>
+  <exec_depend>joint_trajectory_controller</exec_depend>
+  <exec_depend>robot_state_publisher</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+  <exec_depend>rviz2</exec_depend>
+  <exec_depend>xacro</exec_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>control_msgs</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

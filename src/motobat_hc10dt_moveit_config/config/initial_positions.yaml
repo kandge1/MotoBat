@@ -1,0 +1,10 @@
+# Where the simulated hardware starts: the SRDF "ready" pose.
+# All-zeros is a poor start: joint_3_u = 0 folds the forearm down beside the
+# upper arm.
+initial_positions:
+  s3_joint_1_s: 0.0
+  s3_joint_2_l: 0.0
+  s3_joint_3_u: 1.5708
+  s3_joint_4_r: 0.0
+  s3_joint_5_b: -1.5708
+  s3_joint_6_t: 0.0

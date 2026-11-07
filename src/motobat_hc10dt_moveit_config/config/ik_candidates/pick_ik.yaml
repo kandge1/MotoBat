@@ -1,0 +1,12 @@
+# pick_ik, global mode: gradient descent inside a memetic (evolutionary)
+# search. Thresholds tightened from the defaults (1 mm, 0.001 rad) to sit
+# inside check_ik.py's acceptance bar (0.1 mm, 0.001 rad). At the defaults it
+# returns answers the bar rejects, which would make the comparison unfair to it.
+inspector_arm:
+  kinematics_solver: pick_ik/PickIkPlugin
+  kinematics_solver_timeout: 0.05
+  mode: global
+  position_threshold: 0.00005
+  orientation_threshold: 0.0005
+  cost_threshold: 1.0e-9
+  stop_optimization_on_valid_solution: true

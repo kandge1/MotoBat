@@ -1,0 +1,36 @@
+<?xml version="1.0"?>
+<!--
+  MotoBat line layout: where every station sits in `world`.
+
+  The single source of truth for station poses. Both the full line
+  (motobat_line.urdf.xacro) and the per-station descriptions that the MoveIt
+  configs load (e.g. inspector_station.urdf.xacro) read these numbers, so a
+  station planned alone sits exactly where it sits in the line, and its TF
+  frames agree with every other station's.
+
+  Layout is a straight line along +X at `pitch`, matching the process order.
+-->
+<robot xmlns:xacro="http://ros.org/wiki/xacro">
+
+  <!-- Station pitch along the line. Change here, not in each mount. -->
+  <xacro:property name="pitch"        value="1.2"/>
+  <xacro:property name="table_height" value="0.0"/>
+
+  <!-- Station 3, Inspector (HC10DT). Set back on -Y and raised: the HC10's
+       reach lets it scan across neighbouring stations from a central
+       position. Placeholder pose; task 2.5 (reachable view plan) may move it. -->
+  <xacro:property name="s3_x"   value="${pitch*1.5}"/>
+  <xacro:property name="s3_y"   value="-0.9"/>
+  <xacro:property name="s3_z"   value="0.3"/>
+  <xacro:property name="s3_yaw" value="${pi/2}"/>
+
+  <!-- Bolt an arm's base_link to world at a given pose. -->
+  <xacro:macro name="station_mount" params="prefix x y z yaw">
+    <joint name="${prefix}mount" type="fixed">
+      <parent link="world"/>
+      <child  link="${prefix}base_link"/>
+      <origin xyz="${x} ${y} ${z}" rpy="0 0 ${yaw}"/>
+    </joint>
+  </xacro:macro>
+
+</robot>

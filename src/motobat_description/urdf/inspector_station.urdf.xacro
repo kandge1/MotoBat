@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<!--
+  Station 3, Inspector, on its own: the HC10DT at its line pose in `world`.
+
+  This is the robot that motobat_hc10dt_moveit_config plans for. Frames match
+  motobat_line.urdf.xacro exactly (same prefix, same mount), so a plan made
+  here is valid in the full line.
+
+      xacro inspector_station.urdf.xacro > /tmp/inspector.urdf
+-->
+<robot name="motobat_inspector" xmlns:xacro="http://ros.org/wiki/xacro">
+
+  <xacro:include filename="$(find motobat_description)/urdf/line_layout.xacro"/>
+  <xacro:include filename="$(find motobat_description)/urdf/inspector_station.xacro"/>
+
+  <link name="world"/>
+
+  <xacro:motobat_inspector_station prefix="s3_"/>
+
+</robot>
