@@ -110,7 +110,7 @@ against the equations in §9 — write the maths down before writing the code.
 | Repository structure | **Restructured** 31 Aug 2026 — repo root is the colcon workspace (`docs/project_structure.md`) |
 | **Domain** | **Battery module assembly line** as of 15 Sep 2026 (§3.7) |
 | Defect generation + detection | **Current work**: §4B, module generator, mesh-native |
-| MoveIt configs | HC10DT first (§4A.2), then GP7 cell placement, then GP4 busbars |
+| MoveIt configs | HC10DT first (§4A.2), then GP7 cell placement, then GP4 busbars. **From 6 Nov 2026** the HC10DT work runs in parallel with §4B, in a second worktree (`../MotoBat-arm`, `feature/hc10dt_gazebo`); see §8 and `status_update.md` "Two lanes" |
 | Sensor flange | Snapshot 3D + line profilometer; 2D camera only if task 1.11 requires it (§3.7.3, revised 28 Oct 2026) |
 | **Battery module CAD** | **Complete 1 Nov 2026** — all 12 bodies of `module_spec.md` §7, plus two assembled references. STEP in `cad/module/`, STL in `src/motobat_description/meshes/module/` |
 | **Inspector mount CAD** | **Started early** — `inspector_flange`, carrying the Zivid 2+ M60 and the Keyence LJ-X8200 (§4A.4). Task 2.3 is ahead of sequence. |
@@ -1697,6 +1697,326 @@ above. Gazebo and Isaac supply only poses and raw rays/depth. This mirrors the
 
 Runs in `mb-venv`, not system Python.
 
+#### As built — 6 Nov 2026 (`defectgen/detect.py`, `fit.py`, `evaluate.py`)
+
+```
+ captures (one per sensor shot or sweep)            clean reference, same stage
+ points, ray index, poses ─────────┐                (generator, no defects)
+                                   │                         │
+                                   ▼                         ▼
+                        ┌─────────────────────┐   same rays, same frozen sensor
+                        │ 1-2  align to datum │◄── model, noise off = GOLDEN capture
+                        └─────────┬───────────┘
+                                  ▼
+                                  ▼
+   3  per-feature fits on scan AND golden, Δf = f(scan) − f(golden)
+      terminals · cells · polarity · busbars · pad-to-busbar gap · carrier · seams
+      (positions only from captures fine enough to judge them, §3.7.3 rule)
+                                  │
+                                  ▼  every measured part moved to where it was measured,
+                                  │  same rays recast = the module AS MEASURED
+   4-5  per-ray residual r_i against the module as measured,
+        connected regions on the sensor's own grid
+                                  ▼
+            6  classify → DefectReport (findings, measurements, uncovered, OK/NOK/INCOMPLETE)
+                                  ▼
+            evaluate.py: match to the generator's labels → TP / FN / FP per class
+```
+
+Millimetres and degrees, module (pallet datum) frame, Z up, throughout.
+
+**Organised captures.** Every scan point carries the index of the ray that
+produced it: (profile, column) for a line sensor, (row, column) for the
+snapshot. Real sensors return this (an LJ-X profile, a Zivid organised
+cloud), and it is what makes the comparison below exact.
+
+**The golden capture.** For each capture, the same rays are cast at the clean
+module for that stage, through the same frozen sensor model (§4B.3), with noise
+off. It is what this capture would return from a perfect module, with the same
+shadows, dropouts and sampling. Two uses:
+
+- *Golden-sample differencing.* Every feature is measured by the same function
+  on both, and only the difference is reported: Δf = f(scan) − f(golden). A
+  method's own bias (chamfered pad edges, a shadowed corner, where samples
+  happen to fall) is the same on both and cancels. The detector compares like
+  with like rather than against the CAD's nominal numbers.
+- *Per-ray residual* (step 5).
+
+**Steps 1–2: alignment to the datum.** Whole-module ICP was implemented first
+and failed in two measured ways:
+
+- It is dragged by the dominant surface. With a carrier seated 0.3 mm high,
+  ICP lowered the whole capture by 0.3 mm. The defect vanished and every cap
+  read 0.3 mm low.
+- It barely constrains in-plane motion. Seen from above, the module is nearly
+  all horizontal faces, which fix Z, roll and pitch. Only edges fix X, Y and
+  yaw. A 0.15 mm fixture shift came back about 0.10 mm wrong, under every
+  kernel and schedule tried, and under generalised ICP.
+
+So, as §9.7's last paragraph asks, registration uses only features no defect
+moves: the **housing** (end plates and side plates, picked out by the golden
+capture's material per ray).
+
+- Z, roll, pitch: point-to-plane ICP on the housing points only. The first pass
+  is plain least squares; the second uses a Tukey kernel. Random subsampling
+  (voxel averaging smears edges), and target normals are the reference mesh's
+  face normals (estimated normals round edges off).
+- X, Y, yaw: the outlines of the two end-plate tops (below), from the rigid 2D
+  fit of their golden centres onto their scanned centres.
+- A capture that sees no housing (a wrist sweep along one terminal row) keeps
+  its fixture or robot pose. Its *absolute* positions inherit that pose's
+  error. Its *relative* ones do not: Δh between adjacent terminals, busbar to
+  pad, seam to busbar. That is the single-capture rule of §3.7.6 doing its job.
+
+The housing is the datum rather than the cells deliberately. A frame fitted
+to the cells would absorb any shift they share, such as a systematic gripper
+offset, which is exactly the error the integral term in §9.9 exists to remove.
+
+Measured (line-scan, injected fixture error 0.15 / −0.10 / 0.03 mm, 0.05° yaw,
+0.02° roll): Z exact; X and Y within 50 µm. **50 µm is half the line-scan
+profile pitch.** An edge across the scan direction can only be placed to the
+nearest profile, so any outline-based X is quantised to ±pitch/2. With no
+fixture error, scan and golden share a sampling phase and cell positions read
+0.0 µm. That number flatters the sensor, and %GRR (1.9) must vary the phase.
+
+**Which capture may measure what.** §3.7.3's rule of thumb (sample spacing
+≲ D/2 to measure a feature of size D) is applied per capture. A position
+placed by an outline is judged against tolerance T only by a capture whose
+sample spacing is ≤ T/2. That covers a cell's or busbar's position, a
+seam's shape and the X/Y datum. Anything else is listed as uncovered, not
+passed. Plane fits (heights, tilt, gap, carrier) average thousands of points
+and are open to every capture. The simulated Zivid samples every second
+pixel (`stride: 2`), so its spacing is ≈ 0.5 mm. Before this rule, its
+end-plate outlines moved a perfectly placed module 0.115 mm in X and its
+cells read 0 or 0.25 mm, depending on which pad edges crossed a pixel: 23–56
+false findings per clean module. Under the rule it reports heights,
+polarity, gaps, carrier, missing parts and large residuals, and it lists
+cell and busbar positions and seams as uncovered. That is exactly the
+plan's "coverage, not precision" role for it.
+
+**Step 3: per-feature fits** (`fit.py`).
+
+*Top-face plane, trimmed least squares* (seeded by RANSAC, Fischler & Bolles
+1981, so a busbar top with 0.3 mm beads on it or a pad beside a busbar fits
+the right surface):
+
+```
+z = a + b(x − x₀) + c(y − y₀),   refit on |eᵢ| ≤ max(3·rms, floor), 5 passes
+n̂ = (−b, −c, 1)/‖·‖,             tilt = arccos(n̂_scan · n̂_golden)
+```
+
+*Face points and outline.* Every point within `band = max(0.03, 4σ̂)` of the
+plane, inside the nominal face grown by 2.5 mm, is on the face. Its outline is
+the minimum-area enclosing rectangle (rotating calipers over the convex hull,
+Freeman & Shapira 1975): centre (cₓ, c_y), yaw ψ, extents.
+
+*Cell pose.* A cell's cap is flush with the pads either side, so it has no
+edge to fit. Its pose comes from its terminal pads, which are rigid on the can.
+With both pads in one capture, a 2D Kabsch fit maps golden pad centres onto
+scanned ones (§9.7 in 2D): R, t, then Δ(x, y) = R·c + t − c at the cell centre
+c, and Δθ = atan2(R₂₁, R₁₁). With one pad, Δθ is that pad's outline yaw.
+
+*Terminal height.* h_k = plane_k(c_k) − golden. The row's common part is
+removed by a straight line along the row, trimmed on the median absolute
+deviation (a sweep may see only six terminals, and one raised terminal
+inflates an rms enough to keep itself), d_k = h_k − (a + b·x_k), and
+the §4 rule is applied: |d_k| > 0.1 mm. Adjacent Δh is reported for every
+pair seen in one capture. Tilt tolerance: atan(0.1 / 18.5) = 0.31°, the tilt
+that lifts one pad edge 0.1 mm. A tilted terminal stands on its low edge, so
+its centre rises by (d/2)·sin(tilt). That rise is not reported again as a
+height defect.
+
+*Polarity.* Two CAD hypotheses per cell: as designed, and turned 180°. The
+pads land in the same places either way; the fill plug beside the negative
+pad does not. Each cap point is scored along its own measuring ray against
+each hypothesis mesh M_h:
+
+```
+S_h = Σᵢ min(|t_h,i − 20|, 1 mm)    t_h,i = hit distance along âᵢ from pᵢ − 20·âᵢ
+```
+
+The cell is reversed if S_turned < S_as_designed. Along the ray, not by
+nearest-face distance. A cap point where a hypothesis puts the plug lies on
+that plug's bottom face, so nearest-face distance charges nothing for a plug
+that is not there. That bug called every flipped cell reversed on a one-row
+sweep. Measured margin (S_ad − S_t)/(S_ad + S_t): ±0.99 profilometer, ±0.89
+line-scan.
+
+*Busbar gap.* The busbar is 12 wide on a 22 wide pad, so the pad shows either
+side of it. Fitting the pad from those strips puts the gap inside one capture:
+
+```
+g(x, y) = [B(x, y) − t_busbar] − P(x, y)        scan minus golden
+```
+
+with B the busbar top plane and P the pad plane, evaluated at the terminal
+centre for `busbar_liftoff` (tolerance 0.15 = `weld_gap_ok`) and at each stitch
+end for the weld (a busbar tilted on a chip opens toward one end).
+
+*Weld stitch.* Heights h = z − B(x, y), only on the busbar (inside its
+measured outline), in the stitch frame carried by the busbar's measured
+motion. Bins of 0.25 mm along s. Per bin, the surface counts as melted where
+bead_min_h < |h| and h > −t/2, giving the bead centre c(s), its width (2–98
+percentile across), and its height. Then, over the nominal span:
+
+```
+c_scan(s) − c_gold(s) = a + q·(1 − (2s/L)²)
+   a  offset at the ends → seam_deviation
+   q  sagitta            → weld_arc        (the bow weld.py draws)
+
+w_c = 1.4826·MAD(c − [1, bow, s]-fit of c)     each centreline about its own fit
+drift = √2·√(max(w_scan² − w_gold², 0))        → weld_path_drift
+```
+
+Drift is the extra wander of the scanned centreline over the golden one, not
+the wander of their bin-by-bin difference. The difference needs scan and
+golden bins to line up along the stitch. Alignment leaves up to half a
+profile pitch along X, and bead texture then read as 0.12–0.45 mm of drift
+on every clean stitch under a 0.15 mm fixture error. Measured after the
+change: clean stitches read ≤ 0.05; an injected 0.15 mm drift reads
+0.136–0.146; and under the fixture error one clean stitch still reads 0.144,
+against a 0.10 tolerance. Drift on the line-scan sits close to its noise
+floor.
+
+Length is the longest melted run, coverage the melted fraction (missing <
+0.1). Undercut is measured in a toe band 0.03–0.30 mm outside the design melt
+width, where weld.py cuts it. A hole is points deeper than t/2 inside the
+stitch. **Causal rule:** where the measured gap under a stitch exceeds 0.15,
+the gap is the cause. The stitch reports what the gap did (underfill,
+undercut, hole), not the shape changes it made.
+
+**Steps 4–5: residual against the module as measured.** The residual is
+taken *after* the features are measured. Every part detection measured is
+moved to where it was measured:
+- each cell's in-plane pose, carrying its terminals;
+- each terminal's and busbar's plane change;
+- each busbar's outline motion;
+- the carrier's plane;
+- each weld bead, on its busbar plus its centreline offset.
+
+The same rays are then recast at that module. Against the plain golden
+capture, a part that moved *within* tolerance left its edges and shadows
+behind as residual regions, because only a feature *finding* covered them.
+A carrier 0.1 mm high (tolerance 0.2) gave 5,321 false regions, a busbar on
+a 0.1 mm gap 133, a terminal 0.08 mm high one. A real line runs mostly just
+under tolerance, so this was the main false-alarm source, and the
+single-defect tests (all above tolerance) could not show it. Against the
+module as measured, all of them read clean.
+
+A correction is applied only when it is resolved. Plane changes are precise
+to microns and always applied. An in-plane outline motion is applied only
+if it moves some point of the part more than half the capture's sample
+spacing. A bead offset is applied only above 0.1 mm: clean stitches read
+±0.08 on the line-scan. Moving parts by sampling noise left its own
+residuals, 4 false spatter findings on a clean weld module.
+
+For each ray seen by both:
+
+```
+rᵢ = (p_pred,i − p_scan,i) · âᵢ          âᵢ = measuring direction, into the scene
+                                          p_pred = same ray cast at the module as measured
+flag |rᵢ| > τ_m = max(5·σ̂_m, 5 µm),     σ̂_m = 1.4826·MAD(r | nominal material m)
+```
+
+Positive r is material nearer the sensor than designed (raised, added). A ray
+the golden capture returned but the scan did not counts as missing. Per-ray
+comparison handles occlusion exactly. Closest-point distance cannot: the
+cooling plate under a missing cell is a CAD face, so its points would sit "on
+the reference". Regions are 8-connected components on the sensor's own grid,
+with area Σ ray footprints. They are dropped when:
+
+- smaller than 6 rays or 0.02 mm²;
+- long and under 2.5 rays thick (a ray that grazed an edge);
+- peak |r| > 3·√area: far deeper than wide, so a ray that crossed a step edge
+  (after a recast, at a cap feature), not a dent or a particle;
+- explained: on a fitted face, inside a feature finding's box, or within an
+  outline's band. The outlines are terminals, busbars and weld beads, and the
+  band is max(0.25 mm, the capture's sample spacing) plus how far that part
+  moved. Bead outlines were added because the residual ±pitch/2 of alignment
+  leaves slivers at bead ends and toes: 23 false spatter findings on a clean
+  weld module under a fixture error. The cost is that a drop landing within
+  the band of a bead is not reported (profilometer spatter: 10/10 → 9/10).
+
+What remains is classified: raised and ≤ 4 mm² → spatter (post-weld) or FOD;
+missing on foam → missing pad; sunk and ≤ 400 mm² → handling damage; the rest
+→ anomaly.
+
+**Thresholds:** `configs/detect.yaml`, tagged S/D/A like the other configs and
+fingerprinted into every report (`detect_hash`). Tolerances come from the spec
+where it gives one and are assumed elsewhere. They were set from the spec and
+from clean-module noise, not tuned on defect results.
+
+**Combining captures.** Each feature comes from the capture that saw it best
+by design (most golden support), among those capable of it. A terminal row's
+common height line is fitted per capture: two captures carry different
+alignment offsets and must not share a fit. A residual region already
+reported by an earlier capture is not reported again.
+
+**Station result.** The report carries `result`:
+- NOK if anything was found;
+- INCOMPLETE if nothing was found but some required feature was never
+  measured (uncovered), since not looked at is not passed;
+- OK otherwise.
+
+**Scan provenance.** Every scan records what it scanned: stage, `--include`d
+groups, and a fingerprint of the module's labels file. Detection skips, and
+says why, any scan that has no ray index, belongs to another stage, or was
+taken of the module before it was last regenerated. Such a scan would
+otherwise be scored against the wrong labels without complaint. A scan's
+`--include` is carried into the golden capture.
+
+**Scoring** (`evaluate.py`): same class, overlapping boxes (1 mm slack), each
+label used once. A class is scored at the stage that inspects it. A finding on
+a label of another class, which covers true downstream effects such as the
+carrier a reversed cell lifts, is "other", not a false positive.
+`lack_of_fusion` (class 16) is never in scope. The verdict per finding and
+per label goes to `<stage>.evaluation.json`, which `show_detections.py` draws
+in RViz.
+
+Two scoring caveats for 1.7–1.8:
+- **"Other" mixes two things.** It holds real knock-on effects (busbars a
+  lifted carrier raised) and cross-talk between measures (a bead 60% too wide
+  also reads as a 0.16 mm bow, tolerance 0.1). P/R tables must report it,
+  and a class confusion matrix should separate the two.
+- **A label is a defect only above its tolerance.** The generator labels
+  every injection, so a 0.08 mm terminal (tolerance 0.1) scores as a missed
+  `terminal_height` when passing it is correct. Severity sweeps must score
+  against the tolerance, or labels must carry it.
+
+**Limitations:**
+
+- Sensor poses are exact in simulation. Absolute positions from a wrist sweep
+  would carry the HC10DT's pose error.
+- Cell pose relies on the pads, so a cell whose pads are both hidden has no
+  pose.
+- Spatter landing *on* a bead with a seam finding is absorbed into that seam.
+- Handling damage on a cell's or side plate's side face is invisible from
+  above. That is a coverage miss for 1.5 and 1.10, not a detection one.
+- A dent at an edge (end-plate top edge) turns the surface away from the
+  sensor and shows mostly as missing returns. It is flagged, but as
+  `anomaly`, not `handling_damage`.
+- The line-scan places an edge across its scan direction only to its profile
+  pitch, so cell X reads in 0.1 mm-quantised steps (injected 0.15 reads
+  0.10, 0.25 reads 0.20). Against the 0.2 mm cell tolerance that is coarse:
+  the POD curve (1.11) will show it, and the profilometer's 0.05 mm pitch
+  halves it.
+- Seam acceptance limits are assumed (`A` in `detect.yaml`). §4B.2 says they
+  should come from ISO 13919-2 quality levels. The standard is not in the
+  repo, and its limits are not sourced yet.
+- Seam shape measures interact: a 60% wider bead reads as a 0.16 mm bow (see
+  scoring caveats).
+- Weld drift on the line-scan is marginal. Under a 0.15 mm fixture error, one
+  clean stitch reads 0.144 (tolerance 0.10), and one of two stitches with a
+  real 0.15 mm drift reads under it. The profilometer's finer pitch is the
+  remedy, which 1.11 should quantify.
+- Spatter within 0.25 mm of a bead is treated as a bead-edge effect and not
+  reported.
+- Latency, line-scan, one capture: ~15–35 s per module on this laptop, most
+  of it two ray casts (golden, and the module as measured) and ICP. A real
+  cell casts the golden once per station pose, or on a GPU. The per-stage
+  split is in `timings_s`.
+- The cover (final stage) is not scanned.
+
 ### 4B.5 — Coverage and view selection (no kinematics yet)
 
 Define the **required inspection surfaces** per stage: terminal tops and
@@ -2162,6 +2482,27 @@ the proposal). Write messages that explain *why*, not *what*.
  
 **Before writing a control node,** re-read §6. That boundary is the whole
 sim-to-hardware argument.
+
+**Parallel worktrees (from 6 Nov 2026).** The Phase 2 ROS work lives in a second
+worktree, `~/projects/MotoBat-arm` on `feature/hc10dt_gazebo`, beside the Phase 1
+folder. Which tasks and docs belong to each lane: `status_update.md`, "Two lanes".
+Setting up a worktree in this repo needs four things that git doesn't do for you:
+
+- **`src/_vendor/` is gitignored, so a new worktree has none.** Symlink the Phase 1
+  folder's copy (`ln -s ~/projects/MotoBat/src/_vendor src/_vendor`). Git doesn't count a
+  symlink as a directory, so the `src/_vendor/` ignore rule misses it. `src/_vendor` is
+  therefore listed in `.git/info/exclude`, which every worktree shares.
+- **Build the first time from a clean shell.** `~/.bashrc` sources the Phase 1 folder's
+  `motobat_env.sh`, and colcon writes whatever install is on `AMENT_PREFIX_PATH` into the
+  new `install/setup.bash` as a permanent underlay. The worktree would then quietly resolve
+  the vendor packages from the other folder. Do the first build under
+  `env -i HOME=$HOME PATH=/usr/bin:/bin bash -c 'source motobat_env.sh && colcon build --symlink-install'`,
+  and check with `grep MotoBat/install install/setup.bash`, which should find nothing.
+- **In every terminal, source the worktree's own `motobat_env.sh`.** It finds its own
+  folder, so it overlays that folder's `install/` on top of what `~/.bashrc` loaded.
+- **`data/` is gitignored too.** Copy in what a task needs.
+
+Remove a worktree with `git worktree remove ../MotoBat-arm`. Its branch and commits stay.
  
 ---
  

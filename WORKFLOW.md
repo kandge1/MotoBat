@@ -198,6 +198,86 @@ cd ~/projects/MotoBat && source motobat_env.sh
 # glare that drops 3D points there.
 
 
+## Detection (task 1.4) ##
+# Point clouds in, a list of defects out, scored against the labels the
+# generator wrote. Detection itself needs only the venv; RViz is for looking
+# at the result. Same four terminals as the scans above:
+#   Terminal 1  RViz, as always
+#   Terminal 2  the module, at the stage being inspected
+#   Terminal 3  scan, then detect (venv)
+#   Terminal 4  what detection found, boxed on the module (NEW: show_detections.py)
+#
+# Use the matching --stage everywhere: pre_busbar finds cell, terminal,
+# polarity, pad and FOD defects; pre_weld busbar pose, busbar gap and carrier
+# seating; post_weld the welds and spatter.
+
+# Terminal 1 #start rviz (restart it once after updating, to get the new "Detections" display)
+cd ~/projects/MotoBat && source motobat_env.sh
+rviz2 -d src/motobat_description/rviz/defects.rviz
+
+# Terminal 2 #the module being inspected, here the weld demo
+cd ~/projects/MotoBat && source motobat_env.sh
+/usr/bin/python3 src/motobat_description/scripts/show_module.py data/preview_welds --hide cover cmc
+# for the clean check instead:
+/usr/bin/python3 src/motobat_description/scripts/show_module.py data/preview_clean --stage pre_busbar
+
+# Terminal 3 #scan, then detect
+cd ~/projects/MotoBat && source motobat_env.sh && mb-venv
+python -m defectgen.scan data/preview_clean --stage pre_busbar --sensor line_scan
+python -m defectgen.detect data/preview_clean --stage pre_busbar     # a clean module: expect no findings
+python -m defectgen.scan data/preview_welds --stage post_weld --sensor line_scan
+python -m defectgen.detect data/preview_welds --stage post_weld      # the weld demo, scored
+
+# Terminal 4 #what detection found, on top of the module
+cd ~/projects/MotoBat && source motobat_env.sh
+/usr/bin/python3 src/motobat_description/scripts/show_detections.py data/preview_welds --stage post_weld
+# One box per finding (findings on the same part share one), with a tag:
+#   green   found        right class, right place
+#   red     false alarm  nothing there
+#   amber   knock-on     a finding on a defect of another class (see "other" below)
+#   magenta MISSED       the truth box of a defect it did not find; the tag says
+#                        what, if anything, was found there instead
+#   cyan    unscored     the run has no labels
+# Untick "Defects" (Terminal 2's truth boxes) to see only what detection said.
+# Under Detections -> Namespaces, each colour toggles on its own.
+# show_scan.py still works exactly as before (Terminal 4 of the scan section),
+# in another terminal at the same time if you want the cloud too:
+/usr/bin/python3 src/motobat_description/scripts/show_scan.py data/preview_welds/scans/post_weld_line_scan.npz
+
+# Which scans it uses: every data/<run>/scans/<stage>_*.npz that is a scan of
+# the module as it is now. A scan is skipped, with a line saying why and the
+# command that rescans it, when it was saved before 6 Nov 2026 (no ray index),
+# is of another stage, or is of the module before it was last regenerated.
+# Scans also record --include, so detection compares against the same parts.
+# Scan with more than one sensor and each feature is measured by whichever
+# capture saw it best. Or name them (then a stale one is an error, not a skip):
+python -m defectgen.detect data/preview_welds --stage post_weld \
+    --scans data/preview_welds/scans/post_weld_profilometer.npz
+
+# What it prints:
+#   the alignment per capture (what it registered to: the housing),
+#   one line per finding: class, size (mm or deg), which feature, where, which capture,
+#   anything no capture saw ("not seen by any capture") -- not passed, just not looked at,
+#   and, if <stage>.labels.json is there, a table per class:
+#     TP     found, right class, right place
+#     FN     a defect it should have found and did not ("missed as" says what it
+#            found there instead, if anything)
+#     FP     a finding with no defect under it
+#     other  a finding on a defect of another class -- usually a real knock-on
+#            effect, e.g. busbars riding high on a carrier a reversed cell lifted
+# The full report goes to data/<run>/detections/<stage>.report.json: every
+# measurement (each terminal's height, each cell's dx/dy/yaw, each gap, each
+# seam's offset/bow/width), not just the findings. The scoring, finding by
+# finding and label by label, goes next to it as <stage>.evaluation.json --
+# that is what Terminal 4 draws.
+#
+# The demo modules stack many defects on purpose; the realistic one has a
+# reversed cell that lifts the carrier ~3 mm and spoils every weld after it.
+# One defect per module is what a detector is judged on (task 1.7 builds that
+# dataset); the demos are for looking at.
+# Thresholds: defectgen/src/defectgen/configs/detect.yaml (tagged S/D/A).
+
+
 ## Regenerate the preview data ##
 # Everything under data/ is generated, not in git. Run these after a fresh
 # clone, or after any change to defectgen, or the viewers show old modules.
@@ -221,6 +301,7 @@ cd ~/projects/MotoBat/defectgen && mb-venv
 pytest -p no:launch_testing -p no:launch_ros            # everything, a few minutes
 pytest -p no:launch_testing -p no:launch_ros -k weld    # only the weld tests
 pytest -p no:launch_testing -p no:launch_ros -k scan    # only the sensor tests
+pytest -p no:launch_testing -p no:launch_ros tests/test_detect.py   # only detection
 # The -p no:... flags matter: with ROS sourced, pytest picks up ROS's own
 # test plugins and dies before running anything.
 

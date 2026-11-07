@@ -9,10 +9,21 @@ disagree, `project_plan.md` is right about *why* and this file is right about
 
 Section references like §4B.1 point into `project_plan.md`.
 
-*Last updated: 1 Nov 2026 — battery and mount CAD exist; task 2.3 started early; wrist sensor
-suite revised (28 Oct).*
+*Last updated: 6 Nov 2026 — 1.4 detection v1; Phase 2 opened as a parallel lane in a second
+worktree.*
 
 ---
+
+> **6 Nov 2026: Phase 2 now runs in parallel, in a second git worktree.**
+> `../MotoBat-arm` on branch `feature/hc10dt_gazebo` takes the Phase 2 tasks that need nothing
+> from Phase 1: 2.1, 2.2, 2.4 and 2.8, plus 1.6 (`motobat_interfaces`, ROS-only). This folder
+> stays on Phase 1. The lanes, which docs each one edits, and the worktree setup are under
+> "How work is sequenced" below and in `project_plan.md` §8.
+
+> **6 Nov 2026: task 1.4 (detection) has a working, reviewed first version**, Phase 1 table below.
+> `python -m defectgen.detect data/<run> --stage <stage>`, findings in RViz with
+> `show_detections.py` (WORKFLOW.md, "Detection"). The ▶ CURRENT TASK block further down still
+> describes 1.1 and is out of date.
 
 > **Tasks 1.1 and 1.2 are done (3 Nov 2026).** `defectgen/` emits all three stages from the real
 > CAD and injects 13 of the 15 in-scope defect classes. 85 tests passing. Current task is now
@@ -138,6 +149,34 @@ each phase unblocks the next:
 **Never trade away** the Phase 1 metrics or the fixed-vs-arm comparison.
 Everything else is presentation around them.
 
+### Two lanes, from 6 Nov 2026
+
+Phase 1 and Phase 2 are only partly sequential. Several Phase 2 tasks need nothing that
+Phase 1 produces. Those tasks are now worked in parallel, in a second
+[git worktree](https://git-scm.com/docs/git-worktree): the same repo, a second folder, its own
+branch. Each lane has its own VS Code window and its own Claude Code session.
+
+| Lane | Folder | Branch | Tasks |
+|---|---|---|---|
+| Phase 1, numpy | `~/projects/MotoBat` | `feature/defect_generation_and_detection` | 1.4 onward (`defectgen/`) |
+| Phase 2, ROS | `~/projects/MotoBat-arm` | `feature/hc10dt_gazebo` (from `315bf90`) | 2.1, 2.2, 2.4, 2.8, and 1.6 |
+
+**What stays sequential:** 2.5 needs 1.5's viewpoints and 2.1. 2.6 needs a decimated mesh
+export from `defectgen`, so that export is Phase 1 lane work. 2.7 needs 2.5 and 1.10.
+
+**Rules that keep the lanes from colliding:**
+- **Docs:** the Phase 1 lane owns this file, `project_plan.md` and `WORKFLOW.md`. The ROS
+  lane edits only the Phase 2 rows here and §4A of the plan. Anything else it needs to record
+  goes in its commit messages or a note that is folded in at merge.
+- **Code:** the ROS lane does not touch `defectgen/`. The shared venv's editable install points
+  at the Phase 1 folder, so `python -m defectgen` always runs that folder's code.
+- **Simulation:** only one lane runs RViz, Gazebo or a heavy `defectgen` job at a time (16 GB
+  of RAM, and both lanes use `ROS_DOMAIN_ID=42`).
+- **Priority:** the Phase 1 metrics still come first. The ROS lane uses time that Phase 1
+  spends waiting on compute (the 1.7 dataset, the 1.11 sweeps).
+- **Merging:** merge the Phase 1 branch to `main` first. The ROS branch's PR then shows only
+  its own commits.
+
 ---
 
 ## Phase 0 — Setup, repair, restructure ✅ COMPLETE
@@ -184,9 +223,9 @@ the contribution.
 | 1.1 | Mesh-native module generator, three stages, `(mesh, labels)` seam | 4B.1 | ✅ 1 Nov 2026 — `defectgen/`, 65 tests passing. Loads the real CAD, normalising each mesh into the §7 frame on the way in. Terminal placement corrected 3 Nov against the Fusion `cell_assembled` (fixlist E1); the module is 151.0 wide. |
 | 1.2 | Defect injection: cell pose, terminal height/tilt, missing cell, reversed polarity, busbar pose/gap, weld seam, adhesive bead, FOD | 4B.2 | ✅ 3 Nov 2026 — `defects.py`, 13 of 15 in-scope classes. Each injector is tagged with the §4B.2 stage it first applies at, so one recipe describes all three stages. **Not done:** class 10 (gap-filler bead — no pre-cell stage exists yet) and class 12 (insulation film — deliberately never modelled as geometry, `module_spec.md` §3). |
 | 1.3 | Three ray-cast sensor models: fixed Ranger3 line-scan, wrist Zivid-class snapshot, wrist LJ-X8200-class profilometer. Both occlusions, dropout, noise; parameters **frozen and hashed before any results**. | 4B.3 | ✅ 4 Nov 2026 — `scan.py`. Two models: laser-line triangulation (LJ-X8200 and Ranger3 share it) and structured-light snapshot (Zivid). Each covers both occlusions, the range window, a grazing-angle cut, and per-material reflectance (`configs/materials.yaml`: diffuse plus Beckmann lobe per band), giving dark and glare dropout on bare Cu/Al. Noise grows as the returned light weakens and with distance². Line-sensor exposure falls as the profile rate rises (up to each sensor's max rate). Height is quantised. The profilometer triangulation angle is **22.0°, measured** from the Keyence model's receiver-window tilt in the flange STEP (was an assumed 23°). **Frozen: params hash `779e2255dc4c`**, pinned in `tests/test_scan.py` and written into every scan. Stated limitations (multipath, speckle, motion during capture, sub-surface scattering, thermal drift): `project_plan.md` §4B.3. Also: Zivid 2D quadrant photos (`--sensor photos`, display render, not frozen) and per-run `data/scan_logs/`. |
-| 1.4 | Detection: align → ICP → per-feature fits within one capture → residual segmentation → classify | 4B.4 | `detect.py` |
+| 1.4 | Detection: align → ICP → per-feature fits within one capture → residual segmentation → classify | 4B.4 | ◐ 6 Nov 2026 — `detect.py`, `fit.py`, `evaluate.py`, `configs/detect.yaml`; maths and measured findings in `project_plan.md` §4B.4 "As built". Every scan is compared ray by ray with a **golden capture** (the same rays cast at the clean module through the same frozen sensor model), and every feature is reported as f(scan) − f(golden). **Alignment registers to the housing, not the whole module.** Whole-module ICP was measured to fail: a 0.3 mm carrier lift dragged the fit 0.3 mm, and XY is barely constrained from above. Every in-scope class except `cover_misalignment` (final stage, not scanned) has a detector, and the clean module gives zero findings at all three stages. `ScanResult` now carries the organised ray index (no numbers changed; hash still `779e2255dc4c`), so **older scans must be rescanned**. Second pass (6 Nov): residuals are now taken against the module **as measured** (every measured part moved to its measured pose and recast), which removed the false alarms parts moving *within* tolerance caused (a 0.1 mm carrier gave 5,321); a capture measures a position only if its sample spacing is ≤ tolerance/2 (§3.7.3), so the Zivid now reports cell/busbar/seam positions as uncovered rather than wrong; scans record what they scanned and stale ones are skipped; reports carry OK/NOK/INCOMPLETE. Open: seam limits from ISO 13919-2 (not sourced); labels below tolerance score as FN (fix in 1.7); weld drift on the line-scan is marginal under a fixture error (one clean stitch 0.144 vs 0.10). 143 tests pass. Not yet: P/R with intervals over a seeded dataset (1.7–1.8). |
 | 1.5 | Coverage metric + greedy view selection (no kinematics yet) | 4B.5 | `coverage.py` |
-| 1.6 | `motobat_interfaces`: `DefectReport`, `ScanResult`, `CorrectionCmd` | §7 | first ROS package |
+| 1.6 | `motobat_interfaces`: `DefectReport`, `ScanResult`, `CorrectionCmd` | §7 | first ROS package. **ROS lane** (6 Nov 2026): it needs no `defectgen` code, and 1.4's output now fixes what a report contains |
 | 1.7 | Labelled dataset, **several seeds per (class × severity) cell** | 4B.6 | seeded, not committed |
 | 1.8 | **Precision/recall per class, with confidence intervals** | 4B.6 | |
 | 1.9 | **%GRR** for terminal height, cell position, busbar gap | 4B.6 | automotive MSA form |
@@ -209,6 +248,10 @@ from the MDPI paper itself.
 ---
 
 ## Phase 2 — HC10DT inspection in Gazebo
+
+> **Running in parallel from 6 Nov 2026**, in `../MotoBat-arm` on `feature/hc10dt_gazebo`
+> (see "Two lanes" above). Open now: **2.1, 2.2, 2.4, 2.8**. 2.3 is already in progress
+> (Fusion). 2.5–2.7 wait on Phase 1.
 
 | # | Task | § | Notes |
 |---|---|---|---|

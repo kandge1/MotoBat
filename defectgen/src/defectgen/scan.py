@@ -214,6 +214,19 @@ class ScanResult:
     # sensor is; these are how it was driven, and are meant to be varied.
     settings: dict = field(default_factory=dict)
     rays: int = 0
+    # The organised layout a real sensor returns: which ray each point came
+    # from, as a flat index into `grid` -- (profiles, points per profile) for a
+    # line sensor, (rows, columns) of cast pixels for the snapshot. Detection
+    # (detect.py) compares a scan ray by ray with the same rays cast at the
+    # clean reference. Adds no information about the scene: an LJ-X profile
+    # and a Zivid organised cloud both carry it.
+    index: np.ndarray | None = None    # (N,) int64
+    grid: tuple | None = None
+    # What was scanned: run directory, stage, groups put back (--include) and
+    # `labels_fingerprint` of the module at scan time. Detection checks it, so
+    # a scan left over from before the module was regenerated is refused
+    # instead of being scored against the new labels.
+    source: dict = field(default_factory=dict)
 
     def save(self, path: Path | str) -> Path:
         path = Path(path)
@@ -221,11 +234,14 @@ class ScanResult:
         np.savez_compressed(
             path, points=self.points, truth=self.truth, signal=self.signal,
             material=self.material, poses=self.poses,
+            index=self.index if self.index is not None else np.zeros(0, np.int64),
             meta=json.dumps({
                 "sensor": self.sensor, "material_names": self.material_names,
                 "dropped": self.dropped, "params_hash": self.params_hash,
                 "dropped_by_material": self.dropped_by_material,
                 "settings": self.settings, "rays": self.rays,
+                "grid": list(self.grid) if self.grid is not None else None,
+                "source": self.source,
             }),
         )
         trimesh.PointCloud(self.points).export(path.with_suffix(".ply"))
@@ -234,6 +250,37 @@ class ScanResult:
 
             Image.fromarray(self.image).save(path.with_name(path.stem + "_2d.png"))
         return path
+
+    @classmethod
+    def load(cls, path: Path | str) -> "ScanResult":
+        """Read back what `save` wrote. Scans saved before the ray index was
+        recorded come back with `index=None`; rescan them for detection."""
+        z = np.load(path)
+        meta = json.loads(str(z["meta"]))
+        index = z["index"] if "index" in z.files and len(z["index"]) == len(z["points"]) else None
+        grid = tuple(meta["grid"]) if meta.get("grid") else None
+        return cls(meta["sensor"], z["points"], z["truth"], z["signal"], z["material"],
+                   meta["material_names"], z["poses"], meta["dropped"], meta["params_hash"],
+                   dropped_by_material=meta.get("dropped_by_material", {}),
+                   settings=meta.get("settings", {}), rays=meta.get("rays", 0),
+                   index=index, grid=grid, source=meta.get("source", {}))
+
+    @staticmethod
+    def read_meta(path: Path | str) -> dict:
+        """Only the metadata of a saved scan, without loading the points
+        (npz members load lazily), plus `has_index`."""
+        with np.load(path) as z:
+            meta = json.loads(str(z["meta"]))
+            meta["has_index"] = bool(meta.get("grid")) and "index" in z.files
+        return meta
+
+
+def labels_fingerprint(run: Path | str, stage: str) -> str:
+    """Fingerprint of a generated module at one stage: the hash of its labels
+    file, which records every placed part and injected defect. Empty if the
+    run has no labels for that stage."""
+    f = Path(run) / f"{stage}.labels.json"
+    return hashlib.sha256(f.read_bytes()).hexdigest()[:16] if f.is_file() else ""
 
 
 def _drop(dropped: dict, by_mat: dict, reason: str, mask: np.ndarray, mat: np.ndarray, n_mat: int):
@@ -245,7 +292,7 @@ def _drop(dropped: dict, by_mat: dict, reason: str, mask: np.ndarray, mat: np.nd
 
 
 def _finish(name, cfg, materials, scene, pts, normal, mat, to_light, to_cam, along, normals,
-            poses, dropped, sigma, sigma_x_dir=None, sigma_x=0.0, by_mat=None):
+            poses, dropped, sigma, sigma_x_dir=None, sigma_x=0.0, by_mat=None, index=None):
     """Shared tail: reflectance cut, noise, quantisation. `normals` is (2, N)
     standard-normal draws fixed per ray upstream, so the noise on a point does
     not depend on how a sweep was split into chunks."""
@@ -261,6 +308,8 @@ def _finish(name, cfg, materials, scene, pts, normal, mat, to_light, to_cam, alo
     _drop(dropped, by_mat, "glare", glare, mat, n_mat)
     keep = ~dark & ~glare
     pts, s, mat, along, sigma = pts[keep], s[keep], mat[keep], along[keep], sigma[keep]
+    if index is not None:
+        index = index[keep]
     zn, xn = normals[0][keep], normals[1][keep]
     if sigma_x_dir is not None:
         sigma_x_dir = sigma_x_dir[keep]
@@ -275,7 +324,7 @@ def _finish(name, cfg, materials, scene, pts, normal, mat, to_light, to_cam, alo
     noisy += ((np.round(depth / q) * q) - depth)[:, None] * along
 
     return ScanResult(name, noisy, pts, s, mat, scene.material_names, np.array(poses), dropped,
-                      params_hash(), dropped_by_material=by_mat)
+                      params_hash(), dropped_by_material=by_mat, index=index)
 
 
 # -- laser line ------------------------------------------------------------
@@ -348,6 +397,8 @@ def line_scan(scene: Scene, sensor: str, start: np.ndarray, length: float, seed:
         dropped_by_material=by_mat,
         settings=settings,
         rays=rays,
+        index=np.concatenate([p.index for p in parts]),
+        grid=(len(poses), cfg["points"]),
     )
 
 
@@ -400,7 +451,7 @@ def _line_profiles(scene: Scene, cfg: dict, materials: dict, poses: list, seed: 
     sigma = cfg["sigma_z"] * (depth[idx] / d0) ** cfg["noise_distance_exponent"]
     return _finish("", cfg, materials, scene, pts[idx], normal[idx], mat[idx], to_light[idx],
                    to_cam[idx], axis[idx], normals, poses, dropped, sigma, xdir[idx], cfg["sigma_x"],
-                   by_mat=by_mat)
+                   by_mat=by_mat, index=idx.astype(np.int64) + first * n)
 
 
 # -- structured light ------------------------------------------------------
@@ -458,7 +509,9 @@ def snapshot(scene: Scene, pose: np.ndarray, sensor: str = "snapshot", seed: int
     sigma = cfg["point_precision"] * (depth[idx] / cfg["focus_distance"]) ** cfg["precision_exponent"]
     normals = np.random.default_rng(seed).standard_normal((2, len(dirs)))[:, idx]
     result = _finish(sensor, cfg, materials, scene, pts[idx], normal[idx], mat[idx], to_proj[idx],
-                     to_cam[idx], -to_cam[idx], normals, [pose], dropped, sigma, by_mat=by_mat)
+                     to_cam[idx], -to_cam[idx], normals, [pose], dropped, sigma, by_mat=by_mat,
+                     index=idx.astype(np.int64))
+    result.grid = (h, w)
     result.rays = len(dirs)
     result.settings = {"pose_xyz_mm": [float(v) for v in eye], "rays": len(dirs), "seed": seed,
                        "stride": cfg["stride"]}
@@ -639,6 +692,8 @@ def main() -> None:
     info = summary(result)
     _report(info)
     out = args.out or args.run / "scans" / f"{args.stage}_{args.sensor}.npz"
+    result.source = {"run": str(args.run), "stage": args.stage, "include": sorted(args.include),
+                     "labels": labels_fingerprint(args.run, args.stage)}
     t0 = time.perf_counter()
     result.save(out)
     info["files"] = [str(out), str(out.with_suffix(".ply"))] + (

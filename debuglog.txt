@@ -1,107 +1,265 @@
 Terminal 3
 
-python -m defectgen.scan data/preview_welds --sensor profilometer --distance 215
-python -m defectgen.scan data/preview_welds --sensor profilometer --speed 500 --rate 10000
+ewok@titan:~/projects/MotoBat$ cd ~/projects/MotoBat && source motobat_env.sh && mb-venv
+python -m defectgen.scan data/preview_clean --stage pre_busbar --sensor line_scan
+python -m defectgen.detect data/preview_clean --stage pre_busbar     # a clean module: expect no findings
+python -m defectgen.scan data/preview_welds --stage post_weld --sensor line_scan
+python -m defectgen.detect data/preview_welds --stage post_weld      # the weld demo, scored
+23:41:42.549 defectgen.scan line_scan on data/preview_clean / pre_busbar
+23:41:42.554 sensor model: params 779e2255dc4c (configs/sensors.yaml + materials.yaml, frozen)
+23:41:42.554   kind=line, reference_distance=500.0, z_range=50.0, line_width=180.0, points=2560, triangulation_angle=30.0, profile_pitch=0.1, reference_rate=1000.0, max_rate=7000.0, sigma_z=0.01, noise_distance_exponent=2.0, sigma_x=0.02, quantum_z=0.002, band=red, max_incidence=80.0, min_signal=0.02, saturation=4.0, noise_ref_signal=0.5
+23:41:45.304 scene: loaded in 2.7 s; materials in use: aluminium_cap, aluminium_cast, aluminium_sheet, aluminium_terminal, cell_wrap, copper_rolled, copper_weld, foam, pcb, plastic_black
+23:41:45.304 standoff: 500.0 mm above the terminal tops (reference 500, +0.0)
+23:41:45.316 plan: line_scan sweep 365.0 mm at 0.100 mm pitch -> 3651 profiles x 2560 points = 9.3 M rays
+23:41:45.724   profiles   400/3651 ( 11%) | rays   1.02 M | kept   0.62 M (60.3%) | lost: miss 266.6k grazing 13.1k shadow 126.7k | 2.5 M rays/s
+23:41:46.161   profiles   800/3651 ( 22%) | rays   2.05 M | kept   1.42 M (69.3%) | lost: miss 425.0k grazing 33.4k shadow 170.6k | 2.4 M rays/s
+23:41:46.583   profiles  1200/3651 ( 33%) | rays   3.07 M | kept   2.23 M (72.6%) | lost: miss 583.4k grazing 54.8k shadow 202.5k | 2.4 M rays/s
+23:41:47.002   profiles  1600/3651 ( 44%) | rays   4.10 M | kept   3.02 M (73.7%) | lost: miss 741.8k grazing 74.7k shadow 262.3k | 2.4 M rays/s
+23:41:47.436   profiles  2000/3651 ( 55%) | rays   5.12 M | kept   3.83 M (74.7%) | lost: miss 900.2k grazing 96.0k shadow 297.5k | 2.4 M rays/s
+23:41:47.867   profiles  2400/3651 ( 66%) | rays   6.14 M | kept   4.61 M (75.1%) | lost: miss 1058.6k grazing 116.4k shadow 357.3k | 2.4 M rays/s
+23:41:48.300   profiles  2800/3651 ( 77%) | rays   7.17 M | kept   5.42 M (75.6%) | lost: miss 1217.0k grazing 137.3k shadow 392.6k | 2.4 M rays/s
+23:41:48.733   profiles  3200/3651 ( 88%) | rays   8.19 M | kept   6.21 M (75.9%) | lost: miss 1375.4k grazing 158.3k shadow 443.4k | 2.4 M rays/s
+23:41:49.172   profiles  3600/3651 ( 99%) | rays   9.22 M | kept   7.02 M (76.2%) | lost: miss 1533.8k grazing 173.6k shadow 484.0k | 2.4 M rays/s
+23:41:49.201   profiles  3651/3651 (100%) | rays   9.35 M | kept   7.02 M (75.2%) | lost: miss 1664.4k grazing 173.6k shadow 484.0k | 2.4 M rays/s
+23:41:49.272 simulated in 4.0 s
+23:41:49.507 result: line_scan kept 7,024,570 of 9,346,560 rays (75.2%)
+23:41:49.507   lost to miss                  1,664,360  (17.8%)
+23:41:49.507   lost to grazing                 173,586  ( 1.9%)
+23:41:49.507   lost to shadow                  484,044  ( 5.2%)
+23:41:49.507   material                   kept   kept% Z noise um   signal  lost by reason
+23:41:49.507   aluminium_cap         4,193,520   89.7%      10.74    0.573  shadow 483,792
+23:41:49.507   aluminium_terminal    1,903,740   98.4%      21.87    0.105  grazing 30,720, shadow 252
+23:41:49.507   aluminium_cast          435,010  100.0%       9.88    1.024  
+23:41:49.507   foam                    343,200  100.0%      10.25    0.621  
+23:41:49.507   aluminium_sheet         149,100   51.5%       9.84    1.145  grazing 140,490
+23:41:49.507   cell_wrap                     0    0.0%          -        -  grazing 2,376
+23:41:56.336 saved data/preview_clean/scans/pre_busbar_line_scan.npz, data/preview_clean/scans/pre_busbar_line_scan.ply in 6.8 s
+23:41:56.336 data/preview_clean/scans/pre_busbar_line_scan.npz: 7,024,570 points kept of 9,346,560 rays, params 779e2255dc4c -- log and summary in data/scan_logs/20261106_234142_preview_clean_pre_busbar_line_scan/
+captures: pre_busbar_line_scan (7,024,570 pts)
+OK: 0 findings in 23.7 s -> data/preview_clean/detections/pre_busbar.report.json
 
-(venv) ewok@titan:~/projects/MotoBat$ python -m defectgen.scan data/preview_welds --sensor profilometer --distance 215
-python -m defectgen.scan data/preview_welds --sensor profilometer --speed 500 --rate 10000
-17:33:21.982 defectgen.scan profilometer on data/preview_welds / post_weld
-17:33:21.987 sensor model: params 779e2255dc4c (configs/sensors.yaml + materials.yaml, frozen)
-17:33:21.987   kind=line, reference_distance=245.0, z_range=34.0, line_width=72.0, points=3200, triangulation_angle=22.0, profile_pitch=0.05, reference_rate=1000.0, max_rate=16000.0, sigma_z=0.001, noise_distance_exponent=2.0, sigma_x=0.003, quantum_z=0.0005, band=blue, max_incidence=80.0, min_signal=0.02, saturation=4.0, noise_ref_signal=0.5
-17:33:25.314 scene: loaded in 3.3 s; materials in use: aluminium_cap, aluminium_cast, aluminium_sheet, aluminium_terminal, cell_wrap, copper_rolled, copper_weld, foam, pcb, plastic_black
-17:33:25.314 standoff: 215.0 mm above the terminal tops (reference 245, -30.0)
-17:33:25.328 plan: profilometer sweep 335.0 mm at 0.050 mm pitch -> 6701 profiles x 3200 points = 21.4 M rays
-17:33:26.073   profiles   400/6701 (  6%) | rays   1.28 M | kept   0.78 M (61.1%) | lost: miss 268.4k range 24.5k grazing 27.3k shadow 176.7k dark 1.1k | 1.7 M rays/s
-17:33:26.600   profiles   800/6701 ( 12%) | rays   2.56 M | kept   1.73 M (67.5%) | lost: miss 536.8k range 40.1k grazing 52.5k shadow 200.3k dark 1.3k | 2.0 M rays/s
-17:33:27.119   profiles  1200/6701 ( 18%) | rays   3.84 M | kept   2.68 M (69.9%) | lost: miss 805.2k range 55.7k grazing 77.7k shadow 217.1k dark 1.3k | 2.1 M rays/s
-17:33:27.620   profiles  1600/6701 ( 24%) | rays   5.12 M | kept   3.60 M (70.4%) | lost: miss 1073.6k range 71.3k grazing 108.2k shadow 260.5k dark 2.6k | 2.2 M rays/s
-17:33:28.127   profiles  2000/6701 ( 30%) | rays   6.40 M | kept   4.54 M (71.0%) | lost: miss 1342.0k range 86.9k grazing 133.9k shadow 292.4k dark 3.3k | 2.3 M rays/s
-17:33:28.612   profiles  2400/6701 ( 36%) | rays   7.68 M | kept   5.49 M (71.5%) | lost: miss 1610.4k range 102.5k grazing 155.7k shadow 314.9k dark 4.0k | 2.3 M rays/s
-17:33:29.097   profiles  2800/6701 ( 42%) | rays   8.96 M | kept   6.45 M (72.0%) | lost: miss 1878.8k range 118.1k grazing 178.8k shadow 325.0k dark 5.2k | 2.4 M rays/s
-17:33:29.579   profiles  3200/6701 ( 48%) | rays  10.24 M | kept   7.41 M (72.4%) | lost: miss 2147.2k range 133.7k grazing 202.3k shadow 337.8k dark 5.8k | 2.4 M rays/s
-17:33:30.062   profiles  3600/6701 ( 54%) | rays  11.52 M | kept   8.36 M (72.6%) | lost: miss 2415.6k range 149.3k grazing 226.5k shadow 361.3k dark 6.3k | 2.4 M rays/s
-17:33:30.540   profiles  4000/6701 ( 60%) | rays  12.80 M | kept   9.31 M (72.8%) | lost: miss 2684.0k range 164.9k grazing 251.8k shadow 378.1k dark 7.0k | 2.5 M rays/s
-17:33:31.009   profiles  4400/6701 ( 66%) | rays  14.08 M | kept  10.26 M (72.9%) | lost: miss 2952.4k range 180.5k grazing 282.0k shadow 394.4k dark 7.9k | 2.5 M rays/s
-17:33:31.479   profiles  4800/6701 ( 72%) | rays  15.36 M | kept  11.22 M (73.0%) | lost: miss 3220.8k range 196.1k grazing 307.4k shadow 408.1k dark 9.1k | 2.5 M rays/s
-17:33:31.944   profiles  5200/6701 ( 78%) | rays  16.64 M | kept  12.12 M (72.8%) | lost: miss 3489.2k range 211.7k grazing 335.4k shadow 476.8k dark 9.1k | 2.5 M rays/s
-17:33:32.440   profiles  5600/6701 ( 84%) | rays  17.92 M | kept  13.08 M (73.0%) | lost: miss 3757.6k range 227.3k grazing 358.5k shadow 486.8k dark 12.0k | 2.5 M rays/s
-17:33:32.924   profiles  6000/6701 ( 90%) | rays  19.20 M | kept  14.03 M (73.1%) | lost: miss 4026.0k range 242.9k grazing 384.8k shadow 499.4k dark 21.3k | 2.5 M rays/s
-17:33:33.407   profiles  6400/6701 ( 96%) | rays  20.48 M | kept  14.96 M (73.1%) | lost: miss 4294.4k range 258.5k grazing 409.4k shadow 523.2k dark 32.5k | 2.5 M rays/s
-17:33:33.734   profiles  6701/6701 (100%) | rays  21.44 M | kept  15.50 M (72.3%) | lost: miss 4496.4k range 279.2k grazing 430.3k shadow 701.4k dark 40.6k | 2.6 M rays/s
-17:33:34.086 simulated in 8.8 s
-17:33:34.771 result: profilometer kept 15,495,382 of 21,443,200 rays (72.3%)
-17:33:34.771   lost to miss                  4,496,371  (21.0%)
-17:33:34.771   lost to range                   279,195  ( 1.3%)
-17:33:34.771   lost to grazing                 430,252  ( 2.0%)
-17:33:34.771   lost to shadow                  701,371  ( 3.3%)
-17:33:34.771   lost to dark                     40,629  ( 0.2%)
-17:33:34.771   material                   kept   kept% Z noise um   signal  lost by reason
-17:33:34.771   plastic_black         8,551,153   97.3%       1.55    0.123  grazing 167,904, shadow 66,784
-17:33:34.771   copper_rolled         3,051,204   98.7%       0.81    1.253  grazing 8,012, shadow 1,095, dark 31,309
-17:33:34.771   aluminium_terminal    2,707,046   98.2%       0.78    0.663  grazing 13, shadow 50,833
-17:33:34.771   aluminium_cap           570,497   49.5%       0.83    1.465  shadow 582,556
-17:33:34.771   copper_weld             266,624   96.6%       2.40    0.053  grazing 141, shadow 1, dark 9,320
-17:33:34.771   aluminium_sheet         261,339   33.6%       0.76    1.882  range 261,339, grazing 254,182
-17:33:34.771   foam                     75,963   99.9%       0.83    0.622  shadow 102
-17:33:34.771   aluminium_cast           11,556   39.3%       0.75    1.074  range 17,856
-17:33:44.604 saved data/preview_welds/scans/post_weld_profilometer.npz, data/preview_welds/scans/post_weld_profilometer.ply in 9.8 s
-17:33:44.604 data/preview_welds/scans/post_weld_profilometer.npz: 15,495,382 points kept of 21,443,200 rays, params 779e2255dc4c -- log and summary in data/scan_logs/20261106_173321_preview_welds_post_weld_profilometer/
-17:33:45.326 defectgen.scan profilometer on data/preview_welds / post_weld
-17:33:45.331 sensor model: params 779e2255dc4c (configs/sensors.yaml + materials.yaml, frozen)
-17:33:45.331   kind=line, reference_distance=245.0, z_range=34.0, line_width=72.0, points=3200, triangulation_angle=22.0, profile_pitch=0.05, reference_rate=1000.0, max_rate=16000.0, sigma_z=0.001, noise_distance_exponent=2.0, sigma_x=0.003, quantum_z=0.0005, band=blue, max_incidence=80.0, min_signal=0.02, saturation=4.0, noise_ref_signal=0.5
-17:33:46.963 scene: loaded in 1.6 s; materials in use: aluminium_cap, aluminium_cast, aluminium_sheet, aluminium_terminal, cell_wrap, copper_rolled, copper_weld, foam, pcb, plastic_black
-17:33:46.963 standoff: 245.0 mm above the terminal tops (reference 245, +0.0)
-17:33:46.977 plan: profilometer sweep 335.0 mm at 0.050 mm pitch -> 6701 profiles x 3200 points = 21.4 M rays, 500 mm/s at 10000 Hz = 0.67 s of sensor time, exposure x0.10 of the reference
-17:33:47.685   profiles   400/6701 (  6%) | rays   1.28 M | kept   0.37 M (28.8%) | lost: miss 314.8k grazing 21.1k shadow 155.0k dark 420.8k | 1.8 M rays/s
-17:33:48.158   profiles   800/6701 ( 12%) | rays   2.56 M | kept   0.71 M (27.7%) | lost: miss 629.6k grazing 40.7k shadow 175.6k dark 1003.9k | 2.2 M rays/s
-17:33:48.609   profiles  1200/6701 ( 18%) | rays   3.84 M | kept   1.06 M (27.6%) | lost: miss 944.4k grazing 60.3k shadow 190.4k dark 1586.8k | 2.4 M rays/s
-17:33:49.058   profiles  1600/6701 ( 24%) | rays   5.12 M | kept   1.45 M (28.4%) | lost: miss 1259.2k grazing 84.0k shadow 227.5k dark 2097.7k | 2.5 M rays/s
-17:33:49.508   profiles  2000/6701 ( 30%) | rays   6.40 M | kept   1.87 M (29.3%) | lost: miss 1574.0k grazing 103.8k shadow 249.6k dark 2599.1k | 2.5 M rays/s
-17:33:49.966   profiles  2400/6701 ( 36%) | rays   7.68 M | kept   2.22 M (28.9%) | lost: miss 1888.8k grazing 120.8k shadow 269.2k dark 3184.4k | 2.6 M rays/s
-17:33:50.425   profiles  2800/6701 ( 42%) | rays   8.96 M | kept   2.60 M (29.0%) | lost: miss 2203.6k grazing 138.7k shadow 278.0k dark 3741.0k | 2.6 M rays/s
-17:33:50.891   profiles  3200/6701 ( 48%) | rays  10.24 M | kept   2.99 M (29.2%) | lost: miss 2518.4k grazing 156.9k shadow 289.0k dark 4286.8k | 2.6 M rays/s
-17:33:51.348   profiles  3600/6701 ( 54%) | rays  11.52 M | kept   3.33 M (28.9%) | lost: miss 2833.2k grazing 175.7k shadow 309.5k dark 4868.7k | 2.6 M rays/s
-17:33:51.816   profiles  4000/6701 ( 60%) | rays  12.80 M | kept   3.68 M (28.7%) | lost: miss 3148.0k grazing 195.4k shadow 324.3k dark 5455.5k | 2.6 M rays/s
-17:33:52.281   profiles  4400/6701 ( 66%) | rays  14.08 M | kept   4.09 M (29.0%) | lost: miss 3462.8k grazing 218.8k shadow 338.4k dark 5970.6k | 2.7 M rays/s
-17:33:52.736   profiles  4800/6701 ( 72%) | rays  15.36 M | kept   4.44 M (28.9%) | lost: miss 3777.6k grazing 238.5k shadow 350.2k dark 6558.0k | 2.7 M rays/s
-17:33:53.186   profiles  5200/6701 ( 78%) | rays  16.64 M | kept   4.83 M (29.0%) | lost: miss 4092.4k grazing 260.2k shadow 403.9k dark 7052.7k | 2.7 M rays/s
-17:33:53.657   profiles  5600/6701 ( 84%) | rays  17.92 M | kept   5.21 M (29.1%) | lost: miss 4407.2k grazing 278.1k shadow 412.7k dark 7608.7k | 2.7 M rays/s
-17:33:54.137   profiles  6000/6701 ( 90%) | rays  19.20 M | kept   5.59 M (29.1%) | lost: miss 4722.0k grazing 298.6k shadow 423.5k dark 8164.6k | 2.7 M rays/s
-17:33:54.630   profiles  6400/6701 ( 96%) | rays  20.48 M | kept   5.93 M (29.0%) | lost: miss 5036.8k grazing 318.1k shadow 444.0k dark 8751.6k | 2.7 M rays/s
-17:33:54.989   profiles  6701/6701 (100%) | rays  21.44 M | kept   6.22 M (29.0%) | lost: miss 5273.7k grazing 334.4k shadow 589.5k dark 9024.9k | 2.7 M rays/s
-17:33:55.063 simulated in 8.1 s
-17:33:55.329 result: profilometer kept 6,220,684 of 21,443,200 rays (29.0%)
-17:33:55.329   lost to miss                  5,273,687  (24.6%)
-17:33:55.329   lost to grazing                 334,391  ( 1.6%)
-17:33:55.329   lost to shadow                  589,550  ( 2.7%)
-17:33:55.329   lost to dark                  9,024,888  (42.1%)
-17:33:55.329   material                   kept   kept% Z noise um   signal  lost by reason
-17:33:55.329   copper_rolled         2,649,796   97.9%       1.76    0.156  grazing 6,875, shadow 796, dark 50,093
-17:33:55.329   aluminium_terminal    2,385,869   98.4%       1.98    0.129  grazing 10, shadow 39,666
-17:33:55.329   aluminium_cap           553,399   53.0%       1.60    0.218  shadow 490,376
-17:33:55.329   aluminium_sheet         455,668   70.1%       1.47    0.218  grazing 193,981
-17:33:55.329   copper_weld              80,282   33.1%       2.58    0.107  grazing 133, shadow 1, dark 162,161
-17:33:55.329   foam                     67,530   99.9%       2.99    0.062  shadow 52
-17:33:55.329   aluminium_cast           28,140  100.0%       2.07    0.110  
-17:33:55.329   plastic_black                 0    0.0%          -        -  grazing 133,392, shadow 58,659, dark 8,812,634
-17:33:58.984 saved data/preview_welds/scans/post_weld_profilometer.npz, data/preview_welds/scans/post_weld_profilometer.ply in 3.7 s
-17:33:58.984 data/preview_welds/scans/post_weld_profilometer.npz: 6,220,684 points kept of 21,443,200 rays, params 779e2255dc4c -- log and summary in data/scan_logs/20261106_173345_preview_welds_post_weld_profilometer/
+evaluation (pre_busbar): class              TP  FN  FP  other  missed as
+  total (in scope)                 0   0   0     0  (0 labels belong to other stages, 0 are internal)
+23:42:22.393 defectgen.scan line_scan on data/preview_welds / post_weld
+23:42:22.398 sensor model: params 779e2255dc4c (configs/sensors.yaml + materials.yaml, frozen)
+23:42:22.399   kind=line, reference_distance=500.0, z_range=50.0, line_width=180.0, points=2560, triangulation_angle=30.0, profile_pitch=0.1, reference_rate=1000.0, max_rate=7000.0, sigma_z=0.01, noise_distance_exponent=2.0, sigma_x=0.02, quantum_z=0.002, band=red, max_incidence=80.0, min_signal=0.02, saturation=4.0, noise_ref_signal=0.5
+23:42:24.088 scene: loaded in 1.7 s; materials in use: aluminium_cap, aluminium_cast, aluminium_sheet, aluminium_terminal, cell_wrap, copper_rolled, copper_weld, foam, pcb, plastic_black
+23:42:24.088 standoff: 500.0 mm above the terminal tops (reference 500, +0.0)
+23:42:24.099 plan: line_scan sweep 365.0 mm at 0.100 mm pitch -> 3651 profiles x 2560 points = 9.3 M rays
+23:42:24.777   profiles   400/3651 ( 11%) | rays   1.02 M | kept   0.65 M (63.5%) | lost: miss 266.6k grazing 18.5k shadow 88.3k dark 0.2k glare 0.5k | 1.5 M rays/s
+23:42:25.240   profiles   800/3651 ( 22%) | rays   2.05 M | kept   1.47 M (72.0%) | lost: miss 425.0k grazing 46.9k shadow 100.0k dark 0.2k glare 1.0k | 1.8 M rays/s
+23:42:25.682   profiles  1200/3651 ( 33%) | rays   3.07 M | kept   2.29 M (74.6%) | lost: miss 583.4k grazing 78.3k shadow 117.7k dark 0.5k glare 1.8k | 1.9 M rays/s
+23:42:26.119   profiles  1600/3651 ( 44%) | rays   4.10 M | kept   3.11 M (76.0%) | lost: miss 741.8k grazing 106.1k shadow 133.2k dark 0.6k glare 2.1k | 2.0 M rays/s
+23:42:26.686   profiles  2000/3651 ( 55%) | rays   5.12 M | kept   3.93 M (76.7%) | lost: miss 900.2k grazing 137.4k shadow 151.3k dark 0.9k glare 2.9k | 2.0 M rays/s
+23:42:27.443   profiles  2400/3651 ( 66%) | rays   6.14 M | kept   4.75 M (77.3%) | lost: miss 1058.6k grazing 166.2k shadow 166.4k dark 1.0k glare 3.5k | 1.8 M rays/s
+23:42:28.365   profiles  2800/3651 ( 77%) | rays   7.17 M | kept   5.56 M (77.6%) | lost: miss 1217.0k grazing 196.7k shadow 187.4k dark 1.4k glare 4.2k | 1.7 M rays/s
+23:42:29.205   profiles  3200/3651 ( 88%) | rays   8.19 M | kept   6.38 M (77.9%) | lost: miss 1375.4k grazing 227.0k shadow 198.6k dark 3.8k glare 4.8k | 1.6 M rays/s
+23:42:29.869   profiles  3600/3651 ( 99%) | rays   9.22 M | kept   7.16 M (77.7%) | lost: miss 1533.8k grazing 248.8k shadow 261.4k dark 6.4k glare 5.0k | 1.6 M rays/s
+23:42:29.909   profiles  3651/3651 (100%) | rays   9.35 M | kept   7.16 M (76.6%) | lost: miss 1664.4k grazing 248.8k shadow 261.4k dark 6.4k glare 5.0k | 1.6 M rays/s
+23:42:30.005 simulated in 5.9 s
+23:42:30.392 result: line_scan kept 7,160,578 of 9,346,560 rays (76.6%)
+23:42:30.392   lost to miss                  1,664,360  (17.8%)
+23:42:30.392   lost to grazing                 248,794  ( 2.7%)
+23:42:30.392   lost to shadow                  261,391  ( 2.8%)
+23:42:30.392   lost to dark                      6,402  ( 0.1%)
+23:42:30.392   lost to glare                     5,035  ( 0.1%)
+23:42:30.392   material                   kept   kept% Z noise um   signal  lost by reason
+23:42:30.392   plastic_black         4,784,788   96.9%      20.63    0.119  grazing 93,870, shadow 61,306
+23:42:30.392   copper_rolled           887,604   98.0%      10.14    0.983  grazing 12,634, shadow 266, dark 4,832, glare 228
+23:42:30.392   aluminium_terminal      733,626   95.7%      22.71    0.103  grazing 20,216, shadow 12,542
+23:42:30.392   aluminium_cast          435,010  100.0%       9.88    1.024  
+23:42:30.392   aluminium_sheet         149,100   55.2%       9.84    1.145  grazing 121,248
+23:42:30.392   aluminium_cap            79,803   29.9%      11.52    0.410  shadow 187,277
+23:42:30.392   copper_weld              75,887   91.3%      33.54    0.040  grazing 826, dark 1,570, glare 4,807
+23:42:30.392   foam                     14,760  100.0%      10.25    0.619  
+23:42:41.099 saved data/preview_welds/scans/post_weld_line_scan.npz, data/preview_welds/scans/post_weld_line_scan.ply in 10.7 s
+23:42:41.099 data/preview_welds/scans/post_weld_line_scan.npz: 7,160,578 points kept of 9,346,560 rays, params 779e2255dc4c -- log and summary in data/scan_logs/20261106_234222_preview_welds_post_weld_line_scan/
+skipping post_weld_profilometer.npz: saved before scans recorded their ray index -- rescan it: python -m defectgen.scan data/preview_welds --stage post_weld --sensor profilometer
+skipping post_weld_snapshot.npz: saved before scans recorded their ray index -- rescan it: python -m defectgen.scan data/preview_welds --stage post_weld --sensor snapshot
+captures: post_weld_line_scan (7,160,578 pts)
+NOK: 34 findings in 52.4 s -> data/preview_welds/detections/post_weld.report.json
+  busbar_liftoff         1.009  busbar 4                            at (154.0, 57.5, 101.0)  [post_weld_line_scan]
+  missing_weld           1.000  seam 2 (busbar 0, pin 2)            at (-126.0, -60.0, 102.5)  [post_weld_line_scan]
+  missing_weld           1.000  seam 3 (busbar 0, pin 2)            at (-126.0, -55.0, 102.5)  [post_weld_line_scan]
+  short_weld             0.489  seam 8 (busbar 0, pin 5)            at (-42.0, -60.0, 102.5)  [post_weld_line_scan]
+  short_weld             0.489  seam 9 (busbar 0, pin 5)            at (-42.0, -55.0, 102.5)  [post_weld_line_scan]
+  weld_path_drift        0.409  seam 16 (busbar 1, pin 19)          at (-14.0, 55.0, 102.5)  [post_weld_line_scan]
+  weld_path_drift        0.372  seam 17 (busbar 1, pin 19)          at (-14.0, 60.0, 102.5)  [post_weld_line_scan]
+  seam_deviation         0.588  seam 20 (busbar 1, pin 17)          at (42.0, 55.0, 102.5)  [post_weld_line_scan]
+  seam_deviation         0.611  seam 21 (busbar 1, pin 17)          at (42.0, 60.0, 102.5)  [post_weld_line_scan]
+  weld_arc               0.581  seam 28 (busbar 2, pin 9)           at (70.0, -60.0, 102.5)  [post_weld_line_scan]
+  weld_arc               0.626  seam 29 (busbar 2, pin 9)           at (70.0, -55.0, 102.5)  [post_weld_line_scan]
+  weld_arc               0.155  seam 32 (busbar 2, pin 11)          at (126.0, -60.0, 102.5)  [post_weld_line_scan]
+  width_deviation        1.768  seam 32 (busbar 2, pin 11)          at (126.0, -60.0, 102.5)  [post_weld_line_scan]
+  weld_arc               0.179  seam 33 (busbar 2, pin 11)          at (126.0, -55.0, 102.5)  [post_weld_line_scan]
+  width_deviation        1.775  seam 33 (busbar 2, pin 11)          at (126.0, -55.0, 102.5)  [post_weld_line_scan]
+  reinforcement         -0.129  seam 38 (busbar 3, pin 23)          at (-126.0, 55.0, 102.5)  [post_weld_line_scan]
+  reinforcement         -0.125  seam 39 (busbar 3, pin 23)          at (-126.0, 60.0, 102.5)  [post_weld_line_scan]
+  weld_underfill         0.107  seam 42 (busbar 4, pin 15)          at (100.5, 55.0, 102.5)  [post_weld_line_scan]
+  weld_underfill         0.513  seam 44 (busbar 4, pin 14)          at (126.0, 55.0, 102.5)  [post_weld_line_scan]
+  weld_undercut          0.127  seam 44 (busbar 4, pin 14)          at (126.0, 55.0, 102.5)  [post_weld_line_scan]
+  weld_underfill         0.510  seam 45 (busbar 4, pin 14)          at (126.0, 60.0, 102.5)  [post_weld_line_scan]
+  weld_undercut          0.134  seam 45 (busbar 4, pin 14)          at (126.0, 60.0, 102.5)  [post_weld_line_scan]
+  weld_underfill         0.944  seam 46 (busbar 4, pin 13)          at (151.5, 55.0, 102.5)  [post_weld_line_scan]
+  burn_through           1.000  seam 46 (busbar 4, pin 13)          at (151.5, 55.0, 102.5)  [post_weld_line_scan]
+  weld_underfill         0.955  seam 47 (busbar 4, pin 13)          at (151.5, 60.0, 102.5)  [post_weld_line_scan]
+  burn_through           1.000  seam 47 (busbar 4, pin 13)          at (151.5, 60.0, 102.5)  [post_weld_line_scan]
+  spatter                0.308  raised region on copper_rolled      at (-155.5, -57.9, 102.7)  [post_weld_line_scan]
+  spatter                0.318  raised region on aluminium_terminal  at (-149.0, -48.7, 101.3)  [post_weld_line_scan]
+  spatter                0.308  raised region on copper_rolled      at (-104.7, 52.4, 102.7)  [post_weld_line_scan]
+  spatter                0.284  raised region on aluminium_terminal  at (-98.8, -46.8, 101.2)  [post_weld_line_scan]
+  spatter                0.374  raised region on aluminium_terminal  at (-49.5, 50.6, 101.3)  [post_weld_line_scan]
+  spatter                0.298  raised region on aluminium_cap      at (2.5, -56.3, 95.2)  [post_weld_line_scan]
+  spatter                0.320  raised region on copper_rolled      at (15.5, -51.7, 102.7)  [post_weld_line_scan]
+  spatter                0.332  raised region on copper_rolled      at (95.3, -53.7, 102.8)  [post_weld_line_scan]
+
+evaluation (post_weld): class              TP  FN  FP  other  missed as
+  burn_through                     2   0   0     0  
+  busbar_liftoff                   1   0   0     0  
+  missing_weld                     2   0   0     0  
+  reinforcement                    2   0   0     0  
+  seam_deviation                   2   0   0     0  
+  short_weld                       2   0   0     0  
+  spatter                          8   7   0     0  spatter, weld_path_drift, nothing, reinforcement, busbar_liftoff, weld_arc, burn_through/busbar_liftoff/weld_underfill
+  weld_arc                         2   0   0     2  
+  weld_path_drift                  2   0   0     0  
+  weld_undercut                    2   4   0     0  busbar_liftoff/weld_underfill, busbar_liftoff, burn_through/busbar_liftoff/weld_underfill, burn_through/busbar_liftoff/weld_underfill
+  weld_underfill                   5   1   0     0  busbar_liftoff
+  width_deviation                  2   0   0     0  
+  total (in scope)                31  12   0     2  (1 labels belong to other stages, 4 are internal)
 (venv) ewok@titan:~/projects/MotoBat$ 
 
 
 
-Terminal 4
+terminal 4
 
-^Cewok@titan:~/projects/MotoBat$ /usr/bin/python3 src/motobat_description/scripts/show_scan.py data/preview_welds/scans/post_weld_*.npz --side-by-side --colour signal
-[WARN] [1794004508.810438156] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
-[WARN] [1794004508.810449915] [rcl]: 'localhost_only' is disabled, 'automatic_discovery_range' and 'static_peers' will be used.
-[INFO] [1794004510.743797939] [show_scan]: post_weld_line_scan.npz: line_scan 7160578 points (showing 2000000), dropped {'miss': 1664360, 'range': 0, 'grazing': 248794, 'shadow': 261391, 'dark': 6402, 'glare': 5035}, params 779e2255dc4c -> /defectgen/scan/line_scan
-[INFO] [1794004512.305293639] [show_scan]: post_weld_profilometer.npz: profilometer 6220684 points (showing 2000000), dropped {'miss': 5273687, 'range': 0, 'grazing': 334391, 'shadow': 589550, 'dark': 9024888, 'glare': 0}, params 779e2255dc4c -> /defectgen/scan/profilometer
-[INFO] [1794004512.414799135] [show_scan]: post_weld_snapshot.npz: snapshot 203007 points (showing 203007), dropped {'miss': 1029768, 'range': 0, 'outside_projector': 0, 'grazing': 4691, 'shadow': 4396, 'dark': 1146, 'glare': 10368}, params 779e2255dc4c -> /defectgen/scan/snapshot
-[INFO] [1794004512.433945383] [show_scan]: post_weld_snapshot_2d.png -> /defectgen/snapshot_2d
-[INFO] [1794004512.499570688] [show_scan]: post_weld_photos_annotated.png -> /defectgen/photos
-[INFO] [1794004512.499796971] [show_scan]: Ctrl-C to stop; clouds stay in RViz until another run replaces them.
-^Cewok@titan:~/projects/MotoBat$ 
+ewok@titan:~/projects/MotoBat$ cd ~/projects/MotoBat && source motobat_env.sh && mb-venv
+python -m defectgen.scan data/preview_clean --stage pre_busbar --sensor line_scan
+python -m defectgen.detect data/preview_clean --stage pre_busbar     # a clean module: expect no findings
+python -m defectgen.scan data/preview_welds --stage post_weld --sensor line_scan
+python -m defectgen.detect data/preview_welds --stage post_weld      # the weld demo, scored
+23:41:42.549 defectgen.scan line_scan on data/preview_clean / pre_busbar
+23:41:42.554 sensor model: params 779e2255dc4c (configs/sensors.yaml + materials.yaml, frozen)
+23:41:42.554   kind=line, reference_distance=500.0, z_range=50.0, line_width=180.0, points=2560, triangulation_angle=30.0, profile_pitch=0.1, reference_rate=1000.0, max_rate=7000.0, sigma_z=0.01, noise_distance_exponent=2.0, sigma_x=0.02, quantum_z=0.002, band=red, max_incidence=80.0, min_signal=0.02, saturation=4.0, noise_ref_signal=0.5
+23:41:45.304 scene: loaded in 2.7 s; materials in use: aluminium_cap, aluminium_cast, aluminium_sheet, aluminium_terminal, cell_wrap, copper_rolled, copper_weld, foam, pcb, plastic_black
+23:41:45.304 standoff: 500.0 mm above the terminal tops (reference 500, +0.0)
+23:41:45.316 plan: line_scan sweep 365.0 mm at 0.100 mm pitch -> 3651 profiles x 2560 points = 9.3 M rays
+23:41:45.724   profiles   400/3651 ( 11%) | rays   1.02 M | kept   0.62 M (60.3%) | lost: miss 266.6k grazing 13.1k shadow 126.7k | 2.5 M rays/s
+23:41:46.161   profiles   800/3651 ( 22%) | rays   2.05 M | kept   1.42 M (69.3%) | lost: miss 425.0k grazing 33.4k shadow 170.6k | 2.4 M rays/s
+23:41:46.583   profiles  1200/3651 ( 33%) | rays   3.07 M | kept   2.23 M (72.6%) | lost: miss 583.4k grazing 54.8k shadow 202.5k | 2.4 M rays/s
+23:41:47.002   profiles  1600/3651 ( 44%) | rays   4.10 M | kept   3.02 M (73.7%) | lost: miss 741.8k grazing 74.7k shadow 262.3k | 2.4 M rays/s
+23:41:47.436   profiles  2000/3651 ( 55%) | rays   5.12 M | kept   3.83 M (74.7%) | lost: miss 900.2k grazing 96.0k shadow 297.5k | 2.4 M rays/s
+23:41:47.867   profiles  2400/3651 ( 66%) | rays   6.14 M | kept   4.61 M (75.1%) | lost: miss 1058.6k grazing 116.4k shadow 357.3k | 2.4 M rays/s
+23:41:48.300   profiles  2800/3651 ( 77%) | rays   7.17 M | kept   5.42 M (75.6%) | lost: miss 1217.0k grazing 137.3k shadow 392.6k | 2.4 M rays/s
+23:41:48.733   profiles  3200/3651 ( 88%) | rays   8.19 M | kept   6.21 M (75.9%) | lost: miss 1375.4k grazing 158.3k shadow 443.4k | 2.4 M rays/s
+23:41:49.172   profiles  3600/3651 ( 99%) | rays   9.22 M | kept   7.02 M (76.2%) | lost: miss 1533.8k grazing 173.6k shadow 484.0k | 2.4 M rays/s
+23:41:49.201   profiles  3651/3651 (100%) | rays   9.35 M | kept   7.02 M (75.2%) | lost: miss 1664.4k grazing 173.6k shadow 484.0k | 2.4 M rays/s
+23:41:49.272 simulated in 4.0 s
+23:41:49.507 result: line_scan kept 7,024,570 of 9,346,560 rays (75.2%)
+23:41:49.507   lost to miss                  1,664,360  (17.8%)
+23:41:49.507   lost to grazing                 173,586  ( 1.9%)
+23:41:49.507   lost to shadow                  484,044  ( 5.2%)
+23:41:49.507   material                   kept   kept% Z noise um   signal  lost by reason
+23:41:49.507   aluminium_cap         4,193,520   89.7%      10.74    0.573  shadow 483,792
+23:41:49.507   aluminium_terminal    1,903,740   98.4%      21.87    0.105  grazing 30,720, shadow 252
+23:41:49.507   aluminium_cast          435,010  100.0%       9.88    1.024  
+23:41:49.507   foam                    343,200  100.0%      10.25    0.621  
+23:41:49.507   aluminium_sheet         149,100   51.5%       9.84    1.145  grazing 140,490
+23:41:49.507   cell_wrap                     0    0.0%          -        -  grazing 2,376
+23:41:56.336 saved data/preview_clean/scans/pre_busbar_line_scan.npz, data/preview_clean/scans/pre_busbar_line_scan.ply in 6.8 s
+23:41:56.336 data/preview_clean/scans/pre_busbar_line_scan.npz: 7,024,570 points kept of 9,346,560 rays, params 779e2255dc4c -- log and summary in data/scan_logs/20261106_234142_preview_clean_pre_busbar_line_scan/
+captures: pre_busbar_line_scan (7,024,570 pts)
+OK: 0 findings in 23.7 s -> data/preview_clean/detections/pre_busbar.report.json
 
+evaluation (pre_busbar): class              TP  FN  FP  other  missed as
+  total (in scope)                 0   0   0     0  (0 labels belong to other stages, 0 are internal)
+23:42:22.393 defectgen.scan line_scan on data/preview_welds / post_weld
+23:42:22.398 sensor model: params 779e2255dc4c (configs/sensors.yaml + materials.yaml, frozen)
+23:42:22.399   kind=line, reference_distance=500.0, z_range=50.0, line_width=180.0, points=2560, triangulation_angle=30.0, profile_pitch=0.1, reference_rate=1000.0, max_rate=7000.0, sigma_z=0.01, noise_distance_exponent=2.0, sigma_x=0.02, quantum_z=0.002, band=red, max_incidence=80.0, min_signal=0.02, saturation=4.0, noise_ref_signal=0.5
+23:42:24.088 scene: loaded in 1.7 s; materials in use: aluminium_cap, aluminium_cast, aluminium_sheet, aluminium_terminal, cell_wrap, copper_rolled, copper_weld, foam, pcb, plastic_black
+23:42:24.088 standoff: 500.0 mm above the terminal tops (reference 500, +0.0)
+23:42:24.099 plan: line_scan sweep 365.0 mm at 0.100 mm pitch -> 3651 profiles x 2560 points = 9.3 M rays
+23:42:24.777   profiles   400/3651 ( 11%) | rays   1.02 M | kept   0.65 M (63.5%) | lost: miss 266.6k grazing 18.5k shadow 88.3k dark 0.2k glare 0.5k | 1.5 M rays/s
+23:42:25.240   profiles   800/3651 ( 22%) | rays   2.05 M | kept   1.47 M (72.0%) | lost: miss 425.0k grazing 46.9k shadow 100.0k dark 0.2k glare 1.0k | 1.8 M rays/s
+23:42:25.682   profiles  1200/3651 ( 33%) | rays   3.07 M | kept   2.29 M (74.6%) | lost: miss 583.4k grazing 78.3k shadow 117.7k dark 0.5k glare 1.8k | 1.9 M rays/s
+23:42:26.119   profiles  1600/3651 ( 44%) | rays   4.10 M | kept   3.11 M (76.0%) | lost: miss 741.8k grazing 106.1k shadow 133.2k dark 0.6k glare 2.1k | 2.0 M rays/s
+23:42:26.686   profiles  2000/3651 ( 55%) | rays   5.12 M | kept   3.93 M (76.7%) | lost: miss 900.2k grazing 137.4k shadow 151.3k dark 0.9k glare 2.9k | 2.0 M rays/s
+23:42:27.443   profiles  2400/3651 ( 66%) | rays   6.14 M | kept   4.75 M (77.3%) | lost: miss 1058.6k grazing 166.2k shadow 166.4k dark 1.0k glare 3.5k | 1.8 M rays/s
+23:42:28.365   profiles  2800/3651 ( 77%) | rays   7.17 M | kept   5.56 M (77.6%) | lost: miss 1217.0k grazing 196.7k shadow 187.4k dark 1.4k glare 4.2k | 1.7 M rays/s
+23:42:29.205   profiles  3200/3651 ( 88%) | rays   8.19 M | kept   6.38 M (77.9%) | lost: miss 1375.4k grazing 227.0k shadow 198.6k dark 3.8k glare 4.8k | 1.6 M rays/s
+23:42:29.869   profiles  3600/3651 ( 99%) | rays   9.22 M | kept   7.16 M (77.7%) | lost: miss 1533.8k grazing 248.8k shadow 261.4k dark 6.4k glare 5.0k | 1.6 M rays/s
+23:42:29.909   profiles  3651/3651 (100%) | rays   9.35 M | kept   7.16 M (76.6%) | lost: miss 1664.4k grazing 248.8k shadow 261.4k dark 6.4k glare 5.0k | 1.6 M rays/s
+23:42:30.005 simulated in 5.9 s
+23:42:30.392 result: line_scan kept 7,160,578 of 9,346,560 rays (76.6%)
+23:42:30.392   lost to miss                  1,664,360  (17.8%)
+23:42:30.392   lost to grazing                 248,794  ( 2.7%)
+23:42:30.392   lost to shadow                  261,391  ( 2.8%)
+23:42:30.392   lost to dark                      6,402  ( 0.1%)
+23:42:30.392   lost to glare                     5,035  ( 0.1%)
+23:42:30.392   material                   kept   kept% Z noise um   signal  lost by reason
+23:42:30.392   plastic_black         4,784,788   96.9%      20.63    0.119  grazing 93,870, shadow 61,306
+23:42:30.392   copper_rolled           887,604   98.0%      10.14    0.983  grazing 12,634, shadow 266, dark 4,832, glare 228
+23:42:30.392   aluminium_terminal      733,626   95.7%      22.71    0.103  grazing 20,216, shadow 12,542
+23:42:30.392   aluminium_cast          435,010  100.0%       9.88    1.024  
+23:42:30.392   aluminium_sheet         149,100   55.2%       9.84    1.145  grazing 121,248
+23:42:30.392   aluminium_cap            79,803   29.9%      11.52    0.410  shadow 187,277
+23:42:30.392   copper_weld              75,887   91.3%      33.54    0.040  grazing 826, dark 1,570, glare 4,807
+23:42:30.392   foam                     14,760  100.0%      10.25    0.619  
+23:42:41.099 saved data/preview_welds/scans/post_weld_line_scan.npz, data/preview_welds/scans/post_weld_line_scan.ply in 10.7 s
+23:42:41.099 data/preview_welds/scans/post_weld_line_scan.npz: 7,160,578 points kept of 9,346,560 rays, params 779e2255dc4c -- log and summary in data/scan_logs/20261106_234222_preview_welds_post_weld_line_scan/
+skipping post_weld_profilometer.npz: saved before scans recorded their ray index -- rescan it: python -m defectgen.scan data/preview_welds --stage post_weld --sensor profilometer
+skipping post_weld_snapshot.npz: saved before scans recorded their ray index -- rescan it: python -m defectgen.scan data/preview_welds --stage post_weld --sensor snapshot
+captures: post_weld_line_scan (7,160,578 pts)
+NOK: 34 findings in 52.4 s -> data/preview_welds/detections/post_weld.report.json
+  busbar_liftoff         1.009  busbar 4                            at (154.0, 57.5, 101.0)  [post_weld_line_scan]
+  missing_weld           1.000  seam 2 (busbar 0, pin 2)            at (-126.0, -60.0, 102.5)  [post_weld_line_scan]
+  missing_weld           1.000  seam 3 (busbar 0, pin 2)            at (-126.0, -55.0, 102.5)  [post_weld_line_scan]
+  short_weld             0.489  seam 8 (busbar 0, pin 5)            at (-42.0, -60.0, 102.5)  [post_weld_line_scan]
+  short_weld             0.489  seam 9 (busbar 0, pin 5)            at (-42.0, -55.0, 102.5)  [post_weld_line_scan]
+  weld_path_drift        0.409  seam 16 (busbar 1, pin 19)          at (-14.0, 55.0, 102.5)  [post_weld_line_scan]
+  weld_path_drift        0.372  seam 17 (busbar 1, pin 19)          at (-14.0, 60.0, 102.5)  [post_weld_line_scan]
+  seam_deviation         0.588  seam 20 (busbar 1, pin 17)          at (42.0, 55.0, 102.5)  [post_weld_line_scan]
+  seam_deviation         0.611  seam 21 (busbar 1, pin 17)          at (42.0, 60.0, 102.5)  [post_weld_line_scan]
+  weld_arc               0.581  seam 28 (busbar 2, pin 9)           at (70.0, -60.0, 102.5)  [post_weld_line_scan]
+  weld_arc               0.626  seam 29 (busbar 2, pin 9)           at (70.0, -55.0, 102.5)  [post_weld_line_scan]
+  weld_arc               0.155  seam 32 (busbar 2, pin 11)          at (126.0, -60.0, 102.5)  [post_weld_line_scan]
+  width_deviation        1.768  seam 32 (busbar 2, pin 11)          at (126.0, -60.0, 102.5)  [post_weld_line_scan]
+  weld_arc               0.179  seam 33 (busbar 2, pin 11)          at (126.0, -55.0, 102.5)  [post_weld_line_scan]
+  width_deviation        1.775  seam 33 (busbar 2, pin 11)          at (126.0, -55.0, 102.5)  [post_weld_line_scan]
+  reinforcement         -0.129  seam 38 (busbar 3, pin 23)          at (-126.0, 55.0, 102.5)  [post_weld_line_scan]
+  reinforcement         -0.125  seam 39 (busbar 3, pin 23)          at (-126.0, 60.0, 102.5)  [post_weld_line_scan]
+  weld_underfill         0.107  seam 42 (busbar 4, pin 15)          at (100.5, 55.0, 102.5)  [post_weld_line_scan]
+  weld_underfill         0.513  seam 44 (busbar 4, pin 14)          at (126.0, 55.0, 102.5)  [post_weld_line_scan]
+  weld_undercut          0.127  seam 44 (busbar 4, pin 14)          at (126.0, 55.0, 102.5)  [post_weld_line_scan]
+  weld_underfill         0.510  seam 45 (busbar 4, pin 14)          at (126.0, 60.0, 102.5)  [post_weld_line_scan]
+  weld_undercut          0.134  seam 45 (busbar 4, pin 14)          at (126.0, 60.0, 102.5)  [post_weld_line_scan]
+  weld_underfill         0.944  seam 46 (busbar 4, pin 13)          at (151.5, 55.0, 102.5)  [post_weld_line_scan]
+  burn_through           1.000  seam 46 (busbar 4, pin 13)          at (151.5, 55.0, 102.5)  [post_weld_line_scan]
+  weld_underfill         0.955  seam 47 (busbar 4, pin 13)          at (151.5, 60.0, 102.5)  [post_weld_line_scan]
+  burn_through           1.000  seam 47 (busbar 4, pin 13)          at (151.5, 60.0, 102.5)  [post_weld_line_scan]
+  spatter                0.308  raised region on copper_rolled      at (-155.5, -57.9, 102.7)  [post_weld_line_scan]
+  spatter                0.318  raised region on aluminium_terminal  at (-149.0, -48.7, 101.3)  [post_weld_line_scan]
+  spatter                0.308  raised region on copper_rolled      at (-104.7, 52.4, 102.7)  [post_weld_line_scan]
+  spatter                0.284  raised region on aluminium_terminal  at (-98.8, -46.8, 101.2)  [post_weld_line_scan]
+  spatter                0.374  raised region on aluminium_terminal  at (-49.5, 50.6, 101.3)  [post_weld_line_scan]
+  spatter                0.298  raised region on aluminium_cap      at (2.5, -56.3, 95.2)  [post_weld_line_scan]
+  spatter                0.320  raised region on copper_rolled      at (15.5, -51.7, 102.7)  [post_weld_line_scan]
+  spatter                0.332  raised region on copper_rolled      at (95.3, -53.7, 102.8)  [post_weld_line_scan]
+
+evaluation (post_weld): class              TP  FN  FP  other  missed as
+  burn_through                     2   0   0     0  
+  busbar_liftoff                   1   0   0     0  
+  missing_weld                     2   0   0     0  
+  reinforcement                    2   0   0     0  
+  seam_deviation                   2   0   0     0  
+  short_weld                       2   0   0     0  
+  spatter                          8   7   0     0  spatter, weld_path_drift, nothing, reinforcement, busbar_liftoff, weld_arc, burn_through/busbar_liftoff/weld_underfill
+  weld_arc                         2   0   0     2  
+  weld_path_drift                  2   0   0     0  
+  weld_undercut                    2   4   0     0  busbar_liftoff/weld_underfill, busbar_liftoff, burn_through/busbar_liftoff/weld_underfill, burn_through/busbar_liftoff/weld_underfill
+  weld_underfill                   5   1   0     0  busbar_liftoff
+  width_deviation                  2   0   0     0  
+  total (in scope)                31  12   0     2  (1 labels belong to other stages, 4 are internal)
+(venv) ewok@titan:~/projects/MotoBat$ 
 
 

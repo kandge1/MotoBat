@@ -1,0 +1,90 @@
+# Detection thresholds for detect.py (task 1.4, project_plan.md §4B.4).
+#
+# NOT part of the sensor params hash: these describe the detector, not the
+# sensor. detect.detect_hash() fingerprints this file and every DefectReport
+# carries it, so a result can be traced to the thresholds that produced it.
+#
+# Tolerances are what a finding is judged against. Where the spec gives one it
+# is used (S); where it follows from one it is derived (D); the rest are
+# assumed (A) and must be sourced before results are claimed (status_update.md,
+# "Source before claiming results"). They were NOT tuned on defect results.
+#
+# Millimetres and degrees.
+
+residual:                    # per-ray residual against the golden capture (§4B.4 step 5)
+  k_sigma: 5.0               # A  flag |r| > k * sigma_m, sigma_m robust per nominal material
+  floor: 0.005               # A  never flag below 5 um, whatever the estimated noise
+  min_points: 6              # A  smallest connected region that counts
+  min_area: 0.02             # A  mm^2; a 0.15 mm-radius spatter drop shows ~0.07 mm^2
+  min_thickness: 2.5         # A  rays: a region thinner than this along its length is an edge
+                             #    a ray grazed, not a defect (and below the sensor's resolution)
+  missing_min_area: 1.0      # A  mm^2; missing data alone is weaker evidence than a height change
+  max_aspect: 3.0            # A  a region whose peak |r| exceeds this x sqrt(area) is a ray that
+                             #    crossed a step edge: no dent is far deeper than it is wide
+  edge_band: 0.25            # A  residuals this close to a measured outline belong to its pose,
+                             #    widened by how far that part actually moved
+  blob_max_area: 4.0         # A  mm^2; a raised region larger than this is not a drop or a particle
+  dent_max_area: 400.0       # A  mm^2; a sunk region larger than this is a missing part, not a dent
+
+fit:                         # top-face fits: terminals, busbars, carrier (§4B.4 step 3)
+  margin: 2.5                # A  how far past the nominal face to look for its edges
+  shrink: 2.5                # A  how far inside the nominal face to seed its plane
+  band: 0.03                 # A  half-width of the top-face band; widened to 4 x capture noise
+  min_points: 200            # A  fewer points than this on a face and it counts as not seen
+  min_fraction: 0.3          # A  ... or fewer than this fraction of what the golden capture saw
+
+terminal:
+  height_tol: 0.10           # S  spec §4: 0.1 mm between adjacent terminals (confirm: fixlist D1)
+  tilt_tol: 0.31             # D  atan(height_tol / terminal_d): the tilt that raises one pad edge 0.1 mm
+
+cell:                        # cell pose, measured from its terminal pads (the cap is flush with the pads)
+  pos_tol: 0.20              # A  pick-and-place repeatability is a few tenths; source it (§3.7.9)
+  yaw_tol: 0.10              # A  0.1 deg moves a terminal 0.1 mm at the 57.5 mm terminal offset
+
+polarity:                    # which of two CAD hypotheses (as placed / turned 180 deg) explains the cap
+  truncate: 1.0              # A  per-point distance is capped here, so no single point dominates
+  max_points: 40000          # A  per cell, subsampled with a fixed seed
+
+busbar:
+  pos_tol: 0.20              # A  as for cells
+  yaw_tol: 0.10              # A
+  gap_tol: 0.15              # A  = weld_gap_ok: the gap above which weld.py says the weld suffers
+
+carrier:
+  dz_tol: 0.20               # A
+  tilt_tol: 0.10             # A
+
+seam:                        # bead profile along each stitch, against the busbar's fitted plane
+  bin: 0.25                  # A  mm along the seam per sample
+  bead_min_h: 0.05           # A  |height off the busbar plane| above which the surface was melted
+  across: 2.0                # A  half-width of the strip measured; stitches sit 5 mm apart
+  along_margin: 2.0          # A  measured past each nominal end, to see a seam that overran
+  missing_coverage: 0.10     # A  less than this fraction of the nominal length melted: missing
+  short_tol: 0.10            # A  fraction of the golden length
+  offset_tol: 0.25           # A  centreline offset at the seam ends
+  arc_tol: 0.10              # A  sagitta of the centreline's bow
+  drift_tol: 0.10            # A  amplitude of what is left of the centreline after offset and bow
+  width_tol: 0.20            # A  fraction of the golden width
+  crown_tol: 0.10            # A  bead height change
+  undercut_tol: 0.05         # A  toe groove depth
+  hole_points: 20            # A  points more than half the busbar thickness below its top: a hole
+  bead_shift_min: 0.10       # A  a stitch's measured offset moves its bead in the as-measured
+                             #    module only above this: clean stitches read +/-0.08 on the
+                             #    line-scan (sigma ~0.04), and moving beads by noise leaves residuals
+
+icp:                         # fine alignment to the housing datum (§4B.4 step 2, plan §9.7)
+  points: 1000000            # A  random subsample of each cloud (fixed seed); fewer drifts more
+  coarse_corr: 1.0           # A  first pass, plain least squares: the fixture's repeatability
+                             #    must be inside this
+  max_corr: 0.5              # A  second pass, Tukey-weighted
+  tukey: 0.05                # A  robust kernel width: defects are outliers, not signal
+  iters: 50                  # A  per pass
+  min_datum_points: 2000     # A  housing points needed to align at all; fewer and the fixture
+                             #    pose stands
+  identity_tol: 0.005        # A  mm: if the whole correction moves no point of the module more
+                             #    than this, the fixture pose is kept and nothing is recast
+
+capability:                  # which capture may measure what (plan §3.7.3)
+  spacing_per_tol: 0.5       # D  a position judged against tolerance T needs sample spacing <= T/2,
+                             #    the plan's rule of thumb; it applies to outline-placed positions
+                             #    (cell, busbar, seam, the X/Y datum), not to plane fits
