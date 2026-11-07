@@ -227,6 +227,10 @@ class ScanResult:
     # a scan left over from before the module was regenerated is refused
     # instead of being scored against the new labels.
     source: dict = field(default_factory=dict)
+    # The 1-sigma noise the model put on each point, along its measuring
+    # direction (distance and returned light both count). In memory only, not
+    # saved: coverage (coverage.py) uses it for §3.7.3's sigma <= D/3 half.
+    sigma: np.ndarray | None = None
 
     def save(self, path: Path | str) -> Path:
         path = Path(path)
@@ -324,7 +328,8 @@ def _finish(name, cfg, materials, scene, pts, normal, mat, to_light, to_cam, alo
     noisy += ((np.round(depth / q) * q) - depth)[:, None] * along
 
     return ScanResult(name, noisy, pts, s, mat, scene.material_names, np.array(poses), dropped,
-                      params_hash(), dropped_by_material=by_mat, index=index)
+                      params_hash(), dropped_by_material=by_mat, index=index,
+                      sigma=sigma * np.minimum(scale, 10.0))
 
 
 # -- laser line ------------------------------------------------------------
@@ -399,6 +404,7 @@ def line_scan(scene: Scene, sensor: str, start: np.ndarray, length: float, seed:
         rays=rays,
         index=np.concatenate([p.index for p in parts]),
         grid=(len(poses), cfg["points"]),
+        sigma=np.concatenate([p.sigma for p in parts]),
     )
 
 
@@ -489,7 +495,10 @@ def snapshot(scene: Scene, pose: np.ndarray, sensor: str = "snapshot", seed: int
     to_proj = projector - pts
     to_proj /= np.linalg.norm(to_proj, axis=1, keepdims=True)
     # Inside the projector's field of view (projector looks along the camera axis).
-    in_proj = (pts - projector) @ rot.T
+    # World to camera axes is `@ rot` for row vectors. This read `@ rot.T` until
+    # 7 Nov 2026, which only mattered for tilted views: every snapshot until then
+    # looked straight down, where `looking_down`'s rotation is its own transpose.
+    in_proj = (pts - projector) @ rot
     px = np.abs(in_proj[:, 0] / np.maximum(in_proj[:, 2], 1e-9)) <= np.tan(np.radians(cfg["projector_hfov"] / 2))
     py = np.abs(in_proj[:, 1] / np.maximum(in_proj[:, 2], 1e-9)) <= np.tan(np.radians(cfg["projector_vfov"] / 2))
     _drop(dropped, by_mat, "outside_projector", keep & ~(px & py), mat, n_mat)

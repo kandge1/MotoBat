@@ -20,10 +20,9 @@ worktree.*
 > stays on Phase 1. The lanes, which docs each one edits, and the worktree setup are under
 > "How work is sequenced" below and in `project_plan.md` §8.
 
-> **6 Nov 2026: task 1.4 (detection) has a working, reviewed first version**, Phase 1 table below.
-> `python -m defectgen.detect data/<run> --stage <stage>`, findings in RViz with
-> `show_detections.py` (WORKFLOW.md, "Detection"). The ▶ CURRENT TASK block further down still
-> describes 1.1 and is out of date.
+> **7 Nov 2026: task 1.4 (detection) is done (commit `2001f72`); current task is 1.5, coverage
+> and view selection.** `python -m defectgen.detect data/<run> --stage <stage>`, findings in RViz
+> with `show_detections.py` (WORKFLOW.md, "Detection").
 
 > **Tasks 1.1 and 1.2 are done (3 Nov 2026).** `defectgen/` emits all three stages from the real
 > CAD and injects 13 of the 15 in-scope defect classes. 85 tests passing. Current task is now
@@ -90,35 +89,18 @@ Parked, not scheduled: injection-moulding defects in the carrier/cover
 
 ## ▶ CURRENT TASK
 
-> **§4B.1 — Procedural battery-module generator, mesh-native.** Pure numpy +
-> trimesh, no ROS, no simulator. A VDA 355 module (355 × 151 × 108 mm):
-> twelve PHEV2 cells (148 × 91 × 26.5 mm) in 3P4S, laser-weld terminals,
-> busbars, weld seams, end and side plates, cooling plate, carrier, CMC and
-> cover. **Geometry reference: [`module_spec.md`](module_spec.md).** It emits
-> three stages
-> (pre-busbar, pre-weld, post-weld) as watertight solids with STL/PLY export.
-> The generator returns `(mesh, labels)`, and the same mesh is both the
-> reference and the scan target.
+> **§4B.5 — Coverage and view selection (task 1.5), no kinematics yet.** Which required
+> surfaces each approach can observe well enough to measure, in a single capture:
+> the fixed Ranger3 line-scan in one pass, and the HC10DT wrist sensors (Zivid snapshots,
+> Keyence sweeps) chosen by greedy set cover from candidate views. Coverage is counted from
+> the frozen sensor models (§4B.3), per defect class, against the sample spacing each class
+> needs (§3.7.3 rule: spacing ≤ D/2). Outputs: coverage per class for fixed, arm and the arm
+> ceiling, and a **view plan** (sensor poses and sweeps in the module frame). That plan is
+> what the ROS lane's 2.5 consumes, and what 1.7 scans its dataset with.
 >
-> **The CAD now exists (1 Nov 2026), so 1.1 loads real meshes, not box
-> primitives.** All 12 bodies of `module_spec.md` §7 plus two assembled
-> references: STL in `src/motobat_description/meshes/module/`, STEP archives
-> in `cad/module/`. Filenames are the §7 body names. `module_spec.md` §7 used
-> to say "until the Fusion parts exist, the generator uses its own box
-> primitives" — that condition is met.
->
-> **Load `cell_can` + `terminal_pos` + `terminal_neg`, never
-> `cell_assembled`.** The assembled cell is a single merged mesh and exists
-> only for renders; from it, the terminal-height and terminal-tilt defects of
-> task 1.2 cannot be injected, because both work by transforming a terminal
-> relative to its can.
->
-> *(Superseded 26 Sep 2026: this task used to add "in parallel, measure the
-> terminal spacing, pad size and vent from photos in Fusion". The vendor
-> drawing resolved all three — `module_spec.md` §4.)*
->
-> Lives in `defectgen/`, outside `src/`. It must not import ROS (§2 of
-> `project_structure.md`).
+> Design and maths: `project_plan.md` §4B.5 "Design" and §9.8 (coverage). Lives in
+> `defectgen/coverage.py`, `configs/coverage.yaml`. No ROS. One heavy `defectgen` job at a
+> time across both lanes (RAM).
 
 **Scope changed on 15 Sep: from inside a single cell to a battery module
 assembly line.** Cell-internal defects are buried under anode and separator,
@@ -223,8 +205,8 @@ the contribution.
 | 1.1 | Mesh-native module generator, three stages, `(mesh, labels)` seam | 4B.1 | ✅ 1 Nov 2026 — `defectgen/`, 65 tests passing. Loads the real CAD, normalising each mesh into the §7 frame on the way in. Terminal placement corrected 3 Nov against the Fusion `cell_assembled` (fixlist E1); the module is 151.0 wide. |
 | 1.2 | Defect injection: cell pose, terminal height/tilt, missing cell, reversed polarity, busbar pose/gap, weld seam, adhesive bead, FOD | 4B.2 | ✅ 3 Nov 2026 — `defects.py`, 13 of 15 in-scope classes. Each injector is tagged with the §4B.2 stage it first applies at, so one recipe describes all three stages. **Not done:** class 10 (gap-filler bead — no pre-cell stage exists yet) and class 12 (insulation film — deliberately never modelled as geometry, `module_spec.md` §3). |
 | 1.3 | Three ray-cast sensor models: fixed Ranger3 line-scan, wrist Zivid-class snapshot, wrist LJ-X8200-class profilometer. Both occlusions, dropout, noise; parameters **frozen and hashed before any results**. | 4B.3 | ✅ 4 Nov 2026 — `scan.py`. Two models: laser-line triangulation (LJ-X8200 and Ranger3 share it) and structured-light snapshot (Zivid). Each covers both occlusions, the range window, a grazing-angle cut, and per-material reflectance (`configs/materials.yaml`: diffuse plus Beckmann lobe per band), giving dark and glare dropout on bare Cu/Al. Noise grows as the returned light weakens and with distance². Line-sensor exposure falls as the profile rate rises (up to each sensor's max rate). Height is quantised. The profilometer triangulation angle is **22.0°, measured** from the Keyence model's receiver-window tilt in the flange STEP (was an assumed 23°). **Frozen: params hash `779e2255dc4c`**, pinned in `tests/test_scan.py` and written into every scan. Stated limitations (multipath, speckle, motion during capture, sub-surface scattering, thermal drift): `project_plan.md` §4B.3. Also: Zivid 2D quadrant photos (`--sensor photos`, display render, not frozen) and per-run `data/scan_logs/`. |
-| 1.4 | Detection: align → ICP → per-feature fits within one capture → residual segmentation → classify | 4B.4 | ◐ 6 Nov 2026 — `detect.py`, `fit.py`, `evaluate.py`, `configs/detect.yaml`; maths and measured findings in `project_plan.md` §4B.4 "As built". Every scan is compared ray by ray with a **golden capture** (the same rays cast at the clean module through the same frozen sensor model), and every feature is reported as f(scan) − f(golden). **Alignment registers to the housing, not the whole module.** Whole-module ICP was measured to fail: a 0.3 mm carrier lift dragged the fit 0.3 mm, and XY is barely constrained from above. Every in-scope class except `cover_misalignment` (final stage, not scanned) has a detector, and the clean module gives zero findings at all three stages. `ScanResult` now carries the organised ray index (no numbers changed; hash still `779e2255dc4c`), so **older scans must be rescanned**. Second pass (6 Nov): residuals are now taken against the module **as measured** (every measured part moved to its measured pose and recast), which removed the false alarms parts moving *within* tolerance caused (a 0.1 mm carrier gave 5,321); a capture measures a position only if its sample spacing is ≤ tolerance/2 (§3.7.3), so the Zivid now reports cell/busbar/seam positions as uncovered rather than wrong; scans record what they scanned and stale ones are skipped; reports carry OK/NOK/INCOMPLETE. Open: seam limits from ISO 13919-2 (not sourced); labels below tolerance score as FN (fix in 1.7); weld drift on the line-scan is marginal under a fixture error (one clean stitch 0.144 vs 0.10). 143 tests pass. Not yet: P/R with intervals over a seeded dataset (1.7–1.8). |
-| 1.5 | Coverage metric + greedy view selection (no kinematics yet) | 4B.5 | `coverage.py` |
+| 1.4 | Detection: align → ICP → per-feature fits within one capture → residual segmentation → classify | 4B.4 | ✅ 7 Nov 2026 (`2001f72`) — `detect.py`, `fit.py`, `evaluate.py`, `configs/detect.yaml`; maths and measured findings in `project_plan.md` §4B.4 "As built". Every scan is compared ray by ray with a **golden capture** (the same rays cast at the clean module through the same frozen sensor model), and every feature is reported as f(scan) − f(golden). **Alignment registers to the housing, not the whole module.** Whole-module ICP was measured to fail: a 0.3 mm carrier lift dragged the fit 0.3 mm, and XY is barely constrained from above. Every in-scope class except `cover_misalignment` (final stage, not scanned) has a detector, and the clean module gives zero findings at all three stages. `ScanResult` now carries the organised ray index (no numbers changed; hash still `779e2255dc4c`), so **older scans must be rescanned**. Second pass (6 Nov): residuals are now taken against the module **as measured** (every measured part moved to its measured pose and recast), which removed the false alarms parts moving *within* tolerance caused (a 0.1 mm carrier gave 5,321); a capture measures a position only if its sample spacing is ≤ tolerance/2 (§3.7.3), so the Zivid now reports cell/busbar/seam positions as uncovered rather than wrong; scans record what they scanned and stale ones are skipped; reports carry OK/NOK/INCOMPLETE. Open: seam limits from ISO 13919-2 (not sourced); labels below tolerance score as FN (fix in 1.7); weld drift on the line-scan is marginal under a fixture error (one clean stitch 0.144 vs 0.10). 143 tests pass. Not yet: P/R with intervals over a seeded dataset (1.7–1.8). |
+| 1.5 | Coverage metric + greedy view selection (no kinematics yet) | 4B.5 | ◐ 7 Nov 2026 — `coverage.py`, `configs/coverage.yaml`, `show_coverage.py` (RViz). Coverage is judged per ~1.5 mm patch against both halves of the §3.7.3 rule (spacing ≤ D/2, noise ≤ D/3), counted from the frozen sensor models. **Fixed line-scan: ~100% of up-facing features, 96% of weld seams, 80% of spatter, but only 9–25% of handling damage (housing walls). Arm plan (8–12 captures): 98–100% on every class but spatter (93%).** The view plan (`data/coverage/<stage>.plan.json`) is ready for 2.5. Found and fixed a tilted-snapshot bug in `scan.py` (no earlier result affected). Results: `project_plan.md` §4B.5. |
 | 1.6 | `motobat_interfaces`: `DefectReport`, `ScanResult`, `CorrectionCmd` | §7 | first ROS package. **ROS lane** (6 Nov 2026): it needs no `defectgen` code, and 1.4's output now fixes what a report contains |
 | 1.7 | Labelled dataset, **several seeds per (class × severity) cell** | 4B.6 | seeded, not committed |
 | 1.8 | **Precision/recall per class, with confidence intervals** | 4B.6 | |

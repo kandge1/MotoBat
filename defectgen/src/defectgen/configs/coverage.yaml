@@ -1,0 +1,74 @@
+# Coverage and view selection (task 1.5, project_plan.md §4B.5 "Design", §9.8).
+# Tags as in the other configs: S sourced, D derived, A assumed.
+
+element_size: 1.5          # A  mm, longest triangle edge after subdivision
+noise_per_D: 0.333         # D  §3.7.3: a point serves a measurement of size D only if its noise is <= D/3
+patch_size: 1.5            # A  mm, cell size of the patches coverage is judged on (one group,
+                           #    one facing direction, one cell); points are assigned per triangle
+theta_max: 60.0            # A  deg, incidence beyond which a point does not count toward coverage
+                           #    (the sensor models already drop beyond 80; triangulation height
+                           #    error grows as the surface turns away)
+up_cos: 0.866              # D  cos 30 deg: a face counts as a top face when its normal is this close to +Z
+side_cos: 0.5              # D  cos 60 deg: a face counts as a wall when |n_z| is below this
+observe_rays: 32           # A  directions tried per element for "observable at all"
+toe_band: 2.0              # D  mm of busbar top either side of a bead that the seam measure uses
+                           #    (detect.yaml seam.across)
+
+# Surfaces: body groups (scan.py / module.py names) and which way the face points.
+#   up    top faces;   side   walls;   outer  walls facing away from the module centre;   any
+surfaces:
+  terminal_tops:  {groups: [terminals_pos, terminals_neg], facing: up}
+  busbar_tops:    {groups: [busbars], facing: up}
+  busbar_walls:   {groups: [busbars], facing: side}
+  weld_beads:     {groups: [welds], facing: any}
+  weld_toes:      {groups: [busbars], facing: up, near: welds}
+  cap_tops:       {groups: [cells], facing: up}
+  foam:           {groups: [pads], facing: up}
+  carrier_top:    {groups: [carrier], facing: up}
+  housing_tops:   {groups: [end_plates, side_plates], facing: up}
+  housing_outer:  {groups: [end_plates, side_plates], facing: outer}
+
+# What each stage must see, per class family: the surfaces the defects live on, and D, the
+# smallest size that matters. Required sample spacing d = D/2 (plan §3.7.3). `members` are the
+# detector classes the family stands for (evaluate.py INSPECTED).
+stages:
+  pre_busbar:
+    cell_placement:  {D: 0.2, surfaces: [terminal_tops], members: [cell_placement]}       # D cell.pos_tol
+    terminal_height: {D: 1.0, surfaces: [terminal_tops], members: [terminal_height, terminal_tilt]}  # A plane fit
+    cell_presence:   {D: 1.0, surfaces: [cap_tops], members: [missing_cell, reversed_polarity]}      # A fill plug, cap
+    fod:             {D: 1.0, surfaces: [cap_tops, terminal_tops], members: [fod]}         # A particles >= 1 mm
+    missing_pad:     {D: 2.0, surfaces: [foam], members: [missing_pad]}                    # A
+    handling_damage: {D: 2.0, surfaces: [housing_tops, housing_outer, cap_tops], members: [handling_damage]}  # A dents
+  pre_weld:
+    busbar_pose:     {D: 0.2, surfaces: [busbar_tops], members: [busbar_pose]}             # D busbar.pos_tol
+    busbar_gap:      {D: 1.0, surfaces: [busbar_tops, terminal_tops], members: [busbar_liftoff]}  # A plane fits
+    carrier_seating: {D: 2.0, surfaces: [carrier_top], members: [carrier_seating]}         # A
+    fod:             {D: 1.0, surfaces: [busbar_tops, terminal_tops, carrier_top], members: [fod]}
+    handling_damage: {D: 2.0, surfaces: [housing_tops, housing_outer, busbar_tops, busbar_walls], members: [handling_damage]}
+  post_weld:
+    weld_seam:       {D: 0.25, surfaces: [weld_beads, weld_toes],                           # D seam.offset_tol
+                      members: [missing_weld, short_weld, seam_deviation, width_deviation, reinforcement,
+                                weld_path_drift, weld_arc, weld_underfill, weld_undercut, burn_through]}
+    spatter:         {D: 0.3, surfaces: [busbar_tops, terminal_tops, cap_tops], members: [spatter]}  # A smallest drop
+    fod:             {D: 1.0, surfaces: [busbar_tops, terminal_tops, carrier_top], members: [fod]}
+    handling_damage: {D: 2.0, surfaces: [housing_tops, housing_outer, busbar_tops, busbar_walls], members: [handling_damage]}
+
+# Candidate arm views (no kinematics: reachability is Phase 2).
+candidates:
+  snapshot:
+    hemisphere_elevations: [90, 65, 40]     # A deg above horizontal
+    hemisphere_azimuths: 8                  # A per elevation below 90
+    near_distance: 350.0                    # A mm, quadrant close-ups (working distance from 300)
+  sweep:
+    lanes_y: [-75.5, -57.5, -19.0, 19.0, 57.5, 75.5]   # D side plates, terminal rows, caps between
+    rolls: [0, 30, -30, 60, -60]            # A deg about the sweep axis
+    side_on: true                           # also horizontal (roll 90) sweeps along each housing wall
+    margin: 10.0                            # A mm run-in past each end
+    cast_pitch: 0.4                         # A mm, cast for coverage; counts scaled to the flown pitch
+
+# Greedy set cover.
+plan:
+  t_move: 1.5                # A s per repositioning between captures (Phase 2 replaces with MoveIt times)
+  t_snapshot: 0.1            # S Zivid capture (~100 ms)
+  sweep_speed: 50.0          # A mm/s, the plan §4B.3 worked example (50 um at 1 kHz)
+  min_gain: 0.001            # A stop when the best capture adds less than this to the mean class coverage

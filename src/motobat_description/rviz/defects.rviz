@@ -47,6 +47,32 @@ Visualization Manager:
       Class: rviz_default_plugins/PointCloud2
       Color Transformer: RGB8
       Enabled: true
+      Name: Coverage
+      Position Transformer: XYZ
+      Size (Pixels): 3
+      Style: Points
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /defectgen/coverage
+      Use Fixed Frame: true
+      Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: View plan
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /defectgen/view_plan
+      Value: true
+    - Alpha: 1
+      Class: rviz_default_plugins/PointCloud2
+      Color Transformer: RGB8
+      Enabled: true
       Name: Line scan (Ranger3)
       Position Transformer: XYZ
       Size (Pixels): 2

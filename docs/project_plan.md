@@ -2030,6 +2030,182 @@ single capture.
 - Reachability, collision and motion time are added in Phase 2 with MoveIt.
   Phase 1 establishes the coverage ceiling each approach can reach.
 
+#### Design — 7 Nov 2026 (`defectgen/coverage.py`, `configs/coverage.yaml`)
+
+Coverage asks whether a capture *can* measure a surface, before any defect is
+on it. So it is computed on the clean module of each stage, and it is a
+property of the sensor and its pose, not of the detector.
+
+**Surface elements and patches.** The faces of the clean module that some
+class needs are subdivided until no triangle edge exceeds `element_size`.
+Each triangle has an exact area and normal, and scan points are assigned to
+triangles exactly (below). Coverage is judged on **patches**, though, not
+triangles. The CAD is finely meshed (median triangle 0.06 mm²), and "one
+point on a 0.06 mm² triangle" is luck, not density. A patch *j* is the
+observable triangles of one body group that face the same way (normal
+rounded to ~20°) within one `patch_size` = 1.5 mm cell: area a_j, mean
+normal n̂_j. That gives 85 k patches at post-weld, median 2.2 mm².
+
+**Which elements are required, and how finely.** Each defect class names the
+surfaces it lives on and D, the smallest size that matters for it.
+§3.7.3's rule of thumb sets the sample spacing it needs, d = D/2:
+
+| Class family | Surfaces | D (mm) | d (mm) | Why |
+|---|---|---|---|---|
+| cell placement | terminal tops | 0.2 | 0.1 | `cell.pos_tol` |
+| busbar pose | busbar tops | 0.2 | 0.1 | `busbar.pos_tol` |
+| weld seam shape | weld beads + busbar top within 2 mm | 0.25 | 0.125 | `seam.offset_tol` |
+| spatter | busbar, terminal and cap tops | 0.3 | 0.15 | smallest drop to report |
+| terminal height/tilt, busbar gap | terminal tops, exposed pad strips | 1.0 | 0.5 | plane fits average; only the face must be sampled |
+| polarity, missing cell, FOD | cap tops | 1.0 | 0.5 | features ≥ 1 mm |
+| missing pad, carrier seating | pad foam, carrier top | 2.0 | 1.0 | whole-part features |
+| handling damage | housing tops and outer faces, cap tops, busbars | 2.0 | 1.0 | dents of a few mm across |
+
+An element's spacing requirement d_j is the finest of the classes that use
+it.
+
+**Observable at all.** An element is required only if it can be seen: some
+direction within θ_max of n̂_j, at or above horizontal, escapes the module.
+The module sits on a pallet, so nothing looks up from below. This is
+checked by casting K rays from c_j + ε·n̂_j. It drops faces in contact (cell
+sides behind pads, busbar undersides, end-plate faces against cells), so the
+arm's ceiling is a real 100%, not a geometric impossibility.
+
+**Covered (§9.8).** Capture *c* covers element *j* when, *in that one
+capture*, enough points land on it at an acceptable incidence:
+
+```
+n_c,j,k = s_c · #{ points p of c on patch j :  ∠(−ray_p, n̂_p) < θ_max  and  σ_p ≤ D_k/3 }
+covered_c,j,k  ⟺  n_c,j,k ≥ max(1, a_j / d_k²)                 d_k = D_k / 2
+coverage(k, C) = Σ_{j ∈ R_k} a_j · [∃ c ∈ C : covered_c,j,k] / Σ_{j ∈ R_k} a_j
+```
+
+Both halves of §3.7.3's rule are applied. Spacing ≤ D/2 enters through the
+count a_j/d². Noise σ ≤ D/3 enters per point: σ_p is the 1σ the sensor model
+itself put on that point (distance², weakened by low returned light),
+carried on `ScanResult.sigma`.
+
+- **Counts come from the frozen sensor models** (§4B.3): shadowing,
+  grazing, range and specular dark/glare dropout all count. A face a bright
+  copper busbar returns no light from is not covered, however well it is
+  placed.
+- **Points are assigned to triangles exactly.** Each point's noise-free hit
+  is matched to its closest primitive of the element mesh.
+- **s_c rescales a cheaper simulation to the real sensor's density.** The
+  snapshot casts every `stride`-th pixel, so s = stride². Candidate sweeps
+  are cast at a coarser pitch than flown, so s = cast pitch / flown pitch.
+  Counts scale linearly with density, so this is exact in expectation.
+
+**Fixed baseline.** The Ranger3 pass detection uses: one sweep the length of
+the module.
+
+**Arm candidates** (no kinematics; reachability comes in Phase 2):
+
+- *Snapshot (Zivid):* eye points on a hemisphere about the module centre at
+  the focus distance (elevation × azimuth grid), looking at the centre, and
+  closer views at the near working distance aimed at each module quadrant.
+- *Sweep (Keyence):* lanes parallel to the module's X at several Y offsets,
+  and parallel to Y over each end plate, each flown level and rolled about
+  the sweep axis by ±30° and ±60° (to see terminal and busbar walls and weld
+  toes). Side-on sweeps along each side plate's outer face. Standoff is the
+  reference distance from the surfaces the lane targets.
+
+**Greedy set cover.** Each step takes the candidate that adds the most
+*mean class coverage* per second. Every class weighs the same, however
+large its area: otherwise the housing walls (≈ 106,000 mm²) would swamp
+the weld seams (≈ 3,700 mm²). A capture's time is
+
+```
+t_c = t_move + t_capture          t_capture = 0.1 s (snapshot) or L / v (sweep)
+```
+
+It stops when no candidate adds more than `min_gain` mm². Greedy is within a
+factor ln(max |set|) of the optimum (Chvátal 1979), and every pick is
+explainable. Each step records cumulative coverage per class, so the
+write-up can plot coverage against captures and against seconds.
+
+**What 1.5 reports**, per stage:
+- coverage per class for the fixed pass, the arm plan and the arm ceiling
+  (all candidates together);
+- the elements the fixed pass misses that the arm sees;
+- the view plan (`data/coverage/<stage>.plan.json`): sensor poses and sweeps
+  in the module frame, in the order to fly them. Task 2.5 turns it into
+  reachable flange poses, and 1.7 scans its dataset with it.
+
+#### Results — 7 Nov 2026
+
+`python -m defectgen.coverage` (all three stages, about 5 minutes; candidate
+counts are cached). Percent of each class's required area that can be
+measured, in a single capture:
+
+| Stage | Class | D (mm) | Fixed line-scan | Arm plan | Arm ceiling | Both |
+|---|---|---|---|---|---|---|
+| pre-busbar | cell placement | 0.2 | 100.0 | 99.8 | 99.8 | 100.0 |
+| | terminal height / tilt | 1.0 | 100.0 | 100.0 | 100.0 | 100.0 |
+| | cell presence, polarity | 1.0 | 91.5 | 100.0 | 100.0 | 100.0 |
+| | FOD | 1.0 | 94.0 | 100.0 | 100.0 | 100.0 |
+| | missing pad | 2.0 | 100.0 | 100.0 | 100.0 | 100.0 |
+| | **handling damage** | 2.0 | **25.0** | **99.8** | 99.8 | 99.8 |
+| pre-weld | busbar pose | 0.2 | 100.0 | 100.0 | 100.0 | 100.0 |
+| | busbar gap | 1.0 | 99.6 | 100.0 | 100.0 | 100.0 |
+| | carrier seating | 2.0 | 99.0 | 100.0 | 100.0 | 100.0 |
+| | FOD | 1.0 | 99.2 | 100.0 | 100.0 | 100.0 |
+| | **handling damage** | 2.0 | **9.5** | **98.2** | 98.9 | 98.2 |
+| post-weld | weld seam | 0.25 | 95.8 | 97.8 | 99.5 | 97.8 |
+| | **spatter** | 0.3 | **79.8** | **93.0** | 93.8 | 93.2 |
+| | FOD | 1.0 | 99.2 | 100.0 | 100.0 | 100.0 |
+| | **handling damage** | 2.0 | **9.0** | **98.9** | 98.9 | 98.9 |
+
+The arm plans take 9, 8 and 12 captures, 29 s, 28 s and 55 s. The moves are
+an assumed 1.5 s each; Phase 2 replaces them with planned motion. The fixed
+pass takes 3.6 s of conveyor travel.
+
+**What it says:**
+
+- **The fixed line-scan sees nearly everything that faces up.** That covers
+  every placement, height, gap and seating feature, and 96% of the weld seam
+  area, at the required density. For those classes the arm's coverage adds
+  nothing. Its value there can only come from recall (1.10), i.e. the
+  profilometer's finer metrology, not from seeing more.
+- **Its blind spot is the walls.** Handling damage on the housing's outer
+  faces is 9–25% covered from above, 98–99.8% by the arm. That is the
+  26V188 mechanism (§3.7.10, §4B.9): damage the overhead station
+  structurally cannot see.
+- **Spatter: 80% fixed, 93% arm.** The arm's near snapshots (350 mm) and
+  sweeps reach density the 500 mm line-scan does not, beside terminals and
+  busbar walls. Coverage is necessary, not sufficient: the line-scan covers
+  80% of spatter area, yet 1.4 found only 2 of 10 realistic drops on it.
+  The D/2 rule is a floor, and detection needs margin above it, which 1.11
+  measures.
+- **The plan's order is cheap snapshots first, sweeps for what they cannot
+  resolve.** The Zivid at 600 mm covers coarse classes (FOD, damage) but no
+  0.1–0.15 mm requirement. Its stride-2 cast gives ≈ 0.24 mm effective
+  spacing after scaling, and σ ≈ 0.08 mm. The near views at 350 mm cover
+  spatter. Keyence sweeps cover the weld seams and the terminal rows.
+- **The comparison is one overhead line-scan against an arm**, as §4B.5
+  specifies. A fixed station could add side line-scans for the walls. That
+  is the fair counter-design for 1.10 to price, not a reason to change this
+  baseline.
+
+**Bugs found on the way, both in `scan.py`.** Neither changes the parameter
+hash or any earlier result.
+
+- *Snapshot projector field of view.* World to camera axes was written
+  `@ rot.T`; it is `@ rot`. Every snapshot before 1.5 looked straight down,
+  where that rotation is its own transpose, so nothing showed. The first
+  tilted candidate returned 0 points. Regression test:
+  `test_a_tilted_snapshot_sees_what_a_straight_one_does`.
+- *Per-point noise was not carried through `line_scan`'s chunk assembly.*
+  Found by the coverage noise test before any result used it.
+
+**Limitations:**
+- No reachability, collision or motion time (Phase 2, task 2.5 consumes
+  `data/coverage/<stage>.plan.json`).
+- Candidates are a fixed family, not optimised poses. The ceiling is the
+  ceiling of *these* candidates.
+- θ_max = 60°, the D values and t_move are assumed (`configs/coverage.yaml`,
+  tagged).
+
 ### 4B.6 — Validation: the numbers the write-up needs
 
 Generate a labelled dataset with several seeds per (class × severity) cell,

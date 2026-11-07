@@ -278,6 +278,51 @@ python -m defectgen.detect data/preview_welds --stage post_weld \
 # Thresholds: defectgen/src/defectgen/configs/detect.yaml (tagged S/D/A).
 
 
+## Coverage and view selection (task 1.5) ##
+# Which required surfaces each approach can measure, in one capture: the fixed
+# Ranger3 line-scan (one pass) and the arm's wrist sensors (Zivid snapshots,
+# Keyence sweeps) picked by greedy set cover. Computed on the clean module, so
+# no generated run is needed. Uses the venv; heavy-ish (all three stages, a few
+# minutes; candidate views are cached under data/coverage/cache/, so reruns
+# take seconds). Check the other lane is not running Gazebo first.
+
+# Terminal 3 #compute
+cd ~/projects/MotoBat && source motobat_env.sh && mb-venv
+python -m defectgen.coverage                       # all three stages
+python -m defectgen.coverage --stage post_weld     # one stage
+# Follow it live from another terminal: tail -f data/coverage/run.log
+#   (only if you redirect: python -m defectgen.coverage > data/coverage/run.log 2>&1)
+#
+# What it prints per stage: what each class needs (smallest defect size D ->
+# sample spacing D/2), then a table:
+#   fixed    % of the class's surfaces the line-scan measures
+#   arm      % the arm's chosen view plan measures
+#   ceiling  % any of the candidate arm views could measure
+#   both     fixed + arm plan together
+# then the arm plan in order: each view, its time, what it added.
+# Files in data/coverage/:
+#   <stage>.json          every number above, plus each candidate view alone
+#   <stage>.plan.json     the arm's views (sensor poses in the module frame, mm):
+#                         what task 2.5 turns into robot motion
+#   <stage>.patches.npz   per-surface-patch results, for the viewer below
+
+# Terminal 2 #the module at that stage, to see the coverage on top of
+cd ~/projects/MotoBat && source motobat_env.sh
+/usr/bin/python3 src/motobat_description/scripts/show_module.py data/preview_clean --stage post_weld --hide cover cmc
+
+# Terminal 4 #coverage and the view plan in RViz (restart RViz once to get the displays)
+cd ~/projects/MotoBat && source motobat_env.sh
+/usr/bin/python3 src/motobat_description/scripts/show_coverage.py --stage post_weld
+/usr/bin/python3 src/motobat_description/scripts/show_coverage.py --stage pre_busbar --class handling_damage
+# "Coverage": one dot per required ~1.5 mm patch
+#   green both see it / blue only the arm (what the arm adds) / orange only the
+#   fixed scan / red neither
+# "View plan": yellow arrows = Zivid snapshots, purple lines = Keyence sweeps
+#   (arrow = line of sight), numbered in the order flown.
+# --class picks one class (names as in the table); default is all classes, where
+# a patch counts as seen only if it is seen for every class that needs it.
+
+
 ## Regenerate the preview data ##
 # Everything under data/ is generated, not in git. Run these after a fresh
 # clone, or after any change to defectgen, or the viewers show old modules.
@@ -302,6 +347,7 @@ pytest -p no:launch_testing -p no:launch_ros            # everything, a few minu
 pytest -p no:launch_testing -p no:launch_ros -k weld    # only the weld tests
 pytest -p no:launch_testing -p no:launch_ros -k scan    # only the sensor tests
 pytest -p no:launch_testing -p no:launch_ros tests/test_detect.py   # only detection
+pytest -p no:launch_testing -p no:launch_ros tests/test_coverage.py # only coverage
 # The -p no:... flags matter: with ROS sourced, pytest picks up ROS's own
 # test plugins and dies before running anything.
 
