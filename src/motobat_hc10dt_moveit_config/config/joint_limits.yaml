@@ -1,0 +1,49 @@
+# Joint limits for the HC10DT, read by MoveIt's time parameterisation.
+# Position and velocity limits come from the URDF (motoman_hc10_support),
+# which match Yaskawa's published maximum axis speeds:
+#   S 130, L 130, U 180, R 180, B 250, T 250 deg/s.
+#
+# ACCELERATION LIMITS ARE ASSUMED (tag A). Yaskawa does not publish them.
+# Without them MoveIt silently uses 1 rad/s^2 for every joint, which would set
+# every cycle time task 2.7 measures. The values below assume each axis reaches
+# full speed in 0.5 s (a = 2 * v_max). Revisit before 2.7 reports a number.
+#
+# These are robot maxima, not collaborative-mode limits: under power and
+# force limiting (ISO/TS 15066) the controller caps TCP speed far lower.
+# That belongs to task 3.5, not here.
+
+# Setup Assistant defaults: plans run at 10 % until a caller asks for more.
+default_velocity_scaling_factor: 0.1
+default_acceleration_scaling_factor: 0.1
+
+joint_limits:
+  s3_joint_1_s:
+    has_velocity_limits: true
+    max_velocity: 2.2689      # 130 deg/s
+    has_acceleration_limits: true
+    max_acceleration: 4.5379  # A: 2 * v_max
+  s3_joint_2_l:
+    has_velocity_limits: true
+    max_velocity: 2.2689      # 130 deg/s
+    has_acceleration_limits: true
+    max_acceleration: 4.5379  # A
+  s3_joint_3_u:
+    has_velocity_limits: true
+    max_velocity: 3.1416      # 180 deg/s
+    has_acceleration_limits: true
+    max_acceleration: 6.2832  # A
+  s3_joint_4_r:
+    has_velocity_limits: true
+    max_velocity: 3.1416      # 180 deg/s
+    has_acceleration_limits: true
+    max_acceleration: 6.2832  # A
+  s3_joint_5_b:
+    has_velocity_limits: true
+    max_velocity: 4.3633      # 250 deg/s
+    has_acceleration_limits: true
+    max_acceleration: 8.7266  # A
+  s3_joint_6_t:
+    has_velocity_limits: true
+    max_velocity: 4.3633      # 250 deg/s
+    has_acceleration_limits: true
+    max_acceleration: 8.7266  # A

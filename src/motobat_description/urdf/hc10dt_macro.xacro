@@ -1,0 +1,194 @@
+<?xml version="1.0" ?>
+<!--
+  HC10DT with mass properties: the vendor macro plus one <inertial> per link.
+
+  Copied from gavanderhoorn/motoman, motoman_hc10_support/urdf/hc10dt_macro.xacro
+  at commit 93a282d (Apache-2.0). Kinematics, limits and meshes are unchanged.
+  The only additions are the xacro:hc10dt_inertial lines.
+
+  Why a copy: the vendor URDF has no <inertial> tags. RViz and MoveIt don't
+  need them, but Gazebo drops a massless link (task 2.2). URDF cannot add tags
+  to a link another macro has already defined, and _vendor/ is not ours to edit.
+
+  The numbers live in config/hc10dt_inertials.yaml, generated from the vendor
+  collision meshes by scripts/hc10dt_inertials.py (48 kg total, S; uniform
+  density, A). The macro is named motobat_hc10dt so it cannot shadow the
+  vendor's motoman_hc10dt.
+-->
+<robot xmlns:xacro="http://ros.org/wiki/xacro">
+  <xacro:macro name="motobat_hc10dt" params="prefix">
+    <xacro:property name="hc10dt_inertials"
+        value="${xacro.load_yaml('$(find motobat_description)/config/hc10dt_inertials.yaml')['hc10dt_inertials']}"/>
+    <xacro:macro name="hc10dt_inertial" params="link">
+      <xacro:property name="p" value="${hc10dt_inertials[link]}"/>
+      <inertial>
+        <origin xyz="${p['xyz'][0]} ${p['xyz'][1]} ${p['xyz'][2]}" rpy="0 0 0"/>
+        <mass value="${p['mass']}"/>
+        <inertia ixx="${p['ixx']}" ixy="${p['ixy']}" ixz="${p['ixz']}"
+                 iyy="${p['iyy']}" iyz="${p['iyz']}" izz="${p['izz']}"/>
+      </inertial>
+    </xacro:macro>
+
+    <xacro:include filename="$(find motoman_resources)/urdf/common_materials.xacro"/>
+
+    <!-- link list -->
+    <link name="${prefix}base_link">
+      <xacro:hc10dt_inertial link="base_link"/>
+      <visual>
+        <geometry>
+          <mesh filename="package://motoman_hc10_support/meshes/hc10/visual/base_link.dae"/>
+        </geometry>
+        <xacro:material_yaskawa_blue/>
+      </visual>
+      <collision>
+        <geometry>
+          <mesh filename="package://motoman_hc10_support/meshes/hc10/collision/base_link.stl"/>
+        </geometry>
+      </collision>
+    </link>
+    <link name="${prefix}link_1_s">
+      <xacro:hc10dt_inertial link="link_1_s"/>
+      <visual>
+        <geometry>
+          <mesh filename="package://motoman_hc10_support/meshes/hc10/visual/link_1_s.dae"/>
+        </geometry>
+        <xacro:material_yaskawa_blue/>
+      </visual>
+      <collision>
+        <geometry>
+          <mesh filename="package://motoman_hc10_support/meshes/hc10/collision/link_1_s.stl"/>
+        </geometry>
+      </collision>
+    </link>
+    <link name="${prefix}link_2_l">
+      <xacro:hc10dt_inertial link="link_2_l"/>
+      <visual>
+        <geometry>
+          <mesh filename="package://motoman_hc10_support/meshes/hc10/visual/link_2_l.dae"/>
+        </geometry>
+        <xacro:material_yaskawa_blue/>
+      </visual>
+      <collision>
+        <geometry>
+          <mesh filename="package://motoman_hc10_support/meshes/hc10/collision/link_2_l.stl"/>
+        </geometry>
+      </collision>
+    </link>
+    <link name="${prefix}link_3_u">
+      <xacro:hc10dt_inertial link="link_3_u"/>
+      <visual>
+        <geometry>
+          <mesh filename="package://motoman_hc10_support/meshes/hc10/visual/link_3_u.dae"/>
+        </geometry>
+        <xacro:material_yaskawa_blue/>
+      </visual>
+      <collision>
+        <geometry>
+          <mesh filename="package://motoman_hc10_support/meshes/hc10/collision/link_3_u.stl"/>
+        </geometry>
+      </collision>
+    </link>
+    <link name="${prefix}link_4_r">
+      <xacro:hc10dt_inertial link="link_4_r"/>
+      <visual>
+        <geometry>
+          <mesh filename="package://motoman_hc10_support/meshes/hc10/visual/link_4_r.dae"/>
+        </geometry>
+        <xacro:material_yaskawa_blue/>
+      </visual>
+      <collision>
+        <geometry>
+          <mesh filename="package://motoman_hc10_support/meshes/hc10/collision/link_4_r.stl"/>
+        </geometry>
+      </collision>
+    </link>
+    <link name="${prefix}link_5_b">
+      <xacro:hc10dt_inertial link="link_5_b"/>
+      <visual>
+        <geometry>
+          <mesh filename="package://motoman_hc10_support/meshes/hc10/visual/link_5_b.dae"/>
+        </geometry>
+        <xacro:material_yaskawa_blue/>
+      </visual>
+      <collision>
+        <geometry>
+          <mesh filename="package://motoman_hc10_support/meshes/hc10/collision/link_5_b.stl"/>
+        </geometry>
+      </collision>
+    </link>
+    <link name="${prefix}link_6_t">
+      <xacro:hc10dt_inertial link="link_6_t"/>
+      <visual>
+        <geometry>
+          <mesh filename="package://motoman_hc10_support/meshes/hc10dt/visual/link_6_t.dae"/>
+        </geometry>
+        <xacro:material_yaskawa_blue/>
+      </visual>
+      <collision>
+        <geometry>
+          <mesh filename="package://motoman_hc10_support/meshes/hc10dt/collision/link_6_t.stl"/>
+       </geometry>
+      </collision>
+    </link>
+    <link name="${prefix}tool0"/>
+    <!-- end of link list -->
+
+    <!-- joint list -->
+    <joint name="${prefix}joint_1_s" type="revolute">
+      <parent link="${prefix}base_link"/>
+      <child link="${prefix}link_1_s"/>
+      <origin xyz="0 0 0.275" rpy="0 0 0" />
+      <axis xyz="0 0 1" />
+      <limit lower="${radians(-180)}" upper="${radians(180)}" effort="368.48" velocity="${radians(130)}"/>
+    </joint>
+    <joint name="${prefix}joint_2_l" type="revolute">
+      <parent link="${prefix}link_1_s"/>
+      <child link="${prefix}link_2_l"/>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <axis xyz="0 1 0" />
+      <limit lower="${radians(-180)}" upper="${radians(180)}" effort="368.48" velocity="${radians(130)}"/>
+    </joint>
+    <joint name="${prefix}joint_3_u" type="revolute">
+      <parent link="${prefix}link_2_l"/>
+      <child link="${prefix}link_3_u"/>
+      <origin xyz="0 0 0.700" rpy="0 0 0" />
+      <axis xyz="0 -1 0" />
+      <limit lower="${radians(-5)}" upper="${radians(355)}" effort="141.12" velocity="${radians(180)}"/>
+    </joint>
+    <joint name="${prefix}joint_4_r" type="revolute">
+      <parent link="${prefix}link_3_u"/>
+      <child link="${prefix}link_4_r"/>
+      <origin xyz="0 0 -0.500" rpy="0 0 0" />
+      <axis xyz="0 0 1" />
+      <limit lower="${radians(-180)}" upper="${radians(180)}" effort="39.20" velocity="${radians(180)}"/>
+    </joint>
+    <joint name="${prefix}joint_5_b" type="revolute">
+      <parent link="${prefix}link_4_r"/>
+      <child link="${prefix}link_5_b"/>
+      <origin xyz="0 0.162 0" rpy="0 0 0" />
+      <axis xyz="0 -1 0" />
+      <limit lower="${radians(-180)}" upper="${radians(180)}" effort="31.36" velocity="${radians(250)}"/>
+    </joint>
+    <joint name="${prefix}joint_6_t" type="revolute">
+      <parent link="${prefix}link_5_b"/>
+      <child link="${prefix}link_6_t"/>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <axis xyz="0 0 1" />
+      <limit lower="${radians(-180)}" upper="${radians(180)}" effort="31.36" velocity="${radians(250)}"/>
+    </joint>
+    <joint name="${prefix}joint_6_t-tool0" type="fixed">
+      <origin xyz="0 0 -0.170" rpy="${pi} 0 0"/>
+      <parent link="${prefix}link_6_t"/>
+      <child link="${prefix}tool0"/>
+    </joint>
+    <!-- end of joint list -->
+
+    <!-- ROS base_link to Robot Manufacturer World Coordinates transform -->
+    <link name="${prefix}base" />
+    <joint name="${prefix}base_link-base" type="fixed">
+      <origin xyz="0 0 0.275" rpy="0 0 0"/>
+      <parent link="${prefix}base_link"/>
+      <child link="${prefix}base"/>
+    </joint>
+  </xacro:macro>
+</robot>

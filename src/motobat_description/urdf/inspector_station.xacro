@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<!--
+  Station 3, Inspector: HC10DT (with mass properties, hc10dt_macro.xacro)
+  on its line mount.
+
+  Macro only. The includer must also include line_layout.xacro (for
+  station_mount and the s3_* pose) and declare a `world` link.
+
+  Used by:
+    motobat_line.urdf.xacro         the full four-station line
+    inspector_station.urdf.xacro    the station alone, loaded by
+                                    motobat_hc10dt_moveit_config
+
+  The sensor flange (task 2.4, inspector_flange.xacro) attaches to
+  ${prefix}tool0 here, so the line and the MoveIt config both carry it.
+-->
+<robot xmlns:xacro="http://ros.org/wiki/xacro">
+
+  <xacro:include filename="$(find motobat_description)/urdf/hc10dt_macro.xacro"/>
+
+  <xacro:macro name="motobat_inspector_station" params="prefix">
+    <xacro:motobat_hc10dt prefix="${prefix}"/>
+    <xacro:station_mount prefix="${prefix}" x="${s3_x}" y="${s3_y}" z="${s3_z}" yaw="${s3_yaw}"/>
+  </xacro:macro>
+
+</robot>

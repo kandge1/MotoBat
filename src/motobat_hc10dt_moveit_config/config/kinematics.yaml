@@ -1,0 +1,31 @@
+# HC10DT IK: numerical, not closed-form, and KDL by measurement.
+#
+# OPW needs an ortho-parallel basis and a spherical wrist. The HC10DT's
+# joint_5_b is offset 162 mm in Y, so the wrist axes do not intersect and no
+# OPW parameter set exists for it (project_plan.md §4A.2, §9.3).
+#
+# KDL was chosen over TRAC-IK and pick_ik by scripts/compare_ik.py (6 Nov 2026):
+# 1000 targets per set, 50 ms per call, seeded from "ready", answers accepted
+# within 0.1 mm / 0.06 deg, success counted over targets any solver reached.
+#
+#                      down (tool vertical)   cone (0-45 deg tilt)   random pose
+#   KDL                100.0 %   0.5 ms       99.6 %   0.6 ms        97.7 %   2.9 ms
+#   TRAC-IK Distance    99.9 %  51 ms         99.8 %  51 ms          94.7 %  51 ms
+#   pick_ik (global)    99.7 %   5.9 ms       99.5 %   5.2 ms        90.1 %   9.7 ms
+#   TRAC-IK Speed       98.1 %   0.5 ms       97.3 %   0.5 ms        91.8 %   0.7 ms
+#   (median solve time, service round trip included)
+#
+# On the inspection-like sets the top three are within a few targets in 1000.
+# KDL matches them at a tenth to a hundredth of the time. TRAC-IK Distance
+# finds slightly shorter moves (it searches the whole timeout for the answer
+# nearest the seed), which only matters on arbitrary poses.
+# TRAC-IK Speed loses because its MoveIt plugin gives up when its first answer
+# fails the collision check (measured: 25 of its 27 random-set misses had a
+# colliding answer) instead of searching again as KDL does.
+#
+# The other candidates stay in config/ik_candidates/ for re-running the
+# comparison when the flange (task 2.4) changes the collision geometry.
+inspector_arm:
+  kinematics_solver: kdl_kinematics_plugin/KDLKinematicsPlugin
+  kinematics_solver_search_resolution: 0.005
+  kinematics_solver_timeout: 0.05

@@ -1196,6 +1196,70 @@ This asymmetry is itself a finding worth reporting: it is a concrete,
 measurable difference between the industrial GP-series and collaborative
 HC-series arms, and it reinforces the Section 2.1 argument that the two classes
 suit different tasks.
+
+#### As built — 6 Nov 2026 (`motobat_hc10dt_moveit_config`)
+
+**What exists.** A MoveIt config written by hand in the exact layout the Setup
+Assistant generates (it still opens there). The robot is
+`motobat_description/urdf/inspector_station.urdf.xacro`: the HC10DT with the
+`s3_` prefix at its line pose in `world`. Station poses now live in one file,
+`urdf/line_layout.xacro`, which the full line also reads. The refactor was
+checked by expanding `motobat_line.urdf.xacro` before and after: all 464
+elements are identical. One planning group, `inspector_arm`
+(`s3_base_link` → `s3_tool0`). One named pose, `ready`: forearm forward,
+`tool0` straight down at (0.500, 0.162, 0.805) m in `s3_base_link`, checked
+by FK from the URDF. The 0.162 is the wrist offset. All-zeros is a poor
+start, because `joint_3_u = 0` folds the forearm down beside the upper arm.
+
+**Self-collision matrix.** Generated with `collisions_updater`, the command-line
+tool behind the Setup Assistant's matrix page: 100 000 random states, 12 of 45
+pairs disabled (6 adjacent, 6 never in contact). Nothing touches at
+all-zeros, so the "default" option is not used: if a future tool collides at
+zero, that collision should be visible. Rerun
+`scripts/regen_collision_matrix.sh` whenever geometry changes (task 2.4).
+
+**IK solver: KDL, by measurement.** KDL, TRAC-IK (Speed and Distance) and
+pick_ik were compared on identical targets (`scripts/compare_ik.py`). There
+were 1000 per set, 50 ms per call, seeded from `ready`. An answer was accepted
+only within 0.1 mm / 0.06° by FK. Success is counted over targets any solver
+reached, so every miss is a real solution the solver did not find.
+
+| solver | down (tool vertical) | cone (0–45° tilt) | random pose | median solve |
+|---|---|---|---|---|
+| **KDL** | **100.0 %** | 99.6 % | **97.7 %** | 0.5–2.9 ms |
+| TRAC-IK Distance | 99.9 % | 99.8 % | 94.7 % | 51 ms |
+| pick_ik (global) | 99.7 % | 99.5 % | 90.1 % | 5–10 ms |
+| TRAC-IK Speed | 98.1 % | 97.3 % | 91.8 % | 0.5–0.7 ms |
+
+- On the inspection-like sets the top three are within a few targets in 1000.
+  KDL matches them at a tenth to a hundredth of the time. A 300-target run
+  showed pick_ik and TRAC-IK slightly ahead; at 1000 that was noise.
+- TRAC-IK Distance returns slightly shorter moves (median joint-time bound
+  0.72 s against KDL's 0.86 s on random poses), because it searches the whole
+  timeout for the answer nearest the seed. On the inspection-like sets the
+  difference is about 0.01 s. Worth revisiting in 2.5, where move time is
+  the objective.
+- **TRAC-IK Speed's MoveIt plugin gives up when its first answer fails the
+  collision check** instead of searching again. 25 of its 27 random-set
+  misses had a colliding answer when re-solved without collision checking.
+  Planning always collision-checks, so this is how it would behave in use.
+- The project_swarm experience (KDL failing on a downward grasp) does not
+  carry over. That was a myCobot 280 near its wrist singularity, some targets
+  were outside its reach, and the timeout was 5 ms. Here it is 50 ms on a
+  1.2 m arm.
+
+**Planners.** OMPL (default), Pilz, CHOMP and STOMP all load. Pilz's
+PTP / LIN / CIRC are the same set of moves as Yaskawa INFORM's `MOVJ` / `MOVL` /
+`MOVC`, the vocabulary an integrator already uses.
+
+**Acceleration limits are assumed (tag A).** Yaskawa does not publish them.
+Without them MoveIt silently uses 1 rad/s² for every joint.
+`config/joint_limits.yaml` assumes each axis reaches full speed in 0.5 s
+(a = 2·v_max). **Revisit before task 2.7 reports a cycle time.**
+
+**Known noise.** When TRAC-IK or pick_ik is loaded, `move_group` segfaults
+in its executor destructor on Ctrl-C. This happens after all work is done;
+it is the plugin-unloading issue `class_loader` warns about.
  
 ### 4A.3 — Gazebo with ros2_control
  

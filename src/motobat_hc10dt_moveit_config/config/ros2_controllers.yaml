@@ -1,0 +1,32 @@
+# ros2_control controllers for the Inspector.
+#
+# MoveIt commands the arm ONLY through the FollowJointTrajectory action that
+# inspector_arm_controller serves, and reads state ONLY from /joint_states.
+# That is the same contract MotoROS2 exposes on a real YRC1000micro, so moving
+# from mock hardware to Gazebo (2.2) to Isaac Sim to hardware changes the
+# hardware plugin, never this file's consumers (project_plan.md §6).
+controller_manager:
+  ros__parameters:
+    update_rate: 100  # Hz
+
+    inspector_arm_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+inspector_arm_controller:
+  ros__parameters:
+    joints:
+      - s3_joint_1_s
+      - s3_joint_2_l
+      - s3_joint_3_u
+      - s3_joint_4_r
+      - s3_joint_5_b
+      - s3_joint_6_t
+    command_interfaces:
+      - position
+    state_interfaces:
+      - position
+      - velocity
+    allow_nonzero_velocity_at_trajectory_end: true
