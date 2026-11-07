@@ -1257,9 +1257,26 @@ Without them MoveIt silently uses 1 rad/s² for every joint.
 `config/joint_limits.yaml` assumes each axis reaches full speed in 0.5 s
 (a = 2·v_max). **Revisit before task 2.7 reports a cycle time.**
 
-**Known noise.** When TRAC-IK or pick_ik is loaded, `move_group` segfaults
-in its executor destructor on Ctrl-C. This happens after all work is done;
-it is the plugin-unloading issue `class_loader` warns about.
+**Known noise.** `move_group` often segfaults in its executor destructor on
+Ctrl-C. It happens with every IK plugin, KDL included, and in Gazebo too, but
+only after the SIGINT, when all work is done. Harmless.
+
+**How to run it** (verified 6 Nov 2026, headless and in RViz):
+
+```bash
+# Terminal 1: MoveIt + RViz, simulated hardware (no physics)
+cd ~/projects/MotoBat-arm && source motobat_env.sh
+ros2 launch motobat_hc10dt_moveit_config demo.launch.py
+# Terminal 2: acceptance check, an OMPL joint move then a Pilz LIN; prints PASS
+ros2 run motobat_hc10dt_moveit_config plan_exec_check.py
+# On its own (Ctrl-C Terminal 1 first): the IK solver benchmark
+ros2 run motobat_hc10dt_moveit_config compare_ik.py
+```
+
+**To fold in at merge** (docs the Phase 1 lane owns): `WORKFLOW.md` gets the
+recipes here and in §4A.3; `project_structure.md` marks `motobat_hc10dt_moveit_config` and
+`motobat_bringup` as existing and lists the new `motobat_description` files
+(`line_layout.xacro`, `inspector_station*.xacro`, `hc10dt_macro.xacro`).
  
 ### 4A.3 — Gazebo with ros2_control
  
@@ -1284,7 +1301,68 @@ One arm at a time. Gazebo with a single arm is comfortable in 8 GB.
   the module appears **1000× too large**. Expect this to be the first failure.
 - Each part's origin must sit at its `module_spec.md` §7 named datum (cell:
   centre of the can's bottom face) so parts can be placed by transform alone.
- 
+
+#### As built — 6 Nov 2026 (`motobat_bringup/launch/inspector_gazebo.launch.py`)
+
+**What exists.** The Inspector in Gazebo Harmonic (gz-sim 8), driven by
+MoveIt through the same `FollowJointTrajectory` → `inspector_arm_controller`
+path as the mock setup. The only change is the hardware plugin: the xacro arg
+`sim:=gazebo` selects `gz_ros2_control/GazeboSimSystem`, and that plugin hosts
+the controller_manager. `ros2_controllers.yaml` is shared by both setups.
+
+**Mass properties had to be added.** The vendor HC10DT URDF has no
+`<inertial>` tags. Gazebo drops a massless link, so the arm would not
+assemble. `motobat_description/scripts/hc10dt_inertials.py` computes each
+link's volume, centre of mass and inertia tensor exactly from its vendor
+collision mesh (signed tetrahedra; checked against a unit cube). It assumes
+one uniform density, scaled so the arm totals **48 kg (S, Yaskawa EU product
+page, standard HC10DT; the IP67 variant is 58 kg)**. The resulting density is
+984 kg/m³, plausible for a hollow aluminium arm. The per-link split is
+**A**: real motors and gearboxes sit nearer the joints. That is fine for
+position-commanded simulation, but not for dynamics identification or
+effort-based collision detection. The numbers are in
+`config/hc10dt_inertials.yaml`. URDF cannot add tags to links another macro
+already defined, so `urdf/hc10dt_macro.xacro` is a copy of the vendor macro
+(commit 93a282d) whose only additions are those inertials. The line and the
+MoveIt config both use it.
+
+**Position gain: 1.0, not the plugin's 0.1.** `GazeboSimSystem` turns a
+position command into a joint velocity, v = k·(q_cmd − q)·f_update, so the
+joint lags a moving setpoint. That lag is a simulation artifact; a real
+controller tracks its own path tightly. Left alone, it would bend every LIN
+scan pass. Measured with `plan_exec_check.py` (20 % speed, 100 Hz):
+
+| k | worst tracking error, OMPL joint move | worst tracking error, Pilz LIN |
+|---|---|---|
+| 0.1 (plugin default) | 2.35° | 1.71° |
+| 0.5 | 0.29° | 0.23° |
+| **1.0** | **0.026°** | **0.022°** |
+| 1.5 | 0.13° | 0.09° |
+| mock hardware, for reference | 0.004–0.024° | 0.003–0.015° |
+
+k is the fraction of the error corrected per control cycle, so it is stable
+for 0 < k < 2 and fastest without overshoot at 1. The sweep agrees: 1.5
+overshoots. The plugin reads the gain only at start-up; `ros2 param set`
+reports success but changes nothing.
+
+**Verified.** The arm holds `ready` under gravity (0.0000° drift over 10 s),
+and Gazebo runs at a real-time factor of 1.00 on this machine, server only.
+`plan_exec_check.py` passes in Gazebo: joint move within 0.04°, LIN within
+0.001 mm of target. The GUI starts with no mesh errors (headless check only;
+not yet inspected by eye).
+
+```bash
+# Terminal 1: Gazebo + MoveIt + RViz (gui:=false rviz:=false for headless)
+cd ~/projects/MotoBat-arm && source motobat_env.sh
+ros2 launch motobat_bringup inspector_gazebo.launch.py
+# Terminal 2: acceptance check; prints PASS
+cd ~/projects/MotoBat-arm && source motobat_env.sh
+ros2 run motobat_hc10dt_moveit_config plan_exec_check.py
+```
+
+Not done here: the module meshes and simulated sensors (task 2.6), and speeds
+above 20 %, which task 2.7 will need with real acceleration limits.
+
 ### 4A.4 — Custom sensor flange for the HC10DT
 
 > **Redefined by §3.7.3 (15 Sep), revised 28 Oct 2026.** The wrist carries a

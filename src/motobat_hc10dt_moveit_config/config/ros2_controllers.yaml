@@ -30,3 +30,16 @@ inspector_arm_controller:
       - position
       - velocity
     allow_nonzero_velocity_at_trajectory_end: true
+
+# Gazebo only: gz_ros2_control's own node (task 2.2). The mock setup has no
+# node of this name, so this block is ignored there.
+# GazeboSimSystem turns each position command into a joint velocity,
+#   v = k * (q_cmd - q) * update_rate,
+# so the joint lags a moving setpoint by about v / (k * update_rate). At the
+# plugin default k = 0.1 that lag was 2.3 deg mid-move at 20 % speed: a
+# simulation artifact (a real controller tracks its own path tightly) that
+# would bend every LIN scan pass. k corrects that fraction of the error per
+# control cycle: stable for 0 < k < 2, fastest without overshoot at 1.
+gz_ros_control:
+  ros__parameters:
+    position_proportional_gain: 1.0
