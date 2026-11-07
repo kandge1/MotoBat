@@ -1,0 +1,81 @@
+<?xml version="1.0"?>
+<!--
+  Inspector sensor flange on the HC10DT tool flange (task 2.4).
+
+  Every number comes from config/inspector_flange.yaml, which
+  scripts/step_frames.py derives from cad/inspector/inspector_flange.step.
+  Nothing here is typed from a screen (project_plan.md §4A.4).
+  Regenerate after any Fusion change:
+      scripts/step_frames.py > config/inspector_flange.yaml
+
+  Frames:
+    ${prefix}flange       the Mount frame: PCD-63 bolt-circle centre on the robot-side
+                          face, +Z out of the robot. Bolted to ${prefix}tool0.
+    ${prefix}zivid_mount  Zivid 2+ M60 screw-hole datum, Z = viewing direction
+    ${prefix}ljx_mount    LJ-X8200 screw-hole datum, Z = laser direction
+  The optical frames (camera origin, laser reference point) hang off the two
+  mount datums as datasheet offsets: not added yet.
+
+  PENDING: flange_yaw, the rotation of the plate about tool0's Z. It is set by
+  where the HC10DT's dowel hole sits relative to tool0's X axis. The plate's
+  dowel hole is on its +Y axis; the vendor flange mesh shows its extra holes on
+  tool0's +-X axis. Until that is settled from Yaskawa's flange drawing, 0 is a
+  placeholder, NOT a measurement.
+
+  Visual: inspector_flange_visual.stl, decimated from the 99 MB Fusion export
+  (scripts/decimate_flange_mesh.py; max deviation 0.23 mm). Collision: one box
+  per part, 2 mm margin.
+-->
+<robot xmlns:xacro="http://ros.org/wiki/xacro">
+
+  <xacro:macro name="inspector_flange" params="prefix parent flange_yaw:=0.0">
+    <xacro:property name="fl"
+        value="${xacro.load_yaml('$(find motobat_description)/config/inspector_flange.yaml')['inspector_flange']}"/>
+    <xacro:property name="v3" value="${lambda v: ' '.join(str(x) for x in v)}"/>
+
+    <xacro:macro name="flange_box" params="part">
+      <collision>
+        <origin xyz="${v3(fl['collision_boxes'][part]['xyz'])}" rpy="0 0 0"/>
+        <geometry><box size="${v3(fl['collision_boxes'][part]['size'])}"/></geometry>
+      </collision>
+    </xacro:macro>
+
+    <link name="${prefix}flange">
+      <visual>
+        <geometry>
+          <mesh filename="package://motobat_description/meshes/inspector/inspector_flange_visual.stl"
+                scale="0.001 0.001 0.001"/>
+        </geometry>
+        <material name="inspector_grey"><color rgba="0.62 0.64 0.67 1.0"/></material>
+      </visual>
+      <xacro:flange_box part="mount"/>
+      <xacro:flange_box part="zivid"/>
+      <xacro:flange_box part="ljx"/>
+      <xacro:property name="I" value="${fl['inertial']}"/>
+      <inertial>
+        <origin xyz="${v3(I['xyz'])}" rpy="0 0 0"/>
+        <mass value="${I['mass']}"/>
+        <inertia ixx="${I['ixx']}" ixy="${I['ixy']}" ixz="${I['ixz']}"
+                 iyy="${I['iyy']}" iyz="${I['iyz']}" izz="${I['izz']}"/>
+      </inertial>
+    </link>
+
+    <joint name="${prefix}tool0-flange" type="fixed">
+      <parent link="${parent}"/>
+      <child link="${prefix}flange"/>
+      <origin xyz="0 0 0" rpy="0 0 ${flange_yaw}"/>
+    </joint>
+
+    <xacro:macro name="flange_frame" params="name">
+      <link name="${prefix}${name}"/>
+      <joint name="${prefix}flange-${name}" type="fixed">
+        <parent link="${prefix}flange"/>
+        <child link="${prefix}${name}"/>
+        <origin xyz="${v3(fl['frames'][name]['xyz'])}" rpy="${v3(fl['frames'][name]['rpy'])}"/>
+      </joint>
+    </xacro:macro>
+    <xacro:flange_frame name="zivid_mount"/>
+    <xacro:flange_frame name="ljx_mount"/>
+  </xacro:macro>
+
+</robot>

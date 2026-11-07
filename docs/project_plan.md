@@ -1517,6 +1517,70 @@ triangles the ray caster intersects for nothing. What matters is
 face, and the dowel hole fixes the X direction. The mount CAD's origin and X
 axis must coincide with `tool0`, so sensor frames derived numerically from CAD
 match the URDF (the rule above).
+
+#### As built so far — 7 Nov 2026 (task 2.4, in progress)
+
+**Pipeline: CAD → numbers → xacro, with no hand typing.**
+`scripts/step_geometry.py` reads the STEP's exact analytic surfaces (planes,
+cylinders) per part with numpy alone. `scripts/step_frames.py` locates features
+and writes `config/inspector_flange.yaml`. `urdf/inspector_flange.xacro` loads
+it, and `inspector_station.xacro` bolts it to `s3_tool0`, so the line and the
+MoveIt config both carry it. After any Fusion change, re-run `step_frames.py`
+and `regen_collision_matrix.sh`.
+
+**Checked from the CAD, not assumed:** the Mount origin is the centre of the
+bolt circle (PCD **63.000 mm**, 4 holes) on the robot-side face (z = 0), and +Z
+points away from the robot. That matches `tool0`'s origin and Z.
+
+**Frames now in the URDF** (`s3_tool0 → s3_flange → s3_zivid_mount, s3_ljx_mount`):
+
+| frame | origin in flange frame (mm) | how it is defined |
+|---|---|---|
+| `zivid_mount` | (0, −57.0, 78.6) | centroid of the 3 Zivid screw holes the bracket counterbores, on the contact face; Z = mean of the two front-window normals (toed in 1.4° each, symmetric) |
+| `ljx_mount` | (22.0, 27.0, 15.0) | centroid of the 3 LJ-X8200 screw holes matching the bracket's, on the bracket face; Z = laser direction |
+
+Both sensors look along +Z. The Keyence receiver bore is tilted 21.7° off Z,
+and its axis meets the laser plane about 258 mm past the emitter window,
+consistent with the datasheet's ≈ 245 mm reference distance.
+
+**Not yet: the optical frames.** The Zivid camera origin and the LJ-X laser
+emission / reference point are defined by the vendors, relative to these
+mounting holes. They will be datasheet offsets (S) on top of the mount frames.
+The CAD cannot settle them: the Zivid's two windows are geometrically identical
+(camera vs projector), and the LJ-X has two candidate exit slots about 5 mm apart.
+
+**PENDING — `flange_yaw`, the plate's rotation about `tool0`.** The plate's Ø6
+dowel hole is on its **+Y** axis, at r = 34.0 mm. The vendor `link_6_t` visual
+mesh, the only HC10DT flange geometry available, shows its two extra holes on
+`tool0`'s **±X** axis. Either the plate is rotated 90° relative to `tool0`, or
+it was modelled to a different convention, and the sign is open too. Set
+from Yaskawa's flange drawing or the Fusion assembly. Until then
+`flange_yaw = 0` is a placeholder.
+
+**Visual and collision.** The visual mesh is decimated from the 99 MB export
+to 60 000 triangles / 3 MB (`decimate_flange_mesh.py`; deviation median 0.000,
+p99 0.009, max 0.23 mm). Collision is one box per part, with a 2 mm margin. No
+FOV geometry exists in the STEP or STL (checked), so nothing invisible collides.
+The regenerated collision matrix adds 3 disabled pairs: `link_6_t` adjacent,
+and `link_3_u` and `link_5_b` never in contact. The flange's pairs with the
+other links stay checked.
+
+**Mass: 2.7 kg of 10** (Zivid 1.0 S, LJ-X 1.2 S, plate + cabling 0.5 A),
+each part treated as a solid box for the inertia. `plan_exec_check.py`
+passes with the flange on, on mock hardware and in Gazebo. In Gazebo the arm
+holds its pose (0.0000° drift), and the real-time factor is 0.98.
+
+**For the next Fusion revision (task 2.3):**
+- **The bolt holes are Ø5.0, the M6 tapping drill.** An M6 screw needs a
+  Ø6.6 clearance hole through the plate, so the plate cannot be bolted on
+  as modelled.
+- **The STEP's `Mount v3` body is orphaned.** It is written as two identical
+  closed shells that no part references, so a strict STEP reader loads the
+  file without the plate. `step_geometry.py` adopts it and says so. Re-export.
+- **The LJ-X8200 top sits 0.3 mm past the bracket face.** That is either an
+  interference or a locating step: check in Fusion.
+- The Fusion User Parameters (sensor poses) are not in the STEP. A copy of
+  the parameter table would cross-check the frames above.
 ### 4A.5 — Deferred: simulated network switch for DDS
  
 Considered and **deliberately deferred.** Recording the reasoning so it is not

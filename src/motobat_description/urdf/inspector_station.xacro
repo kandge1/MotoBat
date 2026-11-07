@@ -13,14 +13,17 @@
 
   The sensor flange (task 2.4, inspector_flange.xacro) attaches to
   ${prefix}tool0 here, so the line and the MoveIt config both carry it.
+  Its rotation about tool0 (flange_yaw) is still pending: see that file.
 -->
 <robot xmlns:xacro="http://ros.org/wiki/xacro">
 
   <xacro:include filename="$(find motobat_description)/urdf/hc10dt_macro.xacro"/>
+  <xacro:include filename="$(find motobat_description)/urdf/inspector_flange.xacro"/>
 
   <xacro:macro name="motobat_inspector_station" params="prefix">
     <xacro:motobat_hc10dt prefix="${prefix}"/>
     <xacro:station_mount prefix="${prefix}" x="${s3_x}" y="${s3_y}" z="${s3_z}" yaw="${s3_yaw}"/>
+    <xacro:inspector_flange prefix="${prefix}" parent="${prefix}tool0"/>
   </xacro:macro>
 
 </robot>
