@@ -2,20 +2,38 @@
 # Source: cad/inspector/inspector_flange.step (sha256 667ecb63409d8fd4...)
 # Mount frame = STEP assembly origin: PCD-63 bolt circle centre on the robot-side face,
 # +Z out of the robot. Lengths in metres, angles in radians.
-# NOTE: 'Mount v3' has no linked geometry; adopted unreferenced CLOSED_SHELL #63481 (2 identical copies in the file). Re-export from Fusion to fix.
-# NOTE: bolt holes are Ø5.0 mm: the M6 tapping drill. An M6 screw needs a Ø6.6 clearance hole through the plate.
+# NOTE: 'Mount v3' has no linked geometry; adopted unreferenced CLOSED_SHELL #63481 (2 identical copies in the file). The model is fine in Fusion; this is a quirk of the export, and only strict STEP readers drop the body.
+# NOTE: bolt holes are Ø5.0 mm, matching the robot flange's tapped holes. Fine for the current cosmetic sheet-metal mount; a machined plate would need Ø6.6 clearance.
+# NOTE: Zivid 2D camera is on mount +X; optical centre [57.02, -27.5, 93.96] mm (Zivid datasheet offsets from the Ø5 positioning hole, which the CAD matches: 25.000 across, 1.000 back).
 # NOTE: Zivid front windows are toed in by [1.4] deg; the mount frame Z is their mean, [0.0, -0.0, 1.0].
 # NOTE: LJ-X8200 top reaches 14.656 mm, 0.300 mm past the bracket face at 14.956 mm: check for interference in Fusion.
+# NOTE: LJ-X8200 laser line at [-57.02, 31.0, 92.66] mm (emitter face); reference point 275 mm further along the beam. All six drawing dimensions checked against the CAD.
+# NOTE: HC10DT dowel (Ø6, 6 deep) at 1.3 deg in tool0, bolts (Ø5, 11.5 deep) at [-135, -45, 45, 135] deg: vendor link_6_t mesh
 inspector_flange:
   step_sha256_16: "667ecb63409d8fd4"
   bolt_pcd: 0.063000
   dowel_xyz: [-0.000000, 0.034000, 0.000000]   # radius 34.000 mm, at 90.00 deg from mount +X
-  frames:
+  flange_yaw: -1.570796   # plate about tool0 Z: robot dowel at tool0 +X, plate dowel at 90.0 deg -> -90.0 deg
+  frames:   # each relative to its parent
     zivid_mount:
+      parent: flange
       xyz: [-0.000000, -0.057000, 0.078623]
       rpy: [0.000000, -0.000000, 0.000000]
     ljx_mount:
+      parent: flange
       xyz: [0.021978, 0.027000, 0.014956]
+      rpy: [0.000000, -0.000000, 0.000000]
+    zivid_optical:
+      parent: zivid_mount
+      xyz: [0.057020, 0.029500, 0.015333]
+      rpy: [0.000000, 0.043633, -3.141593]
+    ljx_laser:
+      parent: ljx_mount
+      xyz: [-0.079000, 0.004000, 0.077700]
+      rpy: [0.000000, -0.000000, 1.570796]
+    ljx_reference:
+      parent: ljx_laser
+      xyz: [0.000000, 0.000000, 0.275000]
       rpy: [0.000000, -0.000000, 0.000000]
   collision_boxes:
     mount:

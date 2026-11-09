@@ -1518,7 +1518,7 @@ face, and the dowel hole fixes the X direction. The mount CAD's origin and X
 axis must coincide with `tool0`, so sensor frames derived numerically from CAD
 match the URDF (the rule above).
 
-#### As built so far — 7 Nov 2026 (task 2.4, in progress)
+#### As built — 7–9 Nov 2026 (task 2.4)
 
 **Pipeline: CAD → numbers → xacro, with no hand typing.**
 `scripts/step_geometry.py` reads the STEP's exact analytic surfaces (planes,
@@ -1532,7 +1532,8 @@ and `regen_collision_matrix.sh`.
 bolt circle (PCD **63.000 mm**, 4 holes) on the robot-side face (z = 0), and +Z
 points away from the robot. That matches `tool0`'s origin and Z.
 
-**Frames now in the URDF** (`s3_tool0 → s3_flange → s3_zivid_mount, s3_ljx_mount`):
+**Frames in the URDF:** `s3_tool0 → s3_flange → s3_zivid_mount → s3_zivid_optical`, and
+`s3_flange → s3_ljx_mount → s3_ljx_laser → s3_ljx_reference`. The datums (flange frame):
 
 | frame | origin in flange frame (mm) | how it is defined |
 |---|---|---|
@@ -1543,19 +1544,53 @@ Both sensors look along +Z. The Keyence receiver bore is tilted 21.7° off Z,
 and its axis meets the laser plane about 258 mm past the emitter window,
 consistent with the datasheet's ≈ 245 mm reference distance.
 
-**Not yet: the optical frames.** The Zivid camera origin and the LJ-X laser
-emission / reference point are defined by the vendors, relative to these
-mounting holes. They will be datasheet offsets (S) on top of the mount frames.
-The CAD cannot settle them: the Zivid's two windows are geometrically identical
-(camera vs projector), and the LJ-X has two candidate exit slots about 5 mm apart.
+**Zivid optical frame: done (S + CAD).** `zivid_optical` is Zivid's own camera
+frame, the one its point clouds are expressed in. Its origin is the optical centre of the 2D-camera lens; x points toward
+the projector, y down, z out (the same as ROS REP-103's optical convention).
+Zivid publishes it relative to the Ø5 positioning hole on the camera's
+mounting face ([Zivid: Camera Coordinate System](https://support.zivid.com/en/latest/camera/reference-articles/camera-coordinate-system.html),
+2+ M60 drawings): 32.02 mm further out, 49.00 mm toward the front, 29.5 mm
+above the mounting face, and the camera axis toed in 2.5° toward the
+projector. The script finds that hole in the STEP and checks it against the
+same drawing (25.000 mm across and 1.000 mm back from the centre screw, both
+exact) before applying the offsets. Result, in the flange frame:
+**(57.02, −27.50, 93.96) mm, tilted 2.500°**. The camera is on flange +X and
+the projector on −X. (The front windows are toed in 1.4°; that is the
+glass, not the optical axis.)
 
-**PENDING — `flange_yaw`, the plate's rotation about `tool0`.** The plate's Ø6
-dowel hole is on its **+Y** axis, at r = 34.0 mm. The vendor `link_6_t` visual
-mesh, the only HC10DT flange geometry available, shows its two extra holes on
-`tool0`'s **±X** axis. Either the plate is rotated 90° relative to `tool0`, or
-it was modelled to a different convention, and the sign is open too. Set
-from Yaskawa's flange drawing or the Fusion assembly. Until then
-`flange_yaw = 0` is a placeholder.
+**LJ-X8200 laser frames: done (S + CAD).** From Keyence's LJ-X8200 data sheet,
+p.2 dimension drawing (downloaded 9 Nov 2026). The script checks six drawing
+dimensions against the CAD before using any: the M5 pair 24 apart, the single
+M5 60 from the pair and 51 from the laser-end face, the head 185 × 55 × 108, the
+end-face M3 holes at 12.5 / 42.5, and the emitter face 30 above the far face.
+All match to 0.02 mm. The receiver's 21.7° also matches the CAD's receiver bore.
+- `ljx_laser`: the laser line centre on the emitter face, 12 mm in from the
+  laser-end face and 27 mm in from the side face. Z points along the beam, x
+  along the laser line (the profile's X; its sign is **A**, and it only
+  mirrors the profile), y along the head (the scan direction). In the flange
+  frame: (−57.02, 31.00, 92.66) mm.
+- `ljx_reference`: 275 mm further along the beam, i.e. 30 mm to the head's far
+  face plus the 245 mm reference distance. Keyence reports height as −z
+  here: +34 mm is toward the head (Z range ±34; X width 64 near, 72 at the
+  reference, 80 far).
+
+**`flange_yaw` = −90°, resolved 9 Nov 2026.** Measured by hole depth in the
+vendor `link_6_t` mesh, the HC10DT flange has four M6 tapped holes (Ø5, 11.5 deep)
+at ±45° and ±135°, and **one Ø6 dowel hole, 6 deep, on `tool0` +X**. A first pass
+misread an 8-fold recess edge at r ≈ 38 mm as two holes on ±X; depth
+separates them. This agrees with the user's Fusion HC10DT model: the dowel sits
+45° from a bolt hole, at r = 34 mm. The plate's dowel is on its +Y, so the
+plate sits at −90° about `tool0` Z. FK confirms the plate dowel lands at
+(34, 0, 0) mm in `tool0`. `step_frames.py` measures the robot dowel from the mesh
+on every run, so the yaw follows the plate if a revision moves its dowel.
+
+In `tool0` coordinates: Zivid camera (−27.5, −57.0, 94.0) mm, toed in 2.5°; LJ-X
+laser (31.0, 57.0, 92.7) mm; LJ-X reference (31.0, 57.0, 367.7) mm.
+
+Re-verified after the rotation (9 Nov 2026): the regenerated collision matrix is
+unchanged, and `plan_exec_check.py` passes on mock hardware and in Gazebo. In
+Gazebo the arm holds its pose (0.0000° drift), the real-time factor is 0.98, and
+tracking stays within 0.07°.
 
 **Visual and collision.** The visual mesh is decimated from the 99 MB export
 to 60 000 triangles / 3 MB (`decimate_flange_mesh.py`; deviation median 0.000,
@@ -1571,12 +1606,12 @@ passes with the flange on, on mock hardware and in Gazebo. In Gazebo the arm
 holds its pose (0.0000° drift), and the real-time factor is 0.98.
 
 **For the next Fusion revision (task 2.3):**
-- **The bolt holes are Ø5.0, the M6 tapping drill.** An M6 screw needs a
-  Ø6.6 clearance hole through the plate, so the plate cannot be bolted on
-  as modelled.
-- **The STEP's `Mount v3` body is orphaned.** It is written as two identical
-  closed shells that no part references, so a strict STEP reader loads the
-  file without the plate. `step_geometry.py` adopts it and says so. Re-export.
+- The mount is cosmetic sheet metal (the user, 9 Nov 2026): its Ø5 bolt holes
+  mirror the robot's tapped holes and its Ø6 hole the dowel, which is all
+  the frames need. A machined plate would need Ø6.6 clearance holes.
+- In the STEP file (not in Fusion), `Mount v3`'s body is written as two
+  identical closed shells that no part references: an export quirk. Strict
+  STEP readers drop it; `step_geometry.py` adopts it and says so.
 - **The LJ-X8200 top sits 0.3 mm past the bracket face.** That is either an
   interference or a locating step: check in Fusion.
 - The Fusion User Parameters (sensor poses) are not in the STEP. A copy of

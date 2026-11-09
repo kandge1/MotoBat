@@ -13,7 +13,6 @@
 
   The sensor flange (task 2.4, inspector_flange.xacro) attaches to
   ${prefix}tool0 here, so the line and the MoveIt config both carry it.
-  Its rotation about tool0 (flange_yaw) is still pending: see that file.
 -->
 <robot xmlns:xacro="http://ros.org/wiki/xacro">
 

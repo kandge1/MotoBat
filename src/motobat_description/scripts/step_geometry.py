@@ -212,7 +212,7 @@ class StepAssembly:
         self._collect(empty[0], self.reachable(orphans[0]))
         self.orphan_note = (f"'{empty[0].name}' has no linked geometry; adopted unreferenced "
                             f'CLOSED_SHELL #{orphans[0]} ({len(orphans)} identical copies in the file). '
-                            'Re-export from Fusion to fix.')
+                            'The model is fine in Fusion; this is a quirk of the export, and only strict STEP readers drop the body.')
 
     def _collect(self, part, ids):
         T = part.to_assembly
