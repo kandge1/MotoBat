@@ -1248,6 +1248,24 @@ reached, so every miss is a real solution the solver did not find.
   were outside its reach, and the timeout was 5 ms. Here it is 50 ms on a
   1.2 m arm.
 
+**Re-run with the inspector flange fitted (9 Nov 2026, after 2.4).** Same 3×1000
+targets (`compare_ik.py --samples 1000 --out data/ik_compare_flange`, with the
+saved targets copied in). The flange's collision boxes now reject some answers.
+
+| solver | down | cone | random | median solve* |
+|---|---|---|---|---|
+| **KDL** | 99.1 % | **99.6 %** | **97.0 %** | 1.2–3.9 ms |
+| TRAC-IK Distance | **99.9 %** | **99.6 %** | 92.4 % | 52 ms |
+| pick_ik (global) | 96.9 % | 97.5 % | 78.0 % | 12–17 ms |
+| TRAC-IK Speed | 97.0 % | 95.6 % | 87.9 % | 1.6–2.1 ms |
+
+\*Times are about 2× the first run because the other lane was loading the
+machine (load average 11); compare the solvers with each other, not with the
+earlier table. KDL is still first or tied first on cone and random. On down it
+is 8 targets in 1000 behind TRAC-IK Distance, which takes about 40× longer per
+call. **KDL stays.** pick_ik lost the most to the flange (random 90 → 78 %):
+its answers more often put the sensors into the arm.
+
 **Planners.** OMPL (default), Pilz, CHOMP and STOMP all load. Pilz's
 PTP / LIN / CIRC are the same set of moves as Yaskawa INFORM's `MOVJ` / `MOVL` /
 `MOVC`, the vocabulary an integrator already uses.
@@ -1591,6 +1609,19 @@ Re-verified after the rotation (9 Nov 2026): the regenerated collision matrix is
 unchanged, and `plan_exec_check.py` passes on mock hardware and in Gazebo. In
 Gazebo the arm holds its pose (0.0000° drift), the real-time factor is 0.98, and
 tracking stays within 0.07°.
+
+**TF tree (task 2.8, 9 Nov 2026).** `view_frames` on the headless MoveIt demo
+(`demo.launch.py use_rviz:=false`) shows a single tree rooted at `world` with 15
+frames: `world → s3_base_link → s3_link_1_s … s3_link_6_t → s3_tool0 →
+s3_flange`, then `s3_flange → s3_zivid_mount → s3_zivid_optical` and
+`s3_flange → s3_ljx_mount → s3_ljx_laser → s3_ljx_reference`, plus the vendor's
+`s3_base`. There are no orphan frames and no second root. The joint transforms
+come from `robot_state_publisher` off `/joint_states`; everything from `tool0`
+down is static. `tf2_echo s3_tool0 <frame>` matches the `tool0` numbers above to
+the millimetre: `zivid_optical` (−27, −57, 94) mm at RPY (0, 2.5°, 90°), `ljx_laser`
+(31, 57, 93) mm, `ljx_reference` (31, 57, 368) mm. Reproduce: start the demo, then
+`ros2 run tf2_tools view_frames` (it writes `frames_<date>.pdf` in the current
+directory; don't run it inside the repo).
 
 **Visual and collision.** The visual mesh is decimated from the 99 MB export
 to 60 000 triangles / 3 MB (`decimate_flange_mesh.py`; deviation median 0.000,
