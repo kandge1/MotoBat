@@ -219,7 +219,7 @@ from the MDPI paper itself.
 | 2.5 | Reachable view plan: Phase 1 viewpoints filtered by IK and collision, ordered to minimise motion | 4B.5 | the arm earns its place here. Must account for: **two different standoffs** (Zivid ≈ 600 mm nominal, 300–1100; LJ-X8200 ≈ 245 mm) implying separate poses per sensor; the **≈ 39° wall-occlusion limit** on outer terminal edges (`module_spec.md` §5); and housing-to-housing occlusion. **Needs 2.1 first** — scan poses cannot be checked for reach or collision without the HC10DT MoveIt config. |
 | 2.6 | Module meshes in Gazebo; depth camera + narrow-fan `gpu_lidar` as the sensors; fixed line-scan station alongside | 4B.8, 4A.3 | The CAD exists, so this loads real meshes. **Gazebo cannot load STEP** (STL/OBJ/DAE/glTF only), and **STL has no units while Gazebo assumes metres** — every mesh tag needs `<scale>0.001 0.001 0.001</scale>` or the module is 1000× too large. **(4 Nov 2026)** A defectgen module is ≈ 1 M triangles, mostly weld beads (`weld.py`). Gazebo needs a decimated or plain-bead export, with the fine bead detail left to the numpy sensor models. Gazebo also cannot drop points on specular copper, which strengthens §3.7.8 (fidelity lives in Phase 1). |
 | 2.7 | **Fixed vs arm with real cycle time** (motion + capture per module) | 3.7.6 | completes the central comparison |
-| 2.8 | Verify TF tree: `ros2 run tf2_tools view_frames` | 4A.4 | |
+| 2.8 | Verify TF tree: `ros2 run tf2_tools view_frames` ✅ 9 Nov | 4A.4 | One tree rooted at `world`, 15 frames, no orphans: arm chain → `s3_tool0` → `s3_flange` → Zivid (`zivid_mount` → `zivid_optical`) and LJ-X (`ljx_mount` → `ljx_laser` → `ljx_reference`). `tf2_echo` from `s3_tool0` matches the CAD-derived offsets to the millimetre. |
 
 ---
 
