@@ -196,17 +196,27 @@ def _shape(cfg, seam: SeamPlan, gap: np.ndarray):
 
     # Crown: elliptical across the melt, capped where the energy overshoots
     # (that excess is the heat-input signal step 3 of the queue uses).
-    crown = seam.height * np.sqrt(np.clip(melt, 0.0, 1.5))
-    # Ripples and the crater scale the crown rather than cut into it, so a
-    # good weld never dips below the busbar surface: ripple height goes with
-    # the pool, and an unfed pool at the stop sinks toward the surface.
-    ripple = 1.0 + (cfg.weld_ripple_amp / seam.height) * np.cos(
-        2 * np.pi * along / cfg.weld_ripple_pitch
-    )
-    crater = 1.0 - (cfg.weld_crater_depth / seam.height) * np.exp(
-        -((pts - beam[-1]) ** 2).sum(axis=1) / (2 * sigma**2)
-    )
-    h = crown * ripple * np.clip(crater, 0.0, 1.0)
+    if seam.height > 0:
+        crown = seam.height * np.sqrt(np.clip(melt, 0.0, 1.5))
+        # Ripples and the crater scale the crown rather than cut into it, so a
+        # good weld never dips below the busbar surface: ripple height goes with
+        # the pool, and an unfed pool at the stop sinks toward the surface.
+        ripple = 1.0 + (cfg.weld_ripple_amp / seam.height) * np.cos(
+            2 * np.pi * along / cfg.weld_ripple_pitch
+        )
+        crater = 1.0 - (cfg.weld_crater_depth / seam.height) * np.exp(
+            -((pts - beam[-1]) ** 2).sum(axis=1) / (2 * sigma**2)
+        )
+        h = crown * ripple * np.clip(crater, 0.0, 1.0)
+    else:
+        # The whole crown lost (a reinforcement change of -weld_bead_h or more):
+        # the weld lies flush with the busbar top, or sunk below it as underfill.
+        # Ripples still freeze into its surface; there is no proud crown left for
+        # the crater to sink. Kept separate so a proud crown is built exactly as
+        # before. Sunk cells become a cut below.
+        h = np.sqrt(np.clip(melt, 0.0, 1.5)) * (
+            seam.height + cfg.weld_ripple_amp * np.cos(2 * np.pi * along / cfg.weld_ripple_pitch)
+        )
 
     # The gap takes melt with it: the crown drops by what it costs to bridge,
     # the toes undercut, and past weld_gap_hole -- or with nothing under the

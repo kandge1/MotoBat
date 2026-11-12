@@ -9,8 +9,8 @@ disagree, `project_plan.md` is right about *why* and this file is right about
 
 Section references like §4B.1 point into `project_plan.md`.
 
-*Last updated: 6 Nov 2026 — 1.4 detection v1; Phase 2 opened as a parallel lane in a second
-worktree.*
+*Last updated: 12 Nov 2026 — first pass of Phases 1–3 before refining; deferred items listed under
+"How work is sequenced". (6 Nov: 1.4 detection v1; Phase 2 opened as a parallel lane.)*
 
 ---
 
@@ -20,8 +20,8 @@ worktree.*
 > stays on Phase 1. The lanes, which docs each one edits, and the worktree setup are under
 > "How work is sequenced" below and in `project_plan.md` §8.
 
-> **7 Nov 2026: task 1.4 (detection) is done (commit `2001f72`); current task is 1.5, coverage
-> and view selection.** `python -m defectgen.detect data/<run> --stage <stage>`, findings in RViz
+> **8 Nov 2026: tasks 1.4 (`2001f72`) and 1.5 (`0f002a9`) are done; current task is 1.7, the
+> labelled dataset.** `python -m defectgen.detect data/<run> --stage <stage>`, findings in RViz
 > with `show_detections.py` (WORKFLOW.md, "Detection").
 
 > **Tasks 1.1 and 1.2 are done (3 Nov 2026).** `defectgen/` emits all three stages from the real
@@ -87,20 +87,33 @@ CMC and carrier match `module_assembled` (E6).
 Parked, not scheduled: injection-moulding defects in the carrier/cover
 (short shot, warpage, sink, flash) as a defect source.
 
+Parked for a follow-up project (9 Nov 2026): **process-driven welds** — weld outcomes caused
+by scanner speed, power, wobble, seam-position error, part vibration and gap; spatter as
+time-ordered events (landing ahead of the beam, on the bead, in a burn-through); heat tint.
+Design sketch, research digest (Path Robotics' public footprint, open weld datasets, Cu/Al
+battery-welding literature, physics models) and first steps: [`welding_followup.md`](welding_followup.md).
+MotoBat keeps its idealised weld defects and the 1.7 baseline dataset.
+
 ## ▶ CURRENT TASK
 
-> **§4B.5 — Coverage and view selection (task 1.5), no kinematics yet.** Which required
-> surfaces each approach can observe well enough to measure, in a single capture:
-> the fixed Ranger3 line-scan in one pass, and the HC10DT wrist sensors (Zivid snapshots,
-> Keyence sweeps) chosen by greedy set cover from candidate views. Coverage is counted from
-> the frozen sensor models (§4B.3), per defect class, against the sample spacing each class
-> needs (§3.7.3 rule: spacing ≤ D/2). Outputs: coverage per class for fixed, arm and the arm
-> ceiling, and a **view plan** (sensor poses and sweeps in the module frame). That plan is
-> what the ROS lane's 2.5 consumes, and what 1.7 scans its dataset with.
+> **Task 1.7 — the labelled dataset (§4B.6).** Modules with one injected defect each, swept
+> over size around each class's tolerance, several seeds per (class × size), scanned by the
+> fixed Ranger3 pass and by the arm's 1.5 view plan, each scan re-fixtured with a random
+> pallet error. Scored with the out-of-spec rule (a label below tolerance is not a defect;
+> flagging it is a false reject). Three tiers: `pod` (P/R, POD, fixed vs arm), `clean`
+> (false alarms per module) and `grr` (%GRR, AIAG crossed design). Seeded and regenerable;
+> outputs in `data/dataset/`, not committed.
 >
-> Design and maths: `project_plan.md` §4B.5 "Design" and §9.8 (coverage). Lives in
-> `defectgen/coverage.py`, `configs/coverage.yaml`. No ROS. One heavy `defectgen` job at a
-> time across both lanes (RAM).
+> Design: `project_plan.md` §4B.6 "1.7 dataset". Lives in `defectgen/dataset.py`,
+> `configs/dataset.yaml`. Heavy compute: one heavy `defectgen` job at a time across lanes.
+>
+> State, 9 Nov: the fixed setup is done for all three tiers (results in §4B.6 "Fixed run").
+> Arm hardening is done (§4B.6 "Arm hardening": registration from the housing strips, once
+> per load). The fixed re-run on it then exposed a datum fault (a side strip that bows
+> with a shifted cell; §4B.6 "A strip that moves with the defect"), now fixed, so the whole
+> dataset is re-running on the fixed detector: arm `clean`, fixed column, arm `pod`
+> (`data/chain_datum_fix.sh`, progress in `data/PROGRESS.md`). 1.8 (P/R with intervals,
+> reading error) and 1.9 (%GRR) read the stored results and are built alongside the runs.
 
 **Scope changed on 15 Sep: from inside a single cell to a battery module
 assembly line.** Cell-internal defects are buried under anode and separator,
@@ -159,6 +172,39 @@ export from `defectgen`, so that export is Phase 1 lane work. 2.7 needs 2.5 and 
 - **Merging:** merge the Phase 1 branch to `main` first. The ROS branch's PR then shows only
   its own commits.
 
+### First pass, then refine (11 Nov 2026)
+
+**The plan:** take Phases 1, 2 and 3 to a working first pass, end to end. Then come back for
+what was skipped. Phase 4 waits: it has no cloud budget, and 4.1 (Isaac Sim) was already
+optional. The write-up, demo and preprint (4.2–4.5) cost nothing and follow the refine pass.
+
+A first pass is **done** when the task runs, has a result, and states its limits. It is not
+done when the result is polished. Anything cut to get there goes in the table below, with
+why, so a skip is a choice on the record and not a gap found later.
+
+**Estimates (11 Nov, evenings and weekends):**
+- **Phase 1:** first pass by about Sun 15 Nov. Mon 16 Nov if the arm snapshot false alarms
+  need a detector change, which means re-running the arm column.
+- **Phase 2:** about 4–5 more days. It shares the 16 GB with the Phase 1 runs, so it ends
+  mid-to-late next week.
+- **Phase 3:** about 13–17 working sessions, roughly 3–5 weeks.
+
+**Deferred to refine.** When an item is picked up, strike it through with the date, as in
+the fixlist.
+
+| Item | Why it can wait | Where |
+|---|---|---|
+| 1.13 held-out validation set (and the optional learned classifier) | First-pass numbers come from the dev set. This set checks they hold on fresh seeds. ~2 days of compute. | plan §4B.6, "Later" |
+| 1.11 full sensitivity sweep (noise, spacing, standoff) | A cut-down sweep on the fixed setup answers "which sensor class". The full sweep is days of compute. | plan §4B.6 |
+| Dataset speed, beyond the first pass (F5: detector numpy on more cores, GPU) | First pass done 12 Nov (1.6–2×, results unchanged). The rest needs more RAM or a full rerun. | fixlist F5 |
+| Tolerance sourcing (D1, every **A** in `detect.yaml`) | In-spec/out-of-spec labels rest on assumed tolerances. Results are stated as conditional on them. | fixlist D1, plan §3.7.9 |
+| Geometry/tolerance contradictions (F1, F2) | Spec or CAD decisions, not detector work. | fixlist F1, F2 |
+| Detector limits (F3 narrow-bead width, F4 bow noise) | Measured and stated. Fix only if the result needs it. | fixlist F3, F4 |
+| Arm assumes exact robot poses | Robot pose error is not modelled in 1.7. Add it after 2.5 gives real poses. | plan §4B.6 |
+| Arm snapshot false alarms (bowed plate, foam), **if not fixed in the first pass** | Only if the fix forces a rerun that would block 1.10. | plan §4B.6 |
+| Reshape the golden bead to the measured crown and width | First pass (12 Nov): residuals inside a measured seam's footprint count as explained by the bead. That stopped in-spec reinforcement/width welds being rejected (10/10 and 9/10 on the arm). Reshaping the reference bead is the proper fix. | detect.py `_regions`, plan §4B.6 |
+| Spatter on the bead itself | A side effect of the line above: spatter landing inside a seam's footprint is not reported. Spatter beside the bead still is. State it as a limit, or fix it with the reshaped bead. | detect.py `_regions` |
+
 ---
 
 ## Phase 0 — Setup, repair, restructure ✅ COMPLETE
@@ -206,14 +252,15 @@ the contribution.
 | 1.2 | Defect injection: cell pose, terminal height/tilt, missing cell, reversed polarity, busbar pose/gap, weld seam, adhesive bead, FOD | 4B.2 | ✅ 3 Nov 2026 — `defects.py`, 13 of 15 in-scope classes. Each injector is tagged with the §4B.2 stage it first applies at, so one recipe describes all three stages. **Not done:** class 10 (gap-filler bead — no pre-cell stage exists yet) and class 12 (insulation film — deliberately never modelled as geometry, `module_spec.md` §3). |
 | 1.3 | Three ray-cast sensor models: fixed Ranger3 line-scan, wrist Zivid-class snapshot, wrist LJ-X8200-class profilometer. Both occlusions, dropout, noise; parameters **frozen and hashed before any results**. | 4B.3 | ✅ 4 Nov 2026 — `scan.py`. Two models: laser-line triangulation (LJ-X8200 and Ranger3 share it) and structured-light snapshot (Zivid). Each covers both occlusions, the range window, a grazing-angle cut, and per-material reflectance (`configs/materials.yaml`: diffuse plus Beckmann lobe per band), giving dark and glare dropout on bare Cu/Al. Noise grows as the returned light weakens and with distance². Line-sensor exposure falls as the profile rate rises (up to each sensor's max rate). Height is quantised. The profilometer triangulation angle is **22.0°, measured** from the Keyence model's receiver-window tilt in the flange STEP (was an assumed 23°). **Frozen: params hash `779e2255dc4c`**, pinned in `tests/test_scan.py` and written into every scan. Stated limitations (multipath, speckle, motion during capture, sub-surface scattering, thermal drift): `project_plan.md` §4B.3. Also: Zivid 2D quadrant photos (`--sensor photos`, display render, not frozen) and per-run `data/scan_logs/`. |
 | 1.4 | Detection: align → ICP → per-feature fits within one capture → residual segmentation → classify | 4B.4 | ✅ 7 Nov 2026 (`2001f72`) — `detect.py`, `fit.py`, `evaluate.py`, `configs/detect.yaml`; maths and measured findings in `project_plan.md` §4B.4 "As built". Every scan is compared ray by ray with a **golden capture** (the same rays cast at the clean module through the same frozen sensor model), and every feature is reported as f(scan) − f(golden). **Alignment registers to the housing, not the whole module.** Whole-module ICP was measured to fail: a 0.3 mm carrier lift dragged the fit 0.3 mm, and XY is barely constrained from above. Every in-scope class except `cover_misalignment` (final stage, not scanned) has a detector, and the clean module gives zero findings at all three stages. `ScanResult` now carries the organised ray index (no numbers changed; hash still `779e2255dc4c`), so **older scans must be rescanned**. Second pass (6 Nov): residuals are now taken against the module **as measured** (every measured part moved to its measured pose and recast), which removed the false alarms parts moving *within* tolerance caused (a 0.1 mm carrier gave 5,321); a capture measures a position only if its sample spacing is ≤ tolerance/2 (§3.7.3), so the Zivid now reports cell/busbar/seam positions as uncovered rather than wrong; scans record what they scanned and stale ones are skipped; reports carry OK/NOK/INCOMPLETE. Open: seam limits from ISO 13919-2 (not sourced); labels below tolerance score as FN (fix in 1.7); weld drift on the line-scan is marginal under a fixture error (one clean stitch 0.144 vs 0.10). 143 tests pass. Not yet: P/R with intervals over a seeded dataset (1.7–1.8). |
-| 1.5 | Coverage metric + greedy view selection (no kinematics yet) | 4B.5 | ◐ 7 Nov 2026 — `coverage.py`, `configs/coverage.yaml`, `show_coverage.py` (RViz). Coverage is judged per ~1.5 mm patch against both halves of the §3.7.3 rule (spacing ≤ D/2, noise ≤ D/3), counted from the frozen sensor models. **Fixed line-scan: ~100% of up-facing features, 96% of weld seams, 80% of spatter, but only 9–25% of handling damage (housing walls). Arm plan (8–12 captures): 98–100% on every class but spatter (93%).** The view plan (`data/coverage/<stage>.plan.json`) is ready for 2.5. Found and fixed a tilted-snapshot bug in `scan.py` (no earlier result affected). Results: `project_plan.md` §4B.5. |
+| 1.5 | Coverage metric + greedy view selection (no kinematics yet) | 4B.5 | ✅ 7 Nov 2026 (`0f002a9`) — `coverage.py`, `configs/coverage.yaml`, `show_coverage.py` (RViz). Coverage is judged per ~1.5 mm patch against both halves of the §3.7.3 rule (spacing ≤ D/2, noise ≤ D/3), counted from the frozen sensor models. **Fixed line-scan: ~100% of up-facing features, 96% of weld seams, 80% of spatter, but only 9–25% of handling damage (housing walls). Arm plan (8–12 captures): 98–100% on every class but spatter (93%).** The view plan (`data/coverage/<stage>.plan.json`) is ready for 2.5. Found and fixed a tilted-snapshot bug in `scan.py` (no earlier result affected). Results: `project_plan.md` §4B.5. **Corrected 12 Nov 2026** (fixlist F6, after the arm column missed what coverage said it saw): FOD D 1.0 → 0.5 mm, handling damage judged at noise D 0.1 (`noise_D`), and a sweep counts for a class only if its profile pitch ≤ D/2. Every sweep also has a 200 mm/s variant (0.2 mm pitch) for the walls. Final plan: 15 / 13 / 15 captures, 51 / 46 / 63 s; walls 89–92 % (fixed 9–25 %), FOD 99.7–100 %. Old plan in `data/coverage_v1/`. |
 | 1.6 | `motobat_interfaces`: `DefectReport`, `ScanResult`, `CorrectionCmd` | §7 | first ROS package. **ROS lane** (6 Nov 2026): it needs no `defectgen` code, and 1.4's output now fixes what a report contains |
-| 1.7 | Labelled dataset, **several seeds per (class × severity) cell** | 4B.6 | seeded, not committed |
-| 1.8 | **Precision/recall per class, with confidence intervals** | 4B.6 | |
-| 1.9 | **%GRR** for terminal height, cell position, busbar gap | 4B.6 | automotive MSA form |
+| 1.7 | Labelled dataset, **several seeds per (class × severity) cell** | 4B.6 | ◐ 9 Nov 2026 — `dataset.py`, `configs/dataset.yaml`; design, pilot and results in `project_plan.md` §4B.6 "1.7 dataset". **Fixed setup done:** `pod` 565, `clean` 30, `grr` 180 cases (seeded; outputs in `data/dataset/`, not committed). No false alarm in any of the 775. Out-of-spec: 343 hit, 17 partial, 27 miss, 8 not covered, of 395. In-spec: 8 false rejects of 120. Most families are found on every seed from 1.1–1.3 × tol. Weak spots, as measured: line-scan X quantisation (cell/busbar position, cell yaw), crown sag reads short, spatter on and beside beads is not seen (bead band), a flush weld reads as `missing_weld`. Scoring: a miss where the setup does not look by design (1.5's coverage map) is `not_covered`; `--rescore` re-scores stored reports. Fixed on the way: a zero crown divided by zero in `weld._shape`. **Arm hardening done (9 Nov):** the arm's false alarms were registration, not oblique-view detection (placed exactly, every arm view compares clean). X, Y and yaw now come from four housing strips (end- and side-plate tops, each trusted across its width only), solved once per pallet load from each strip's best whole view; this also removed a 0.045 mm bias in the fixed pass's end-plate datum. Clean modules through the arm plan with a fixture error: 0 findings at all three stages (was 6 / 6 / 50); `regress` gained an `arm` group, `probe_arm.py` shows per-capture registration. Assumes exact robot poses. **Fixed column re-run on the strip datum** (old results in `data/dataset_prestrips/`; this run in `data/dataset_strips_v1/`): 0 findings on clean modules, 1 false alarm in 775 (a weld bow 1 % over tol on an untouched seam: the bow measure's noise tail), in-spec short welds rejected 5/10 → 0/10. **Then a datum fault, found by the one failing test:** a cell shifted toward a side plate bows the sheet, the side strip moved with it, and the datum subtracted part of the cell's own shift (11 % in the fixed run, 33 % through a part view). Fixed by a robust per-bin centreline per strip (`detect._strip_offset`); §4B.6 "A strip that moves with the defect". **Re-run on the fixed detector, done 12 Nov 2026**: fixed `clean`/`grr`/`pod` and arm `clean`/`pod`, one detector for both columns (`data/validate_pr_{fixed,arm}_final.txt`). Fixed: 0 false alarms in 775. Arm: 0/30 clean modules with a finding, 8 false alarms in 595, all on snapshots. That arm column measured a flawed arm *plan*, not an arm: FOD 60 % (a centre strip no sweep resolved), 10/10 and 9/10 in-spec reinforcement/width modules rejected, wall dents 12/20. **Fixed 12 Nov 2026** (fixlist F6): coverage sizes and fast wall sweeps (row 1.5); misregistration allowance from the surface slope under each ray (`detect.sideways_gain`); residuals on a judged bead count as explained. Regression through the new plan: clean modules 0 findings at every stage, placed and with fixture error; one defect of every class 23/23 found, 0 false alarms. **Both columns to be rerun** (`data/chain_v2.sh`; first run archived to `data/dataset_plan_v1/`), now with the arm `grr` tier. Arm ~2.5–3 min per case: ~1.5 days. Detector changes found by the pilot (drift window, discontinuity band, memory) re-verified with `python -m defectgen.regress` (now in the repo). 162 tests pass. |
+| 1.8 | **Precision/recall per class, with confidence intervals** | 4B.6 | ◐ 9 Nov 2026 — `validate.py pr`; method in `project_plan.md` §4B.6 "1.8 and 1.9". Recall (conditional on coverage), module decision, false-reject rate (same class, and module decision), precision per finding class, false alarms per module (Poisson bound), all with Wilson 95 %. First look, on the earlier fixed run, already paid off: in-spec carriers at 0.16 mm are rejected because they really do lift the busbars past the 0.15 mm gap tolerance (the two assumed tolerances contradict each other), and in-spec short welds were rejected because their bare bead ends read as dents (a detector fault, fixed). Now also the reading error per family (|reading| − size: mean, sd, slope over size), which is what exposed the datum fault (cell shift slope +0.018 → −0.081). Also found: an in-spec 0.1 mm busbar Y shift makes the generator rest busbar 0 0.5 mm high (a second geometry/tolerance contradiction, to check against CAD). Numbers after the re-run. |
+| 1.9 | **%GRR** for terminal height, cell position, busbar gap | 4B.6 | ◐ 9 Nov 2026, fixed setup — `validate.py grr`, AIAG ANOVA method, 10 parts × 3 pallet loads × 2 trials. %GRR to tolerance: terminal height **1.5 %**, busbar gap **0.5 %**, cell position X **56 %** (AIAG: > 30 % not acceptable). Cell X is the line-scan's 0.1 mm profile pitch, varying with each load's sampling phase, not noise (EV 7 µm, AV 37 µm). Arm column to follow. |
 | 1.10 | **Fixed vs arm: coverage % and recall per class** | 4B.6, 3.7.6 | the central comparison |
 | 1.11 | Minimum detectable defect per class; sensitivity to noise, point spacing, standoff | 4B.6 | → which sensor class the flange needs |
 | 1.12 | **Correction loop in numpy: K-sweep, open- vs closed-loop placement defect rate, reject/rework logic** | 4B.7, 9.9 | the headline control result |
+| 1.13 | Held-out validation set (new seeds, detector frozen), then optional learned region classifier (rules vs gradient-boosted trees on held-out data) | 4B.6 | planned 10 Nov 2026: §4B.6 "Later: a held-out validation set" and "Optional, after the held-out set". Report 1.8–1.12 from the held-out set. |
 
 Tag the commit that produces 1.8–1.12: `git tag -a v0.1-detection-baseline`.
 

@@ -323,6 +323,51 @@ cd ~/projects/MotoBat && source motobat_env.sh
 # a patch counts as seen only if it is seen for every class that needs it.
 
 
+## Labelled dataset (task 1.7) ##
+# Modules with one injected defect each, swept over size around each class's
+# tolerance, several seeds per size, scanned by the fixed line-scan and by the
+# arm's 1.5 view plan (needs data/coverage/<stage>.plan.json: run the coverage
+# section first), detected and scored. Heavy: check the other lane is quiet.
+# Stop it any time (Ctrl-C); rerunning skips finished cases.
+# Run from the repo root: outputs go to data/dataset relative to where you start it.
+
+cd ~/projects/MotoBat && source motobat_env.sh && mb-venv
+python -m defectgen.dataset --tier pod --pilot      # one case per family (its largest size): a smoke test
+python -m defectgen.dataset --tier pod --list       # what the full tier contains, without running it
+python -m defectgen.dataset --tier pod              # P/R, POD, fixed vs arm
+python -m defectgen.dataset --tier clean            # clean modules: false alarms per module
+python -m defectgen.dataset --tier grr              # %GRR: 10 parts x 3 pallet loads x 2 trials
+python -m defectgen.dataset --tier pod --family spatter fod --setups fixed   # a slice
+python -m defectgen.dataset --tier pod --summary    # what the tier holds so far: outcomes per family x size
+python -m defectgen.dataset --tier pod --rescore    # after a scoring-rule change: re-score stored reports, no
+                                                    # detection (light; not while that tier is running)
+# The two setups can run separately: --setups arm after --setups fixed adds the arm
+# column to the same cases (a case's index line keeps both). Cap the memory, so a long
+# run that overruns kills itself instead of freezing the desktop:
+systemd-run --user --scope -p MemoryMax=7G -p MemorySwapMax=0 python -m defectgen.dataset --tier pod --setups fixed
+systemd-run --user --scope -p MemoryMax=7G -p MemorySwapMax=0 python -m defectgen.dataset --tier pod --setups arm
+# Each finished case prints one line:
+#   [12/565  2%] terminal_height  L2_0.11_s3  must_find  fixed: hit  meas 0.1101 fa 0 (44 s)  arm: ...
+#   truth:   must_find (out of spec) | in_spec (must NOT be flagged) | dont_care (below a
+#            presence threshold; kept for the POD curve only)
+#   outcome: hit / miss / partial (must_find), or not_covered: missed where this setup
+#            does not look by design (1.5's coverage map); pass / false_reject (in_spec);
+#            found / not_found (dont_care); clean_ok / false_reject (clean modules)
+#   meas:    what detection measured for the injected feature (POD a-hat, GRR reading)
+#   fa:      false alarms elsewhere on the module
+# Files, under data/dataset/<tier>/: index.jsonl (one line per case) and per case
+# <family>/<case>/{case.json, labels.json, fixed|arm.report.json, fixed|arm.score.json}.
+# No point clouds are kept: every case regenerates bit for bit from its seed.
+# Sizes, seeds, fixture error: defectgen/src/defectgen/configs/dataset.yaml (tagged S/D/A).
+
+# The numbers from the stored dataset (light: reads JSON, safe beside a running tier):
+python -m defectgen.validate pr                     # 1.8: recall, false rejects, precision, false
+                                                    # alarms, Wilson 95 %, per class and family
+python -m defectgen.validate grr                    # 1.9: %GRR, AIAG ANOVA (appraiser = pallet load)
+python -m defectgen.validate pr --setup arm         # the same for the arm column
+# Tables print as markdown; the full numbers go to data/dataset/validation/<what>.<setup>.json.
+
+
 ## Regenerate the preview data ##
 # Everything under data/ is generated, not in git. Run these after a fresh
 # clone, or after any change to defectgen, or the viewers show old modules.
@@ -348,6 +393,23 @@ pytest -p no:launch_testing -p no:launch_ros -k weld    # only the weld tests
 pytest -p no:launch_testing -p no:launch_ros -k scan    # only the sensor tests
 pytest -p no:launch_testing -p no:launch_ros tests/test_detect.py   # only detection
 pytest -p no:launch_testing -p no:launch_ros tests/test_coverage.py # only coverage
+pytest -p no:launch_testing -p no:launch_ros tests/test_dataset.py  # only the dataset logic
+
+# After ANY change to detection: the detection regression (heavy; each group runs
+# whole modules through scan + detect). From ~/projects/MotoBat, in the venv:
+python -m defectgen.regress single --sensors line_scan      # one defect per module, every class
+python -m defectgen.regress single --sensors prof+ prof-    # same, two Keyence sweeps
+python -m defectgen.regress fixture                          # with a fixture error
+python -m defectgen.regress seeds                            # clean modules, 3 noise seeds: 0 findings
+python -m defectgen.regress subtol                           # under tolerance: 0 findings
+python -m defectgen.regress arm                              # clean modules through the arm's 1.5 view
+                                                             # plan, placed and with a fixture error: 0 findings
+# Each line: TP / FN / FP / other per module, then every finding. FP must stay 0.
+# If an arm case raises findings, see why (registration error per capture, the
+# housing strips each view saw whole or cut, what the residual pass assumed):
+python -m defectgen.probe_arm --stage post_weld --fixture
+# Heavy jobs: cap them so an overrun kills the job, not the desktop:
+#   systemd-run --user --scope -p MemoryMax=7G -p MemorySwapMax=0 python -m defectgen.regress single
 # The -p no:... flags matter: with ROS sourced, pytest picks up ROS's own
 # test plugins and dies before running anything.
 

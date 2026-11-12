@@ -30,28 +30,36 @@ surfaces:
 
 # What each stage must see, per class family: the surfaces the defects live on, and D, the
 # smallest size that matters. Required sample spacing d = D/2 (plan §3.7.3). `members` are the
-# detector classes the family stands for (evaluate.py INSPECTED).
+# detector classes the family stands for (evaluate.py INSPECTED). noise_D, where given, is the
+# height or depth the class must resolve; the noise half (noise <= noise_D/3) is judged
+# against it instead of D.
+#
+# fod and handling_damage corrected 12 Nov 2026 to the dataset's must-find sizes
+# (configs/dataset.yaml): fod was D 1.0 ("particles >= 1 mm"), but the dataset must find
+# 0.25 mm radius (0.5 mm across); dents were judged on their 2 mm width only, but must be
+# found from 0.1 mm deep. Both passed views that cannot see them (§4B.6, "Coverage that
+# promised too much").
 stages:
   pre_busbar:
     cell_placement:  {D: 0.2, surfaces: [terminal_tops], members: [cell_placement]}       # D cell.pos_tol
     terminal_height: {D: 1.0, surfaces: [terminal_tops], members: [terminal_height, terminal_tilt]}  # A plane fit
     cell_presence:   {D: 1.0, surfaces: [cap_tops], members: [missing_cell, reversed_polarity]}      # A fill plug, cap
-    fod:             {D: 1.0, surfaces: [cap_tops, terminal_tops], members: [fod]}         # A particles >= 1 mm
+    fod:             {D: 0.5, surfaces: [cap_tops, terminal_tops], members: [fod]}         # D dataset fod D 0.25 radius
     missing_pad:     {D: 2.0, surfaces: [foam], members: [missing_pad]}                    # A
-    handling_damage: {D: 2.0, surfaces: [housing_tops, housing_outer, cap_tops], members: [handling_damage]}  # A dents
+    handling_damage: {D: 2.0, noise_D: 0.1, surfaces: [housing_tops, housing_outer, cap_tops], members: [handling_damage]}  # A width; D depth: dataset D 0.1
   pre_weld:
     busbar_pose:     {D: 0.2, surfaces: [busbar_tops], members: [busbar_pose]}             # D busbar.pos_tol
     busbar_gap:      {D: 1.0, surfaces: [busbar_tops, terminal_tops], members: [busbar_liftoff]}  # A plane fits
     carrier_seating: {D: 2.0, surfaces: [carrier_top], members: [carrier_seating]}         # A
-    fod:             {D: 1.0, surfaces: [busbar_tops, terminal_tops, carrier_top], members: [fod]}
-    handling_damage: {D: 2.0, surfaces: [housing_tops, housing_outer, busbar_tops, busbar_walls], members: [handling_damage]}
+    fod:             {D: 0.5, surfaces: [busbar_tops, terminal_tops, carrier_top], members: [fod]}
+    handling_damage: {D: 2.0, noise_D: 0.1, surfaces: [housing_tops, housing_outer, busbar_tops, busbar_walls], members: [handling_damage]}
   post_weld:
     weld_seam:       {D: 0.25, surfaces: [weld_beads, weld_toes],                           # D seam.offset_tol
                       members: [missing_weld, short_weld, seam_deviation, width_deviation, reinforcement,
                                 weld_path_drift, weld_arc, weld_underfill, weld_undercut, burn_through]}
     spatter:         {D: 0.3, surfaces: [busbar_tops, terminal_tops, cap_tops], members: [spatter]}  # A smallest drop
-    fod:             {D: 1.0, surfaces: [busbar_tops, terminal_tops, carrier_top], members: [fod]}
-    handling_damage: {D: 2.0, surfaces: [housing_tops, housing_outer, busbar_tops, busbar_walls], members: [handling_damage]}
+    fod:             {D: 0.5, surfaces: [busbar_tops, terminal_tops, carrier_top], members: [fod]}
+    handling_damage: {D: 2.0, noise_D: 0.1, surfaces: [housing_tops, housing_outer, busbar_tops, busbar_walls], members: [handling_damage]}
 
 # Candidate arm views (no kinematics: reachability is Phase 2).
 candidates:
@@ -65,6 +73,11 @@ candidates:
     side_on: true                           # also horizontal (roll 90) sweeps along each housing wall
     margin: 10.0                            # A mm run-in past each end
     cast_pitch: 0.4                         # A mm, cast for coverage; counts scaled to the flown pitch
+    fast_speed: 200.0                       # A mm/s: each sweep is also offered flown this fast at the same
+                                            #   1 kHz, 0.2 mm between profiles (12 Nov 2026). Within the
+                                            #   250 mm/s often used near people (ISO/TS 15066 practice; source
+                                            #   it for the HC10DT, Phase 2). A sweep counts for a class only if
+                                            #   its pitch is <= D/2, so it serves walls and debris, not seams.
 
 # Greedy set cover.
 plan:

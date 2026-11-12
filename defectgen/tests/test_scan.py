@@ -100,6 +100,26 @@ def test_scans_are_reproducible_and_carry_the_hash():
     assert a.params_hash == params_hash()
 
 
+def test_threaded_sweep_is_identical_to_serial(monkeypatch):
+    """Fixlist F5: a sweep's chunks run on a thread pool. Every array, the drop
+    counts and their per-material split (key order too: it is saved) must match
+    one thread exactly, on a scene that drops rays for several reasons."""
+    cfg = SENSORS["profilometer"]
+    step = trimesh.creation.box(extents=[10, 60, 3]).apply_translation([0, 0, 1.5])
+    scene = Scene.from_groups({"end_plates": plate(), "busbars": step})
+    pose = looking_down(-8, 0, cfg["reference_distance"])
+    runs = []
+    for threads in ("1", "8"):
+        monkeypatch.setenv("DEFECTGEN_THREADS", threads)
+        runs.append(line_scan(scene, "profilometer", pose, 16.0, seed=5, chunk=13))
+    a, b = runs
+    for f in ("points", "truth", "signal", "material", "index", "sigma"):
+        np.testing.assert_array_equal(getattr(a, f), getattr(b, f), err_msg=f)
+    assert list(a.dropped.items()) == list(b.dropped.items())
+    assert list(a.dropped_by_material.items()) == list(b.dropped_by_material.items())
+    assert sum(v for k, v in a.dropped.items() if k != "miss") > 0   # the scene does drop rays
+
+
 def test_photos_take_four_close_shots_and_stitch_them(tmp_path):
     """A clean module through the photo capture: one shot per quadrant, as
     close as the Zivid allows, cropped to it, and a mosaic of the whole module

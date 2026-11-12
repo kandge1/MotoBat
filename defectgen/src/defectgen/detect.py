@@ -142,7 +142,7 @@ class Reference:
     feature positions) and a raycasting scene of its visible body groups."""
 
     def __init__(self, stage: Stage, cfg: Config | None = None, include=(), parts=None,
-                 run: Path | None = None):
+                 run: Path | None = None, max_cached_points: int = 12_000_000):
         self.stage = stage
         self.cfg = cfg or load()
         if run is not None:
@@ -160,7 +160,14 @@ class Reference:
         drop = without_groups(stage, include)
         self.groups = {g: m for g, m in realise_groups(plan, self.parts).items() if g not in drop}
         self.scene = Scene.from_groups(self.groups)
-        self._golden: dict = {}
+        # Golden captures by pose, least recently used first, bounded by the
+        # points they hold. Unbounded, it grew with every new pose -- and in
+        # the 1.7 dataset every scan has a fresh fixture placement, so every
+        # aligned capture is a new pose: 12 GB and an OOM kill by case two.
+        from collections import OrderedDict
+
+        self._golden: OrderedDict = OrderedDict()
+        self.max_cached_points = max_cached_points
 
     def part_box(self, ref: tuple, grow: float = 0.5) -> tuple:
         """Box around a placed part as designed -- all of it, e.g. a negative
@@ -169,14 +176,44 @@ class Reference:
         c = trimesh.transform_points(trimesh.bounds.corners(self.parts[pl.part].bounds), pl.transform)
         return _box(c.min(axis=0), c.max(axis=0), grow=grow)
 
-    def golden(self, cap: Capture) -> Golden:
-        key = (cap.sensor, json.dumps(cap.settings, sort_keys=True, default=str),
-               np.round(cap.poses[0], 9).tobytes(), len(cap.poses))
-        if key not in self._golden:
-            self._golden[key] = self._cast(cap)
-        return self._golden[key]
+    @staticmethod
+    def _key(cap: Capture) -> tuple:
+        return (cap.sensor, json.dumps(cap.settings, sort_keys=True, default=str),
+                np.round(cap.poses[0], 9).tobytes(), len(cap.poses))
 
-    def as_measured(self, cap: Capture, motions: dict, beads: dict) -> Golden:
+    def forget(self, cap: Capture) -> None:
+        """Drop this capture's golden from the cache: an aligned pose carries
+        the scan's own fixture error and never comes back."""
+        self._golden.pop(self._key(cap), None)
+
+    def golden(self, cap: Capture) -> Golden:
+        key = self._key(cap)
+        if key in self._golden:
+            self._golden.move_to_end(key)
+            return self._golden[key]
+        gold = self._cast(cap)
+        _trim()
+        # Cache it only if it fits the budget on its own: a full-length Keyence
+        # sweep's golden (~10 M points) would otherwise sit in memory for good.
+        if len(gold.points) <= self.max_cached_points:
+            self._golden[key] = gold
+            while sum(len(g.points) for g in self._golden.values()) > self.max_cached_points:
+                self._golden.popitem(last=False)
+        return gold
+
+    def as_measured_scene(self, motions: dict, beads: dict) -> Scene:
+        """The clean module with every measured part moved to where it was
+        measured (see `as_measured`). Built once per detection: every capture
+        is cast against the same one."""
+        placements = [replace(pl, transform=motions[pl.ref] @ pl.transform) if pl.ref in motions else pl
+                      for pl in self.plan.placements]
+        moved_beads = {i: (b.copy().apply_transform(beads[i]) if i in beads else b)
+                       for i, b in self.plan.beads.items()}
+        plan = replace(self.plan, placements=placements, beads=moved_beads)
+        groups = {g: m for g, m in realise_groups(plan, self.parts).items() if g in self.groups}
+        return Scene.from_groups(groups)
+
+    def as_measured(self, cap: Capture, motions: dict, beads: dict, scene: Scene | None = None) -> Golden:
         """The same rays cast at the clean module with every part detection
         measured moved to where it was measured: `motions` maps a placement ref
         to a 4x4 correction in module coordinates, `beads` a seam index to one
@@ -187,13 +224,7 @@ class Reference:
         carrier 0.1 mm high, a busbar on a 0.1 mm gap -- otherwise leaves its
         edges and shadows behind as residual regions (a 0.1 mm carrier left
         5,321 of them), since only a feature *finding* covered them."""
-        placements = [replace(pl, transform=motions[pl.ref] @ pl.transform) if pl.ref in motions else pl
-                      for pl in self.plan.placements]
-        moved_beads = {i: (b.copy().apply_transform(beads[i]) if i in beads else b)
-                       for i, b in self.plan.beads.items()}
-        plan = replace(self.plan, placements=placements, beads=moved_beads)
-        groups = {g: m for g, m in realise_groups(plan, self.parts).items() if g in self.groups}
-        return self._cast(cap, Scene.from_groups(groups))
+        return self._cast(cap, scene or self.as_measured_scene(motions, beads))
 
     def _cast(self, cap: Capture, scene: Scene | None = None) -> Golden:
         scene = scene or self.scene
@@ -215,9 +246,11 @@ class Reference:
             raise ValueError(f"golden grid {r.grid} does not match the capture's {cap.grid}")
         pts = r.truth
         if cfg["kind"] == "line":
-            pose = r.poses[r.index // r.grid[1]]
-            axis = pose[:, :3, 2]
-            depth = ((pts - pose[:, :3, 3]) * axis).sum(axis=1)
+            # Gather only the two pose columns each point needs: indexing the full
+            # 4x4 per point built a 128 B/point copy (1.5 GB for a 12 M-point sweep).
+            prof = r.index // r.grid[1]
+            axis = r.poses[:, :3, 2][prof]
+            depth = ((pts - r.poses[:, :3, 3][prof]) * axis).sum(axis=1)
             pitch = s.get("pitch_mm", cfg["profile_pitch"])
             spacing = cfg["line_width"] / (cfg["points"] - 1) * depth / cfg["reference_distance"]
             footprint = pitch * spacing
@@ -232,7 +265,10 @@ class Reference:
             fy = 2 * np.tan(np.radians(cfg["vfov"] / 2)) / (h - 1)
             footprint = (depth * fx) * (depth * fy)
             coarse = float(np.median(depth) * max(fx, fy))
-        return Golden(pts, r.index, r.material, r.material_names, axis, footprint, coarse)
+        # Directions and footprints as float32 (positions stay float64): the
+        # residual is a micron-scale difference projected on a unit vector.
+        return Golden(pts, r.index, r.material.astype(np.int16), r.material_names, axis.astype(np.float32),
+                      np.asarray(footprint, np.float32), coarse)
 
 
 # -- alignment -----------------------------------------------------------------
@@ -281,37 +317,159 @@ def _in_plane(t: np.ndarray) -> tuple[np.ndarray, float]:
     return keep, float(np.degrees(yaw))
 
 
-def datum(cloud_scan: "Cloud", cloud_gold: "Cloud", cfg: Config, p: dict, band: float):
-    """In-plane correction (X, Y, yaw) from the module's own datum: the two
-    end-plate tops, fitted by outline on scan and golden alike. Returns a 4x4
-    mapping scan to reference, or None if no end plate was seen.
+def datum_strips(cloud_scan: "Cloud", cloud_gold: "Cloud", cfg: Config, p: dict, band: float,
+                 spacing: float) -> list[dict]:
+    """The housing's top strips, fitted by outline on scan and golden alike:
+    the two end-plate tops and the two side-plate tops, each over its middle
+    span only. All four are flush at z_wall_top, and the side plates run the
+    module's full length past the end plates, so an end-plate outline taken
+    out to its corners runs on along the side plates to the edge of the search
+    window -- an edge set by the window, fixed in the module frame, not by the
+    part. That bias hid in 1.4 (an end plate read 0.045 of a 0.15 mm shift).
 
-    The housing, not the cells, is the datum. Fitting the frame to the cells
-    would absorb any shift they share -- a systematic gripper offset, which is
-    exactly what the correction loop's integral term exists to remove (§9.9)."""
-    half = (cfg.end_plate_t / 2, cfg.end_plate_w / 2)
+    Each strip counts across its own width only, where both edges are real
+    drops: an end plate fixes X, a side plate Y, and either one's long edge
+    yaw if `icp.datum_min_edge` or more of it is in view. A strip whose golden
+    outline falls short of its design width by more than
+    `fit.outline_slack` + 3 samples was cut by the view and counts for
+    nothing."""
     end_x = cfg.module_l / 2 - cfg.end_plate_t / 2
-    src, dst, yaws = [], [], []
-    for sign in (-1.0, 1.0):
-        args = ((sign * end_x, 0.0), half, cfg.z_wall_top, (-1.0, 1.0), p, band)
-        g = measure_face(cloud_gold, *args, shrink=np.array([1.5, 5.0]))
-        s = measure_face(cloud_scan, *args, shrink=np.array([1.5, 5.0])) if g else None
-        if g is None or s is None or s.n < p["fit"]["min_fraction"] * g.n:
+    side_y = cfg.module_w / 2 - cfg.side_plate_t / 2
+    keep_clear = 3.0                        # mm short of the corners, past the search margin
+    strips = [("end", sign, (sign * end_x, 0.0), (cfg.end_plate_t / 2, cfg.end_plate_w / 2 - keep_clear))
+              for sign in (-1, 1)]
+    strips += [("side", sign, (0.0, sign * side_y),
+                (cfg.module_l / 2 - cfg.end_plate_t - keep_clear, cfg.side_plate_t / 2)) for sign in (-1, 1)]
+    slack = p["fit"]["outline_slack"] + 3 * spacing
+    out = []
+    for kind, sign, centre, half in strips:
+        across = 0 if kind == "end" else 1          # module axis the strip's width runs along
+        shrink = np.array([min(1.0, half[0] / 3), min(5.0, half[1] / 3)]) if kind == "end" else \
+            np.array([5.0, min(1.0, half[1] / 3)])
+        args = (centre, half, cfg.z_wall_top, (-1.0, 1.0), p, band)
+        g = measure_face(cloud_gold, *args, shrink=shrink)
+        sc = measure_face(cloud_scan, *args, shrink=shrink) if g else None
+        if g is None or sc is None or sc.n < p["fit"]["min_fraction"] * g.n:
             continue
-        src.append((s.rect.cx, s.rect.cy))
-        dst.append((g.rect.cx, g.rect.cy))
-        yaws.append(g.rect.yaw_deg - s.rect.yaw_deg)
-    if not src:
-        return None
-    if len(src) == 2:
-        r, tr = rigid_2d(np.array(src), np.array(dst))
-    else:
-        th = np.radians(yaws[0])
-        r = np.array([[np.cos(th), -np.sin(th)], [np.sin(th), np.cos(th)]])
-        tr = np.array(dst[0]) - r @ np.array(src[0])
-    out = np.eye(4)
-    out[:2, :2], out[:2, 3] = r, tr
+        square = abs(np.cos(np.radians(g.rect.yaw_deg))) > 0.7
+        ext = (g.rect.ex, g.rect.ey) if square else (g.rect.ey, g.rect.ex)
+        width = 2 * half[across]
+        gc = np.array([g.rect.cx, g.rect.cy])
+        line = _strip_offset(cloud_gold.src[g.idx, :2], cloud_scan.src[sc.idx, :2], across, gc[1 - across],
+                             p["icp"]["datum_bin"], spacing)
+        if line is None:
+            continue
+        offset, slope = line
+        # A side strip's centreline is y(x), so its offset's slope is the yaw
+        # between them; an end strip's is x(y), and a yaw tilts it the other way.
+        dyaw = np.degrees(slope if kind == "side" else -slope)
+        out.append({"strip": f"{kind} {sign:+d}", "axis": across, "at": gc.tolist(),
+                    "offset": float(offset), "whole": bool(ext[across] >= width - slack),
+                    "dyaw": float(dyaw), "edge": float(ext[1 - across]), "spacing": float(spacing)})
     return out
+
+
+def _strip_offset(gold_xy: np.ndarray, scan_xy: np.ndarray, across: int, at: float, bin_w: float,
+                  spacing: float) -> tuple[float, float] | None:
+    """Offset (golden - scan) of a strip's centreline across its width, at
+    `at` along it, and that offset's slope along it -- from a robust line
+    through per-bin centrelines, not one outline round the whole strip.
+
+    A side plate is 1.5 mm sheet, and a cell set off its pitch bows it out
+    locally (settle.py). One rectangle round the strip moved with that bow:
+    the datum then took up part of the cell's own shift and the cell read
+    short (0.20 read 0.14 through a part view, 11 % lost in the fixed pass).
+    Bins along the strip each give a centreline (midway between the two edges
+    seen in the bin); a line is fitted to golden - scan, and bins further than
+    3 robust sigma from it (at least a sample spacing) are dropped and the
+    line refitted. A bow over a minority of the strip drops out. Returns None
+    if fewer than 5 bins are seen on both."""
+    along = 1 - across
+
+    def centres(xy):
+        k = np.floor(xy[:, along] / bin_w).astype(np.int64)
+        order = np.argsort(k, kind="stable")
+        k, v = k[order], xy[order, across]
+        keys, start, count = np.unique(k, return_index=True, return_counts=True)
+        lo = np.minimum.reduceat(v, start)
+        hi = np.maximum.reduceat(v, start)
+        ok = count >= 4
+        return dict(zip(keys[ok].tolist(), ((lo + hi) / 2)[ok].tolist()))
+
+    g, s = centres(gold_xy), centres(scan_xy)
+    common = sorted(set(g) & set(s))
+    if len(common) < 5:
+        return None
+    u = (np.array(common, float) + 0.5) * bin_w - at
+    d = np.array([g[k] - s[k] for k in common])
+    keep = np.ones(len(u), bool)
+    for _ in range(3):
+        a = np.c_[np.ones(keep.sum()), u[keep]]
+        coef = np.linalg.lstsq(a, d[keep], rcond=None)[0]
+        r = d - (coef[0] + coef[1] * u)
+        mad = 1.4826 * np.median(np.abs(r[keep] - np.median(r[keep])))
+        new = np.abs(r) <= max(3 * mad, spacing)
+        if new.sum() < 5 or (new == keep).all():
+            break
+        keep = new
+    return float(coef[0]), float(coef[1])
+
+
+def solve_datum(obs: list[dict], p: dict) -> tuple[np.ndarray, list[str]] | None:
+    """In-plane correction (X, Y, yaw) mapping scan to reference, by least
+    squares over whole-strip observations, small-angle: an end strip at
+    (x, y) says  offset_x = tx - yaw * y,  a side strip  offset_y = ty + yaw * x,
+    and a long edge  dyaw = yaw  (weighted by its length, so in mm like the
+    rest). Axes no observation constrains stay at the fixture pose.
+    Returns (4x4, axes fixed) or None if nothing is fixed."""
+    rows, rhs = [], []
+    for o in obs:
+        if not o["whole"]:
+            continue
+        x, y = o["at"]
+        rows.append([1.0, 0.0, -y] if o["axis"] == 0 else [0.0, 1.0, x])
+        rhs.append(o["offset"])
+    for o in obs:
+        if o["edge"] >= p["icp"]["datum_min_edge"]:
+            rows.append([0.0, 0.0, o["edge"]])
+            rhs.append(np.radians(o["dyaw"]) * o["edge"])
+    if not rows:
+        return None
+    a, b = np.array(rows), np.array(rhs)
+    names = ["x", "y", "yaw"]
+    use = [i for i in range(3) if np.abs(a[:, i]).max() > 1e-9]
+    sol = np.zeros(3)
+    sol[use] = np.linalg.lstsq(a[:, use], b, rcond=None)[0]
+    tx, ty, th = sol
+    out = np.eye(4)
+    out[:2, :2] = [[np.cos(th), -np.sin(th)], [np.sin(th), np.cos(th)]]
+    out[:2, 3] = tx, ty
+    return out, [names[i] for i in use]
+
+
+def joint_datum(per_capture: dict, p: dict) -> tuple[np.ndarray, list[str]] | None:
+    """One in-plane correction for the whole load, from the housing strips
+    any of its captures saw whole: for each strip, the finest such capture,
+    then the one that saw most of it.
+    Every capture of one load sees the same module in the same fixture
+    placement, and the station knows where each capture was taken from, so
+    the module is registered once -- as the fixed pass registers itself from
+    all four strips in one sweep -- and views that see no strip whole (most
+    arm views) inherit it. Assumes exact capture poses: robot pose error is
+    not modelled yet. Returns (4x4, the captures used), or None unless X, Y
+    and yaw are all fixed."""
+    best: dict = {}
+    for name, obs in per_capture.items():
+        for o in obs:
+            # Finest sampling first, then the most of the strip in view: a
+            # square-on view of the whole strip, not a corner of it seen at 60 deg.
+            if o["whole"] and (o["strip"] not in best or (o["spacing"], -o["edge"]) <
+                               (best[o["strip"]][1]["spacing"], -best[o["strip"]][1]["edge"])):
+                best[o["strip"]] = (name, o)
+    d = solve_datum([o for _, o in best.values()], p)
+    if d is None or set(d[1]) != {"x", "y", "yaw"}:
+        return None
+    return d[0], sorted({n for n, _ in best.values()})
 
 
 def capable(gold: Golden, tol: float, p: dict) -> bool:
@@ -322,51 +480,75 @@ def capable(gold: Golden, tol: float, p: dict) -> bool:
     return gold.spacing <= p["capability"]["spacing_per_tol"] * tol + 1e-9
 
 
-def align(cap: Capture, gold: Golden, ref: "Reference", p: dict) -> tuple[np.ndarray, dict]:
-    """Fine alignment of one capture to the module's datum.
-
-    Z, roll and pitch: ICP on the housing only -- the rays the golden capture
-    says land on it. Whole-module ICP was tried first and fails twice over:
-    the dominant surface drags it (a carrier seated 0.3 mm high pulled the
-    whole capture down 0.3 mm, hiding the defect and making every cap read
+def housing_fit(cap: Capture, gold: Golden, ref: "Reference", p: dict) -> tuple[np.ndarray | None, dict]:
+    """Z, roll and pitch from ICP on the housing only -- the rays the golden
+    capture says land on it -- and this capture's housing strips
+    (`datum_strips`), measured after that correction. Whole-module ICP was tried first and fails twice
+    over: the dominant surface drags it (a carrier seated 0.3 mm high pulled
+    the whole capture down 0.3 mm, hiding the defect and making every cap read
     0.3 mm low), and seen from above it barely constrains X, Y and yaw (a
-    0.15 mm fixture shift came back 0.10 mm wrong).
-
-    X, Y and yaw: the outlines of the end-plate tops (`datum`).
-
-    A capture that sees no housing keeps its fixture (or robot) pose: its
-    absolute positions inherit that pose's error, its relative ones -- height
-    between adjacent terminals, busbar to pad, seam to busbar -- do not.
-    Returns identity when the correction would move no point of the module
-    more than `identity_tol`."""
+    0.15 mm fixture shift came back 0.10 mm wrong). Returns (None, info) if
+    the capture sees too little housing."""
     q = p["icp"]
     names = [i for i, n in enumerate(gold.material_names) if n in DATUM_MATERIALS]
     _, si, gi = np.intersect1d(cap.index, gold.index, assume_unique=True, return_indices=True)
     on = np.isin(gold.material[gi], names)
-    info: dict = {"datum_points": int(on.sum())}
+    info: dict = {"datum_points": int(on.sum()), "spacing_mm": gold.spacing}
     if on.sum() < q["min_datum_points"]:
-        info["datum"] = "housing not seen: fixture pose kept"
-        return np.eye(4), info
-    t, fit = icp(cap.points[si[on]], gold.points[gi[on]], ref, p)
+        return None, info
+    t3, fit = icp(cap.points[si[on]], gold.points[gi[on]], ref, p)
     info.update(fit)
-    t, info["icp_yaw_dropped_deg"] = _in_plane(t)
-    moved = cap.transformed(t)
-    info["spacing_mm"] = gold.spacing
-    # An outline places an edge to about half the sample spacing. A capture
-    # too coarse to locate the module better than the fixture already does
-    # (the tightest position tolerance, §3.7.3's rule) keeps the fixture's X,
-    # Y and yaw: an estimate below the sensor's resolution is not information.
-    if not capable(gold, min(p["cell"]["pos_tol"], p["busbar"]["pos_tol"]), p):
-        info["datum"] = f"housing tops only: {gold.spacing:.2f} mm sampling is too coarse for " \
-                        "the end-plate outlines, fixture pose kept in X, Y, yaw"
+    t, info["icp_yaw_dropped_deg"] = _in_plane(t3)
+    # An outline places an edge to about half the sample spacing; a capture
+    # too coarse for the tightest position tolerance (§3.7.3) registers no
+    # in-plane axis from outlines.
+    info["strips"] = []
+    if capable(gold, min(p["cell"]["pos_tol"], p["busbar"]["pos_tol"]), p):
+        moved = cap.transformed(t)
+        info["strips"] = datum_strips(Cloud(moved.points), Cloud(gold.points), ref.cfg, p, p["fit"]["band"],
+                                      gold.spacing)
+    return t, info
+
+
+def align(cap: Capture, gold: Golden | None, ref: "Reference", p: dict,
+          fit: tuple | None = None, joint: tuple | None = None) -> tuple[np.ndarray, dict]:
+    """Fine alignment of one capture to the module's datum: Z, roll and pitch
+    from its own housing (`housing_fit`, or `fit` if already done); X, Y and
+    yaw from the load's joint registration if there is one (`joint_datum`),
+    else from this capture's own whole housing strips (`solve_datum`).
+
+    Axes nothing registered keep the fixture (or robot) pose: absolute
+    positions inherit that pose's error, relative ones -- height between
+    adjacent terminals, busbar to pad, seam to busbar -- do not; the residual
+    pass allows the fixture's tolerance there. Returns identity when the
+    correction would move no point of the module more than `identity_tol`."""
+    q = p["icp"]
+    t, info = fit if fit is not None else housing_fit(cap, gold, ref, p)
+    info = dict(info)
+    strips = info.pop("strips", [])
+    if t is None:
+        info["datum"] = "housing not seen: fixture pose kept"
+        info["registered_axes"] = []
+        return np.eye(4), info
+    own = solve_datum(strips, p)
+    if joint is not None:
+        t = joint[0] @ t
+        info["datum"] = f"housing tops + strip outlines, registered once per load (from {', '.join(joint[1])})"
+        info["registered_axes"] = ["x", "y", "yaw"]
+    elif own is not None:
+        t = own[0] @ t
+        full = set(own[1]) == {"x", "y", "yaw"}
+        info["datum"] = "housing tops + strip outlines" if full else \
+            f"housing tops + strip outlines fixing only {', '.join(own[1])}; fixture pose kept on the rest"
+        info["registered_axes"] = own[1]
     else:
-        d = datum(Cloud(moved.points), Cloud(gold.points), ref.cfg, p, p["fit"]["band"])
-        info["datum"] = "housing tops + end-plate outlines" if d is not None else \
-            "housing tops only: fixture pose kept in X, Y, yaw"
-        if d is not None:
-            t = d @ t
+        info["datum"] = "housing tops only: fixture pose kept in X, Y, yaw" if strips or \
+            capable(gold, min(p["cell"]["pos_tol"], p["busbar"]["pos_tol"]), p) else \
+            f"housing tops only: {info['spacing_mm']:.2f} mm sampling is too coarse for the strip outlines, " \
+            "fixture pose kept in X, Y, yaw"
+        info["registered_axes"] = []
     angle = np.arccos(np.clip((np.trace(t[:3, :3]) - 1) / 2, -1, 1))
-    info.update(translation_mm=t[:3, 3].tolist(), rotation_mrad=float(angle * 1e3))
+    info.update(translation_mm=t[:3, 3].tolist(), rotation_mrad=float(angle * 1e3), transform=t.tolist())
     if np.linalg.norm(t[:3, 3]) + angle * ref.cfg.module_l / 2 < q["identity_tol"]:
         info["kept_fixture_pose"] = True
         return np.eye(4), info
@@ -380,6 +562,7 @@ class Cloud:
     a mask over the slice, not a pass over millions of points."""
 
     def __init__(self, points: np.ndarray):
+        self.src = points                   # what `box`'s indices (and Face.idx) index into
         self.order = np.argsort(points[:, 0], kind="stable")
         self.p = points[self.order]
         self.x = self.p[:, 0]
@@ -459,6 +642,24 @@ def _face_ok(scan: Face | None, gold: Face | None, p: dict) -> bool:
     return scan is not None and scan.n >= p["fit"]["min_fraction"] * gold.n
 
 
+def _trim() -> None:
+    """Hand freed memory back to the OS. glibc keeps large freed blocks, so a
+    detection over many big captures crept up ~0.5 GB per sweep without it."""
+    try:
+        import ctypes
+
+        ctypes.CDLL("libc.so.6").malloc_trim(0)
+    except OSError:
+        pass
+
+
+@dataclass
+class _Spacing:
+    """What a released Measurer keeps of its golden capture."""
+
+    spacing: float
+
+
 class Measurer:
     """Every feature this capture can see, measured on scan and golden alike."""
 
@@ -474,6 +675,14 @@ class Measurer:
         self.polarity: dict = {}
         self.caps: dict = {}
         self.carrier: Pair | None = None
+
+    def release(self) -> None:
+        """Drop what only measuring needed: the two sorted point copies and the
+        golden capture (its sample spacing stays; the residual pass recasts).
+        The fitted features stay. A full-length Keyence sweep is ~15 M points,
+        and holding every capture's copies at once did not fit in 16 GB."""
+        self.scan_cloud = self.gold_cloud = None
+        self.gold = _Spacing(self.gold.spacing)
 
     def both(self, fn, *args, **kw) -> Pair | None:
         g = fn(self.gold_cloud, *args, **kw)
@@ -677,6 +886,8 @@ def measure_seam(cloud: Cloud, seam, plane: Plane, outline: Rect, r: np.ndarray,
     centre = np.full(nb, np.nan)
     width = np.full(nb, np.nan)
     crown = np.full(nb, np.nan)
+    area = np.full(nb, np.nan)
+    grid = np.arange(-q["across"], q["across"] + 1e-9, 0.02)
     toe_h = []
     for b in np.unique(which[melted]):
         sel = melted & (which == b)
@@ -692,6 +903,13 @@ def measure_seam(cloud: Cloud, seam, plane: Plane, outline: Rect, r: np.ndarray,
         lo, hi = np.percentile(w[sel], [2, 98])
         width[b] = float(hi - lo)
         crown[b] = float(np.median(h[sel]))
+        # Cross-section above the busbar, every point of the bin, on a fixed
+        # grid across (missing returns interpolated over): the flanks, where
+        # grazing returns drop out, carry little of it.
+        allb = (which == b) & (h > floor)
+        o = np.argsort(w[allb])
+        area[b] = float(np.trapz(np.interp(grid, w[allb][o], np.maximum(h[allb][o], 0.0), left=0.0, right=0.0),
+                                grid))
     mids = (edges[:-1] + edges[1:]) / 2
     nominal = np.abs(mids) <= length / 2
     run = best = 0
@@ -702,7 +920,7 @@ def measure_seam(cloud: Cloud, seam, plane: Plane, outline: Rect, r: np.ndarray,
     toe = np.concatenate(toe_h) if toe_h else np.zeros(0)
     return {
         "n": int(len(pts)),
-        "mids": mids, "has": has, "centre": centre, "width": width, "crown": crown,
+        "mids": mids, "has": has, "centre": centre, "width": width, "crown": crown, "area": area,
         "coverage": float(has[nominal].mean()) if nominal.any() else 0.0,
         "length": best * q["bin"],
         "undercut": float(-np.percentile(toe, 2)) if len(toe) > 20 else 0.0,
@@ -727,9 +945,90 @@ class Region:
     bounds: tuple
     scan_idx: np.ndarray = field(repr=False, default=None)
     gold_pts: np.ndarray = field(repr=False, default=None)
+    on_step: float = 0.0     # fraction of its rays near a discontinuity of the golden capture
 
 
-def residuals(cap: Capture, gold: Golden, p: dict, regions: bool = True) -> tuple[list[Region], dict]:
+def step_band(gold: Golden, grid: tuple, misreg: float, q: dict):
+    """Rays (on the sensor grid) within reach of a discontinuity of the golden
+    capture: a depth step between neighbouring rays along the measuring
+    direction larger than step_slope x spacing + step_min (a surface tilted
+    up to ~72 deg changes by less), or a shadow / silhouette boundary (one
+    neighbour returned a point, the other did not). Widened by
+    1 + ceil(misreg / spacing) rays: a capture registered to within `misreg`
+    moves every such edge by up to that much, in any view, and the residual
+    there is misregistration, not a defect. The outline band is the special
+    case of this for parts detection measured."""
+    from scipy import ndimage
+
+    rows, cols = grid
+    present = np.zeros(rows * cols, bool)
+    present[gold.index] = True
+    depth = np.full(rows * cols, np.nan)
+    depth[gold.index] = (gold.points * gold.axis).sum(axis=1)
+    present, depth = present.reshape(rows, cols), depth.reshape(rows, cols)
+    thr = q["step_slope"] * gold.spacing + q["step_min"]
+    edge = np.zeros((rows, cols), bool)
+    for dr, dc in ((0, 1), (1, 0), (1, 1), (1, -1)):
+        a = (slice(0, rows - dr), slice(max(0, -dc), cols - max(0, dc)))
+        b = (slice(dr, rows), slice(max(0, dc), cols - max(0, -dc) if dc < 0 else cols))
+        pa, pb = present[a], present[b]
+        jump = (pa != pb) | (pa & pb & (np.abs(depth[a] - depth[b]) > thr))
+        edge[a] |= jump & pa
+        edge[b] |= jump & pb
+    k = 1 + int(np.ceil(misreg / max(gold.spacing, 1e-6)))
+    return ndimage.binary_dilation(edge, np.ones((3, 3), bool), iterations=k).ravel()
+
+
+def sideways_gain(gold: Golden, grid: tuple, rays: np.ndarray, cap: float = 20.0) -> np.ndarray:
+    """|n_h| / |n . a| for golden rays `rays` (indices into gold's arrays): how
+    much a sideways shift of the surface under each ray changes the depth it
+    reads. The normals come from the golden points of the neighbouring grid
+    cells, one per quadrant (right/left x down/up), and the steepest counts: a
+    ray at a crease (a wall's foot) lands on either face once the part moves,
+    and averaging the two halved the bound there. A ray with no quadrant whole
+    gets 0, leaving the other bounds. Capped where the ray grazes the surface
+    (n . a -> 0)."""
+    rows, cols = grid
+    idx = gold.index
+    order = None
+    if len(idx) > 1 and np.any(np.diff(idx) <= 0):
+        order = np.argsort(idx, kind="stable")
+        idx = idx[order]
+    cell = gold.index[rays]
+    r0, c0 = cell // cols, cell % cols
+
+    def neighbour(dr, dc):
+        rr, cc = r0 + dr, c0 + dc
+        inside = (rr >= 0) & (rr < rows) & (cc >= 0) & (cc < cols)
+        want = np.where(inside, rr * cols + cc, -1)
+        k = np.clip(np.searchsorted(idx, want), 0, len(idx) - 1)
+        hit = inside & (idx[k] == want)
+        if order is not None:
+            k = order[k]
+        return np.where(hit, k, -1)
+
+    here = gold.points[rays]
+    axis = gold.axis[rays]
+    gain = np.zeros(len(rays))
+    side = {}
+    for dr, dc in ((0, 1), (0, -1), (1, 0), (-1, 0)):
+        k = neighbour(dr, dc)
+        side[dr, dc] = ((gold.points[np.where(k >= 0, k, rays)] - here) * (dr + dc), k >= 0)
+    for su in ((0, 1), (0, -1)):
+        for sv in ((1, 0), (-1, 0)):
+            (tu, ok_u), (tv, ok_v) = side[su], side[sv]
+            n = np.cross(tu, tv)
+            norm = np.linalg.norm(n, axis=1)
+            ok = ok_u & ok_v & (norm > 0)
+            n = n / np.where(ok, norm, 1.0)[:, None]
+            facing = np.abs((n * axis).sum(axis=1))
+            g = np.hypot(n[:, 0], n[:, 1]) / np.maximum(facing, 1.0 / cap)
+            gain = np.maximum(gain, np.where(ok, g, 0.0))
+    return gain
+
+
+def residuals(cap: Capture, gold: Golden, p: dict, regions: bool = True,
+              misreg: float | None = None) -> tuple[list[Region], dict]:
     """Ray-by-ray residual against the golden capture and its connected
     regions on the sensor's own grid.
 
@@ -753,6 +1052,24 @@ def residuals(cap: Capture, gold: Golden, p: dict, regions: bool = True) -> tupl
     noise = float(1.4826 * np.median(np.abs(r - np.median(r)))) if len(r) else 0.0
     if not regions:
         return [], {"rays_compared": int(len(r)), "noise_mm": noise, "sigma_by_material_mm": sigma}
+    if misreg is not None:
+        # X, Y and yaw come from the housing datum, good to about `misreg`; Z, roll
+        # and pitch each capture registers from its own housing. A ray measuring
+        # along a horizontal direction reads that X/Y error in full, so it cannot be
+        # held to its noise alone. Side-on wall sweeps read the whole wall 7-13 um
+        # off against a 5 um threshold: 3,592 false regions (12 Nov 2026). Looking
+        # straight down this adds nothing.
+        horiz = np.hypot(gold.axis[gi, 0], gold.axis[gi, 1]).astype(float)
+        tau = np.maximum(tau, misreg * horiz)
+        # The general form: a surface moved sideways by d reads d |n_h| / |n . a|
+        # along the ray (n its normal). Zero on a level top, the term above on a
+        # wall seen side-on, and several times d on a wall seen nearly edge-on from
+        # above: a close-up snapshot read a cell cap's 2 mm recess walls ~0.08 mm
+        # off from a 0.027 mm residual shift, 2 false regions (12 Nov 2026). Only
+        # rays already over threshold need it.
+        cand = np.flatnonzero(np.abs(r) > tau)
+        if len(cand):
+            tau[cand] = np.maximum(tau[cand], misreg * sideways_gain(gold, cap.grid, gi[cand]))
 
     rows, cols = cap.grid
     raised = np.zeros(rows * cols, bool)
@@ -771,6 +1088,7 @@ def residuals(cap: Capture, gold: Golden, p: dict, regions: bool = True) -> tupl
     r_at[common] = r
 
     regions: list[Region] = []
+    band = step_band(gold, cap.grid, misreg, q) if misreg is not None else None
     eight = np.ones((3, 3), bool)
     for kind, mask in (("raised", raised), ("missing", missing)):
         lab, n = ndimage.label(mask.reshape(rows, cols), structure=eight)
@@ -813,7 +1131,8 @@ def residuals(cap: Capture, gold: Golden, p: dict, regions: bool = True) -> tupl
             regions.append(Region(kind, npts, area, peak, material, gone,
                                   tuple(map(float, here.mean(axis=0))),
                                   (tuple(map(float, pts.min(axis=0))), tuple(map(float, pts.max(axis=0)))),
-                                  sidx[sidx >= 0], gold.points[g[g >= 0]]))
+                                  sidx[sidx >= 0], gold.points[g[g >= 0]],
+                                  float(band[group].mean()) if band is not None else 0.0))
     stats = {"rays_compared": int(len(r)), "noise_mm": noise,
              "sigma_by_material_mm": sigma, "missing_rays": int(len(lost)),
              "regions": len(regions)}
@@ -893,26 +1212,47 @@ class Detector:
         self.do_align = align
 
     def run(self, captures: list[Capture]) -> DefectReport:
+        """Detect over all captures. Memory: each capture is measured and then
+        released (Measurer.release), and an aligned capture replaces its
+        unaligned original in `captures`, so the original can be freed -- the
+        caller's list holds the aligned captures afterwards."""
         timings: dict = {}
         per: list[tuple[Capture, Measurer, list[Region], dict]] = []
         cap_info = []
-        for cap in captures:
+        # Registration first, for the whole load: Z, roll and pitch per capture
+        # from its housing, and the housing strips each capture saw whole.
+        # With several captures, X, Y and yaw come once from the best whole
+        # view of each strip (joint_datum) -- one module, one placement.
+        fits: dict = {}
+        joint = None
+        if self.do_align:
+            for ci, cap in enumerate(captures):
+                t0 = time.perf_counter()
+                gold = self.ref.golden(cap)
+                timings[f"{cap.name}:golden"] = time.perf_counter() - t0
+                t0 = time.perf_counter()
+                fits[ci] = housing_fit(cap, gold, self.ref, self.p)
+                timings[f"{cap.name}:align"] = time.perf_counter() - t0
+                del gold
+                _trim()
+            if len(captures) > 1:
+                joint = joint_datum({captures[ci].name: f[1].get("strips", []) for ci, f in fits.items()}, self.p)
+        for ci in range(len(captures)):
+            cap = captures[ci]
+            info: dict = {"name": cap.name, "sensor": cap.sensor, "params_hash": cap.params_hash,
+                          "points": int(len(cap.points)), "settings": cap.settings}
+            aligned = False
+            if self.do_align:
+                t, info["icp"] = align(cap, None, self.ref, self.p, fit=fits[ci], joint=joint)
+                if not info["icp"].get("kept_fixture_pose"):
+                    cap = cap.transformed(t)
+                    captures[ci] = cap
+                    aligned = True
             # Timed apart: the golden cast is ray tracing the clean CAD, which a
             # real cell does once per station pose (or on a GPU), not per module.
             t0 = time.perf_counter()
             gold = self.ref.golden(cap)
-            timings[f"{cap.name}:golden"] = time.perf_counter() - t0
-            info: dict = {"name": cap.name, "sensor": cap.sensor, "params_hash": cap.params_hash,
-                          "points": int(len(cap.points)), "settings": cap.settings}
-            if self.do_align:
-                t0 = time.perf_counter()
-                t, info["icp"] = align(cap, gold, self.ref, self.p)
-                timings[f"{cap.name}:align"] = time.perf_counter() - t0
-                if not info["icp"].get("kept_fixture_pose"):
-                    t0 = time.perf_counter()
-                    cap = cap.transformed(t)
-                    gold = self.ref.golden(cap)
-                    timings[f"{cap.name}:golden"] += time.perf_counter() - t0
+            timings[f"{cap.name}:golden"] = timings.get(f"{cap.name}:golden", 0.0) + time.perf_counter() - t0
             t0 = time.perf_counter()
             _, rstats = residuals(cap, gold, self.p, regions=False)
             m = Measurer(self.ref, cap, gold, self.p, rstats["noise_mm"])
@@ -927,6 +1267,11 @@ class Detector:
                 if self.stage == "post_weld":
                     m.run_seams()
             timings[f"{cap.name}:measure"] = time.perf_counter() - t0
+            m.release()
+            del gold
+            if aligned:
+                self.ref.forget(cap)
+            _trim()
             per.append((cap, m, [], info))
             cap_info.append(info)
 
@@ -946,12 +1291,24 @@ class Detector:
 
         # Residuals against the module as measured: what is left is what no
         # feature measurement accounts for.
+        moved = {k: v for k, v in self._motions.items() if _moves(v, self.p)}
+        beads = {k: v for k, v in self._bead_motions.items() if _moves(v, self.p)}
+        scene = self.ref.as_measured_scene(moved, beads) if moved or beads else None
         for i, (cap, m, _, info) in enumerate(per):
             t0 = time.perf_counter()
-            moved = {k: v for k, v in self._motions.items() if _moves(v, self.p)}
-            beads = {k: v for k, v in self._bead_motions.items() if _moves(v, self.p)}
-            pred = self.ref.as_measured(cap, moved, beads) if moved or beads else m.gold
-            regions, info["residual"] = residuals(cap, pred, self.p)
+            pred = self.ref.as_measured(cap, moved, beads, scene) if scene else self.ref.golden(cap)
+            # How far this capture may still sit from the module: half a sample
+            # where the housing strips fixed X, Y and yaw (its own or the load's),
+            # else the fixture's own tolerance (an axis kept the fixture pose).
+            reg_axes = set(info.get("icp", {}).get("registered_axes", []))
+            misreg = pred.spacing / 2 if {"x", "y", "yaw"} <= reg_axes else \
+                max(pred.spacing / 2, self.p["residual"]["fixture_tol"])
+            regions, info["residual"] = residuals(cap, pred, self.p, misreg=misreg)
+            info["residual"]["misregistration_mm"] = misreg
+            del pred
+            if scene is None:
+                self.ref.forget(cap)
+            _trim()
             info["residual"]["against"] = (f"the module as measured ({len(moved)} parts, "
                                            f"{len(beads)} beads moved)" if moved or beads else "the golden capture")
             per[i] = (cap, m, regions, info)
@@ -1262,13 +1619,32 @@ class Detector:
                     # bead texture then reads as drift on every clean stitch
                     # (0.12-0.45 under a 0.15 mm fixture error).
                     own = np.column_stack([basis, sm])
+                    # Path drift wanders over millimetres; below `drift_window`
+                    # the centreline holds only sampling artefacts. A bead's fine
+                    # ripple sampled at the line-scan's 0.1 mm pitch aliased into a
+                    # bin-by-bin alternation of +/-0.12 mm under some fixture
+                    # offsets, read as 0.2 mm of drift on clean stitches. A running
+                    # mean over the window removes it; a 6 mm-wavelength drift
+                    # loses ~5% (sinc 1/6).
+                    win = max(1, int(round(q["drift_window"] / q["bin"])))
 
                     def wander(c):
-                        e = c - own @ np.linalg.lstsq(own, c, rcond=None)[0]
+                        if win > 1 and len(c) > win:
+                            c = np.convolve(c, np.ones(win) / win, mode="valid")
+                            o = own[(win - 1) // 2:(win - 1) // 2 + len(c)]
+                        else:
+                            o = own
+                        e = c - o @ np.linalg.lstsq(o, c, rcond=None)[0]
                         return 1.4826 * float(np.median(np.abs(e - np.median(e))))
                     ws, wg = wander(s["centre"][both]), wander(g["centre"][both])
                     drift = float(np.sqrt(2) * np.sqrt(max(ws ** 2 - wg ** 2, 0.0)))
                     width = float(np.nanmedian(s["width"][both]) / np.nanmedian(g["width"][both]) - 1)
+                    # The same from cross-section over crown height (a bead's
+                    # area is width x crown x a shape constant): recorded beside
+                    # the edge-percentile width while the two are compared (1.8).
+                    e["width_change_area"] = float(
+                        np.nanmedian(s["area"][both] / s["crown"][both]) /
+                        np.nanmedian(g["area"][both] / g["crown"][both]) - 1)
                     crown = float(np.nanmedian(s["crown"][both]) - np.nanmedian(g["crown"][both]))
                     e.update(offset=offset, sagitta=sag, drift=drift, width_change=width, crown_change=crown)
                     if not gapped:
@@ -1346,13 +1722,34 @@ class Detector:
             for pair in list(m.pads.values()) + ([m.carrier] if m.carrier else []):
                 if pair.scan is not None:
                     explained[pair.scan.idx] = True
+            # A bead this capture's seam measurement judged accounts for what is
+            # left on it. The module as measured moves beads but does not reshape
+            # them, so an in-spec crown or width change remains as residual, and the
+            # profilometer (~1 um noise) sees it as a dent or spatter: 10/10 in-spec
+            # reinforcement modules rejected (1.7 arm column, 12 Nov 2026). Out of
+            # spec, the seam's own finding covers it. The bead is as wide as its
+            # widest in-spec width. Cost: a drop landing on a bead is not reported
+            # (the fixed pass already misses those, bead band). Reshaping the beads
+            # instead is deferred (status_update.md, "Deferred to refine").
+            judged = []
+            for pair in m.seams.values():
+                g = pair.gold
+                if pair.scan is None or g is None or "centre_xy" not in g:
+                    continue
+                u = np.asarray(g["u"], float)
+                judged.append(Rect(float(g["centre_xy"][0]), float(g["centre_xy"][1]),
+                                   float(np.degrees(np.arctan2(u[1], u[0]))), float(g["nominal_length"]),
+                                   float(self.cfg.weld_stitch_w) * (1 + self.p["seam"]["width_tol"])))
+            bare = short_bead_stretches(m.seams, self.p["seam"], self.cfg.weld_stitch_w)
             for reg in regions:
                 if self._absorbed(reg, absorbing):
                     continue
                 pts = np.vstack([x for x in (cap.points[reg.scan_idx], reg.gold_pts) if len(x)])
                 near_edge = _near_outline(pts[:, :2], outlines)
+                for rect in bare + judged:
+                    near_edge |= _in_rect(pts[:, :2], rect, q["edge_band"])
                 frac = (explained[reg.scan_idx].sum() + near_edge.sum()) / max(len(pts), 1)
-                if frac > 0.5:
+                if frac > 0.5 or reg.on_step > 0.5:
                     continue
                 cls = self._region_class(reg)
                 findings.append(Finding(cls, reg.peak if np.isfinite(reg.peak) else reg.area,
@@ -1425,6 +1822,54 @@ def _terminal_entry(cap: Capture, pair, t, p: dict) -> dict:
                      xy=(s.rect.cx, s.rect.cy), gold_xy=(g.rect.cx, g.rect.cy),
                      dyaw_deg=s.rect.yaw_deg - g.rect.yaw_deg)
     return entry
+
+
+def _bead_span(prof: dict, bin_: float) -> tuple[float, float] | None:
+    """Along-seam extent (from, to) of the longest melted run in a seam
+    profile (`measure_seam`), or None if nothing melted."""
+    best, start = (0, 0, 0), None
+    for i, flag in enumerate(list(prof["has"]) + [False]):
+        if flag and start is None:
+            start = i
+        elif not flag and start is not None:
+            if i - start > best[0]:
+                best = (i - start, start, i - 1)
+            start = None
+    if best[0] == 0:
+        return None
+    return float(prof["mids"][best[1]] - bin_ / 2), float(prof["mids"][best[2]] + bin_ / 2)
+
+
+def short_bead_stretches(seams: dict, q: dict, stitch_w: float) -> list[Rect]:
+    """Where a bead measured shorter than the golden one differs from it at
+    its ends: per seam, the stretch from each golden bead end back to the
+    measured one and on into the bead by its stop crater (one stitch width:
+    weld.py sinks the crater over the pool's size, so an early stop moves it
+    too), the stitch's width across, in the scan's stitch frame.
+
+    The module as measured keeps every bead at its design length, so a bead
+    that stopped short -- by less than `short_tol`, or a `short_weld` finding
+    would cover it -- leaves a dip there the depth of the crown, read as a
+    0.2 mm dent (`handling_damage`). The seam measurement already judged that
+    length, so residuals in these stretches are explained by it -- while the
+    shortfall is within `short_tol`; past it a finding has to cover it.
+    Found by 1.8: half the in-spec short welds were rejected for 'dents'."""
+    out = []
+    bin_ = q["bin"]
+    for pair in seams.values():
+        sc, g = pair.scan, pair.gold
+        if sc is None or g is None:
+            continue
+        ss, gs = _bead_span(sc, bin_), _bead_span(g, bin_)
+        if ss is None or gs is None or 1 - (ss[1] - ss[0]) / (gs[1] - gs[0]) > q["short_tol"]:
+            continue
+        u, c = np.asarray(sc["u"], float), np.asarray(sc["centre_xy"], float)
+        yaw = float(np.degrees(np.arctan2(u[1], u[0])))
+        for lo, hi in ((gs[0], ss[0] + stitch_w), (ss[1] - stitch_w, gs[1])):
+            if hi - lo > stitch_w + 1e-9:          # the bead receded at this end
+                mid = c + u * (lo + hi) / 2
+                out.append(Rect(float(mid[0]), float(mid[1]), yaw, float(hi - lo), float(stitch_w)))
+    return out
 
 
 def _near_outline(xy: np.ndarray, rects: list[tuple[Rect, float]]) -> np.ndarray:

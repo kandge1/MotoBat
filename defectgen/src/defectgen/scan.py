@@ -38,7 +38,10 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -128,7 +131,8 @@ class Scene:
         import open3d as o3d
 
         rays = np.hstack([origins, directions]).astype(np.float32)
-        out = self.raycaster.cast_rays(o3d.core.Tensor(rays))
+        with _RAYCAST_LOCK:
+            out = self.raycaster.cast_rays(o3d.core.Tensor(rays))
         t = out["t_hit"].numpy().astype(float)
         normal = out["primitive_normals"].numpy().astype(float)
         gid = out["geometry_ids"].numpy()
@@ -154,8 +158,22 @@ class Scene:
         # Unnormalised direction: Open3D measures t in units of its length,
         # so t in [0, 1) is exactly "between the point and the eye".
         rays = np.hstack([start, eye - start]).astype(np.float32)
-        blocked = self.raycaster.test_occlusions(o3d.core.Tensor(rays), tnear=0.0, tfar=1.0).numpy()
+        with _RAYCAST_LOCK:
+            blocked = self.raycaster.test_occlusions(o3d.core.Tensor(rays), tnear=0.0, tfar=1.0).numpy()
         return ~blocked
+
+
+# Line sweeps run their profile chunks on a thread pool (fixlist F5): numpy
+# releases the GIL in its array loops, and the chunks are independent (noise is
+# fixed per profile, drop counts are integer sums merged in chunk order). The
+# Open3D scene is only ever queried by one thread at a time; it threads itself.
+_RAYCAST_LOCK = threading.Lock()
+
+
+def scan_threads() -> int:
+    """Chunks of a line sweep processed at once: DEFECTGEN_THREADS, default 8.
+    Each chunk in flight holds its rays' arrays, so memory grows with this."""
+    return max(1, int(os.environ.get("DEFECTGEN_THREADS", "8")))
 
 
 def without_groups(stage: str, include=()) -> tuple:
@@ -335,7 +353,7 @@ def _finish(name, cfg, materials, scene, pts, normal, mat, to_light, to_cam, alo
 # -- laser line ------------------------------------------------------------
 
 def line_scan(scene: Scene, sensor: str, start: np.ndarray, length: float, seed: int = 0,
-              chunk: int = 400, speed: float | None = None, rate: float | None = None) -> ScanResult:
+              chunk: int = 100, speed: float | None = None, rate: float | None = None) -> ScanResult:
     """Sweep a laser-line sensor `length` mm along its own +y from `start`
     (4x4 sensor-to-module). Each profile: a fan of `points` rays spanning
     `line_width` at the reference distance, in the sensor's x-z plane. The
@@ -377,8 +395,25 @@ def line_scan(scene: Scene, sensor: str, start: np.ndarray, length: float, seed:
 
     parts, dropped, by_mat = [], {}, {}
     t0, kept = time.perf_counter(), 0
-    for a in range(0, len(poses), chunk):
-        part = _line_profiles(scene, cfg, materials, poses[a:a + chunk], seed, a, by_mat)
+
+    def one(a):
+        own: dict = {}          # per chunk, merged below in chunk order: no shared state
+        return _line_profiles(scene, cfg, materials, poses[a:a + chunk], seed, a, own), own
+
+    starts = list(range(0, len(poses), chunk))
+    workers = min(scan_threads(), len(starts))
+    pool = ThreadPoolExecutor(workers) if workers > 1 else None
+    # Submit a bounded window ahead (memory: at most 2 x workers chunks alive), consume in order.
+    pending, nxt = [], 0
+    while nxt < len(starts) and len(pending) < 2 * workers:
+        pending.append(pool.submit(one, starts[nxt]) if pool else None); nxt += 1
+    for i, a in enumerate(starts):
+        part, own = pending[0].result() if pool else one(a)
+        pending.pop(0)
+        if nxt < len(starts):
+            pending.append(pool.submit(one, starts[nxt]) if pool else None); nxt += 1
+        for k, v in own.items():
+            by_mat[k] = (np.asarray(by_mat.get(k, np.zeros(len(v), int))) + v).tolist()
         parts.append(part)
         kept += len(part.points)
         for k, v in part.dropped.items():
@@ -389,12 +424,22 @@ def line_scan(scene: Scene, sensor: str, start: np.ndarray, length: float, seed:
                  done, len(poses), 100 * done / len(poses), cast / 1e6, kept / 1e6, 100 * kept / cast,
                  " ".join(f"{k} {v / 1e3:.1f}k" for k, v in dropped.items() if v),
                  cast / 1e6 / max(time.perf_counter() - t0, 1e-9))
+    if pool:
+        pool.shutdown()
+    # Join field by field, freeing each field's chunks as soon as it is joined:
+    # joining everything at once held every chunk plus the result (2x a sweep).
+    def join(field, stack=np.concatenate):
+        out = stack([getattr(p, field) for p in parts])
+        for p in parts:
+            setattr(p, field, None)
+        return out
+
     return ScanResult(
         sensor,
-        np.vstack([p.points for p in parts]),
-        np.vstack([p.truth for p in parts]),
-        np.concatenate([p.signal for p in parts]),
-        np.concatenate([p.material for p in parts]),
+        join("points", np.vstack),
+        join("truth", np.vstack),
+        join("signal"),
+        join("material"),
         scene.material_names,
         np.array(poses),
         dropped,
@@ -402,9 +447,9 @@ def line_scan(scene: Scene, sensor: str, start: np.ndarray, length: float, seed:
         dropped_by_material=by_mat,
         settings=settings,
         rays=rays,
-        index=np.concatenate([p.index for p in parts]),
+        index=join("index"),
         grid=(len(poses), cfg["points"]),
-        sigma=np.concatenate([p.sigma for p in parts]),
+        sigma=join("sigma"),
     )
 
 

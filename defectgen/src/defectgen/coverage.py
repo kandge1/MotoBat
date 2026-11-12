@@ -234,27 +234,42 @@ class Requirement:
     """One class family at one stage: its elements and the points each needs."""
 
     name: str
-    D: float
+    D: float                   # lateral size: sample spacing must be <= D/2
     members: list
     elements: np.ndarray       # indices into the patches
     need: np.ndarray           # points needed per patch, in one capture
     areas: np.ndarray          # mm^2 per patch
     area: float                # total required area, mm^2
-    level: int = 0             # row of the count array: points quiet enough for this D
+    level: int = 0             # row of the count array: points quiet enough for this noise_D
+    noise_D: float = 0.0       # the size the noise half is judged against (<= noise_D/3); D if not given
 
-    def covered(self, n: np.ndarray) -> np.ndarray:
+    def covered(self, n: np.ndarray, pitch: float | None = None) -> np.ndarray:
         """Which of this requirement's patches count array `n` (levels x
-        patches, see `counts`) covers."""
+        patches, see `counts`) covers. `pitch`, for a sweep: the spacing
+        between its profiles. Density alone would let a sweep whose profiles
+        lie farther apart than D/2 pass on its dense along-line sampling; the
+        spacing rule holds in both directions, so such a sweep covers nothing
+        of this class."""
+        if pitch is not None and pitch > self.D / 2 + 1e-9:
+            return np.zeros(len(self.elements), bool)
         return n[self.level, self.elements] >= self.need
 
     def fraction(self, ok: np.ndarray) -> float:
         return float(self.areas[ok].sum() / self.area) if self.area else float("nan")
 
 
+def noise_d(spec: dict) -> float:
+    """The size a family's noise is judged against: `noise_D` where the class is
+    a height or depth smaller than its lateral size (a dent 8 mm wide but 0.1 mm
+    deep, fixed 12 Nov 2026: judging its noise against the width passed views
+    that cannot see it), else D."""
+    return float(spec.get("noise_D", spec["D"]))
+
+
 def levels(q: dict) -> list[float]:
-    """Every D any class uses: one row of counts each, since a point counts
-    for class k only if its noise is at most D_k/3."""
-    return sorted({spec["D"] for stage in q["stages"].values() for spec in stage.values()})
+    """Every noise size any class uses: one row of counts each, since a point
+    counts for class k only if its noise is at most noise_D_k/3."""
+    return sorted({noise_d(spec) for stage in q["stages"].values() for spec in stage.values()})
 
 
 def requirements(el: Elements, stage: str, q: dict) -> list[Requirement]:
@@ -268,7 +283,7 @@ def requirements(el: Elements, stage: str, q: dict) -> list[Requirement]:
         d = spec["D"] / 2.0
         need = np.maximum(1.0, el.p_area[j] / d ** 2)
         out.append(Requirement(name, spec["D"], spec["members"], j, need, el.p_area[j],
-                               float(el.p_area[j].sum()), lv.index(spec["D"])))
+                               float(el.p_area[j].sum()), lv.index(noise_d(spec)), noise_d(spec)))
     return out
 
 
@@ -301,16 +316,17 @@ def counts(result: ScanResult, el: Elements, q: dict, scale: float = 1.0) -> np.
     return (np.array(rows) * scale).astype(np.float32)
 
 
-def coverage(ns, reqs: list[Requirement]) -> dict:
+def coverage(ns, reqs: list[Requirement], pitches=None) -> dict:
     """Covered fraction of each requirement's area by one or more captures.
     An element is covered if *some single* capture covers it: counts are
     never summed across captures (the single-capture rule, §3.7.6)."""
     ns = [ns] if isinstance(ns, np.ndarray) else list(ns)
+    pitches = [pitches] * len(ns) if pitches is None or np.isscalar(pitches) else list(pitches)
     out = {}
     for r in reqs:
         ok = np.zeros(len(r.elements), bool)
-        for n in ns:
-            ok |= r.covered(n)
+        for n, pitch in zip(ns, pitches):
+            ok |= r.covered(n, pitch)
         out[r.name] = r.fraction(ok)
     return out
 
@@ -327,15 +343,20 @@ class View:
     kind: str                  # "snapshot" or "sweep"
     pose: np.ndarray           # 4x4 sensor-to-module; for a sweep, its start
     length: float = 0.0        # mm, sweep only
+    speed: float | None = None  # mm/s, a sweep flown faster than plan.sweep_speed (same profile rate)
+    pitch: float | None = None  # mm between profiles, sweep only
 
     def seconds(self, q: dict) -> float:
         p = q["plan"]
-        capture = p["t_snapshot"] if self.kind == "snapshot" else self.length / p["sweep_speed"]
+        capture = p["t_snapshot"] if self.kind == "snapshot" else self.length / (self.speed or p["sweep_speed"])
         return p["t_move"] + capture
 
     def to_json(self) -> dict:
-        return {"id": self.id, "sensor": self.sensor, "kind": self.kind,
-                "pose_mm": np.round(self.pose, 6).tolist(), "length_mm": self.length}
+        out = {"id": self.id, "sensor": self.sensor, "kind": self.kind,
+               "pose_mm": np.round(self.pose, 6).tolist(), "length_mm": self.length}
+        if self.speed:
+            out.update(speed_mm_s=self.speed, rate_hz=self.speed / self.pitch, pitch_mm=self.pitch)
+        return out
 
 
 def look_at(eye, target) -> np.ndarray:
@@ -431,6 +452,16 @@ def candidates(cfg: Config, q: dict) -> list[View]:
             views.append(View(f"sweep_end_x{sx:+d}", "profilometer", "sweep",
                               sweep_pose([x_face, -cfg.module_w / 2 - m, z_mid], [0, 1, 0], [-sx, 0, 0], ref),
                               length_y))
+    # Each sweep also flown fast: same profile rate (so the same exposure, noise
+    # and dropout), profiles farther apart. The greedy picks it where its pitch
+    # still meets the class's D/2 (walls, debris), which shortens the cycle.
+    fine = p["profile_pitch"]
+    for v in [v for v in views if v.kind == "sweep"]:
+        v.pitch = fine
+    if sw.get("fast_speed"):
+        rate = p["reference_rate"]
+        views += [View(v.id + "_fast", v.sensor, v.kind, v.pose, v.length, sw["fast_speed"],
+                       sw["fast_speed"] / rate) for v in views if v.kind == "sweep"]
     return views
 
 
@@ -438,7 +469,8 @@ def fixed_baseline(cfg: Config) -> View:
     """The Ranger3 station, exactly as scan.py and detection fly it."""
     sensors, _ = load_params()
     start = looking_down(-cfg.module_l / 2 - 5, 0.0, cfg.z_terminal_top + sensors["line_scan"]["reference_distance"])
-    return View("fixed_line_scan", "line_scan", "sweep", start, cfg.module_l + 10)
+    return View("fixed_line_scan", "line_scan", "sweep", start, cfg.module_l + 10,
+                pitch=sensors["line_scan"]["profile_pitch"])
 
 
 def capture(view: View, scene: Scene, q: dict, cast_pitch: float | None) -> tuple[ScanResult, float]:
@@ -452,11 +484,13 @@ def capture(view: View, scene: Scene, q: dict, cast_pitch: float | None) -> tupl
     try:
         if view.kind == "snapshot":
             return snapshot(scene, view.pose, sensor=view.sensor), float(cfg["stride"] ** 2)
-        if cast_pitch is None:
+        if cast_pitch is None and not view.speed:
             return line_scan(scene, view.sensor, view.pose, view.length), 1.0
         rate = cfg["reference_rate"]
-        r = line_scan(scene, view.sensor, view.pose, view.length, speed=cast_pitch * rate, rate=rate)
-        return r, cast_pitch / cfg["profile_pitch"]
+        flown = view.pitch or cfg["profile_pitch"]
+        cast = cast_pitch or flown
+        r = line_scan(scene, view.sensor, view.pose, view.length, speed=cast * rate, rate=rate)
+        return r, cast / flown
     finally:
         quiet.setLevel(level)
 
@@ -507,7 +541,7 @@ def greedy(views: list[View], n: dict, reqs: list[Requirement], q: dict) -> list
     second, until none adds more than min_gain. Each class weighs the same,
     however large its area."""
     live = [r for r in reqs if r.area > 0]
-    cov = {v.id: [r.covered(n[v.id]) for r in live] for v in views}
+    cov = {v.id: [r.covered(n[v.id], v.pitch) for r in live] for v in views}
     have = [np.zeros(len(r.elements), bool) for r in live]
     steps: list[Step] = []
     left = list(views)
@@ -544,8 +578,8 @@ def run_stage(stage: str, out_dir: Path, q: dict | None = None, cfg: Config | No
     log.info("%s: %d triangles, %.0f mm^2, %.0f mm^2 observable, in %d patches (%.0f s)", stage, len(el),
              el.area.sum(), el.area[el.observable].sum(), n_patch, time.perf_counter() - t0)
     for r in reqs:
-        log.info("  required %-16s D %.2f mm -> spacing %.3f mm  %6d elements  %8.0f mm^2",
-                 r.name, r.D, r.D / 2, len(r.elements), r.area)
+        log.info("  required %-16s D %.2f mm -> spacing %.3f mm, noise %.3f mm  %6d elements  %8.0f mm^2",
+                 r.name, r.D, r.D / 2, q["noise_per_D"] * r.noise_D, len(r.elements), r.area)
 
     cache = out_dir / "cache" / f"{stage}_{_cache_key(stage, q, el)}" if use_cache else None
     fixed = fixed_baseline(cfg)
@@ -560,13 +594,15 @@ def run_stage(stage: str, out_dir: Path, q: dict | None = None, cfg: Config | No
         "stage": stage,
         "params_hash": params_hash(),
         "elements": int(len(el)), "observable": int(el.observable.sum()),
-        "requirements": {r.name: {"D_mm": r.D, "spacing_mm": r.D / 2, "area_mm2": r.area,
+        "requirements": {r.name: {"D_mm": r.D, "spacing_mm": r.D / 2, "noise_D_mm": r.noise_D,
+                                  "noise_mm": q["noise_per_D"] * r.noise_D, "area_mm2": r.area,
                                   "members": r.members} for r in reqs},
-        "fixed": coverage(n_fixed, reqs),
-        "arm_plan": coverage([n[s.view.id] for s in steps], reqs),
-        "arm_ceiling": coverage(list(n.values()), reqs),
-        "arm_plus_fixed": coverage([n_fixed] + [n[s.view.id] for s in steps], reqs),
-        "per_view_alone": {v.id: coverage(n[v.id], reqs) for v in views},
+        "fixed": coverage(n_fixed, reqs, fixed.pitch),
+        "arm_plan": coverage([n[s.view.id] for s in steps], reqs, [s.view.pitch for s in steps]),
+        "arm_ceiling": coverage([n[v.id] for v in views], reqs, [v.pitch for v in views]),
+        "arm_plus_fixed": coverage([n_fixed] + [n[s.view.id] for s in steps], reqs,
+                                   [fixed.pitch] + [s.view.pitch for s in steps]),
+        "per_view_alone": {v.id: coverage(n[v.id], reqs, v.pitch) for v in views},
         "plan": [{"step": i + 1, **s.view.to_json(), "seconds": s.seconds, "gain": s.gain,
                   "coverage_after": s.coverage} for i, s in enumerate(steps)],
         "plan_seconds": float(sum(s.seconds for s in steps)),
@@ -580,7 +616,8 @@ def run_stage(stage: str, out_dir: Path, q: dict | None = None, cfg: Config | No
         {"stage": stage, "frame": "module (pallet datum), mm", "params_hash": params_hash(),
          "note": "sensor poses: +z is the viewing direction; a sweep travels along its own +y",
          "views": result["plan"]}, indent=2))
-    best = {r.name: max(n.items(), key=lambda kv: coverage(kv[1], [r])[r.name])[0] for r in reqs}
+    pitch = {v.id: v.pitch for v in views}
+    best = {r.name: max(n.items(), key=lambda kv: coverage(kv[1], [r], pitch[kv[0]])[r.name])[0] for r in reqs}
     P = len(el.p_area)
 
     def flags(sel):
@@ -588,12 +625,12 @@ def run_stage(stage: str, out_dir: Path, q: dict | None = None, cfg: Config | No
         for i, r in enumerate(reqs):
             out[i, r.elements[sel(r)]] = True
         return out
-    plan_ns = [n[s.view.id] for s in steps]
+    plan_ns = [(n[s.view.id], s.view.pitch) for s in steps]
     np.savez_compressed(out_dir / f"{stage}.patches.npz", centroid=el.p_centroid, normal=el.p_normal,
                         area=el.p_area, classes=np.array([r.name for r in reqs]),
                         required=flags(lambda r: np.ones(len(r.elements), bool)),
-                        fixed=flags(lambda r: r.covered(n_fixed)),
-                        arm=flags(lambda r: np.any([r.covered(x) for x in plan_ns], axis=0)
+                        fixed=flags(lambda r: r.covered(n_fixed, fixed.pitch)),
+                        arm=flags(lambda r: np.any([r.covered(x, pt) for x, pt in plan_ns], axis=0)
                                   if plan_ns else np.zeros(len(r.elements), bool)))
     result["best_single_view"] = best
     log.info("done in %.0f s", time.perf_counter() - t0)

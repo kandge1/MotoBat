@@ -133,6 +133,28 @@ def test_coverage_is_per_capture_never_summed():
     assert coverage(a + b, [req])["x"] == pytest.approx(1.0)   # what summing would wrongly claim
 
 
+def test_a_sweep_covers_a_class_only_if_its_pitch_meets_D_over_2():
+    """Point density alone would let a fast sweep (profiles 0.2 mm apart, dense
+    along each line) pass for a 0.2 mm class that needs 0.1 mm spacing. The
+    spacing rule holds along the sweep too (12 Nov 2026); a coarse class keeps it."""
+    fine_cls = Requirement("pos", 0.2, ["x"], np.array([0]), np.array([5.0]), np.array([1.0]), 1.0)
+    coarse_cls = Requirement("dent", 2.0, ["x"], np.array([0]), np.array([5.0]), np.array([1.0]), 1.0)
+    n = np.array([[50.0]])
+    assert coverage(n, [fine_cls], 0.05)["pos"] == 1.0
+    assert coverage(n, [fine_cls], 0.2)["pos"] == 0.0
+    assert coverage(n, [coarse_cls], 0.2)["dent"] == 1.0
+    fast = View("s_fast", "profilometer", "sweep", np.eye(4), 400.0, speed=200.0, pitch=0.2)
+    slow = View("s", "profilometer", "sweep", np.eye(4), 400.0, pitch=0.05)
+    q = {"plan": {"t_move": 1.0, "t_snapshot": 0.1, "sweep_speed": 50.0, "min_gain": 1e-3}}
+    assert fast.seconds(q) == pytest.approx(3.0) and slow.seconds(q) == pytest.approx(9.0)
+    assert fast.to_json()["rate_hz"] == pytest.approx(1000.0)
+    # The greedy takes the fast one for the dent, the fine one for the position.
+    steps = greedy([slow, fast], {"s": n, "s_fast": n}, [coarse_cls], q)
+    assert [s.view.id for s in steps] == ["s_fast"]
+    steps = greedy([slow, fast], {"s": n, "s_fast": n}, [fine_cls], q)
+    assert [s.view.id for s in steps] == ["s"]
+
+
 def test_greedy_prefers_coverage_per_second_and_stops():
     """Equal-weight classes; the fast view that covers class `a` beats a slow
     one that covers the same, and a view adding nothing is never taken."""

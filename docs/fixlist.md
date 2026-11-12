@@ -11,9 +11,9 @@ date (`~~item~~ — **done 5 Nov 2026**`) rather than deleting it, per the house
 Section references like §4A.4 point into `project_plan.md`; §7 and §12 point into
 `module_spec.md`.
 
-*Last updated: 1 Nov 2026 — A, B and C closed. D remains and **none of it blocks the current
-task**, each item gating a specific later task (§D). **§E is new**: two CAD issues found by
-building the generator, one of which supersedes D3.*
+*Last updated: 12 Nov 2026. **§F is new**: six findings from the 1.7 dataset (F5: run speed, first pass done 12 Nov; F6: the arm plan and detector faults the arm column exposed, fixed 12 Nov). F1 and F2 are
+geometry against tolerance contradictions, F3 and F4 detector limitations. D1 now matters more: the
+dataset's in-spec / out-of-spec labels rest on the tolerances. A, B, C and E are closed (1 Nov and 4 Nov).*
 
 ---
 
@@ -297,3 +297,138 @@ CMC 250 × 50 × 3.2, overhang rule `n × 28 + 8.5`. Z now closes at 107.0, not 
       fits. Give the busbar slots (and any other locating feature: terminal windows, CMC pegs) a
       design clearance in Fusion. A typical starting point is 0.2–0.3 mm per side; the user decides.
       *Closed 4 Nov 2026:* the user added 1.5 mm relief per side on the busbar slots. A busbar moved 0.2 mm / 0.1 deg, or 1.2 mm sideways, now drops into its slot.
+
+---
+
+## F. Found by the 1.7 dataset — 9 Nov 2026
+
+The dataset scores every reading against the tolerances in `defectgen/configs/detect.yaml`. Most of
+those are tagged **A** (assumed; §3.7.9 item 2). Where the generated geometry and two tolerances
+cannot both hold, an in-spec part is rejected *correctly*, so the result is about the spec or the
+CAD, not the detector. Write-up: `project_plan.md` §4B.6, "A strip that moves with the defect".
+
+| # | Item | Kind | Blocks |
+|---|---|---|---|
+| F1 | Carrier 0.16 high lifts busbars past the 0.15 gap tolerance | tolerance contradiction | in-spec false-reject rate of `carrier_seating` (1.8) |
+| F2 | Busbar 0 rests 0.5 mm high after an in-spec 0.1 mm Y shift | CAD check | in-spec false-reject rate of `busbar_shift` (1.8) |
+| F3 | Narrow beads over-read in width | detector limitation | in-spec width false rejects (1.8) |
+| F4 | Weld bow measure has ~no margin to its tolerance | detector limitation | false-alarm rate (1.8) |
+| ~~F5~~ | ~~Arm cases run on one core: ~270 s per welded module~~ — **first pass done 12 Nov 2026**: 1.6–2× faster, results unchanged | speed | cheap reruns: 1.13 held-out set, any detector change |
+| F6 | The arm column measured a flawed arm plan: FOD 60 %, in-spec welds rejected, wall dents 12/20 — **fixed 12 Nov 2026**, arm column to be rerun | coverage + detector | a fair fixed-vs-arm verdict (1.10) |
+
+### F1 — Carrier seating vs busbar gap
+
+**What it is.** A carrier sitting 0.16 mm high is in spec (carrier tolerance, assumed). It really
+does lift the busbars it carries by 0.16 mm, which is past the 0.15 mm busbar-to-pad gap tolerance.
+The detector measures both correctly. 5 of 10 in-spec `carrier_seating` cases are rejected for the
+gap.
+
+**To close.** Source both tolerances (D1, §3.7.9). If both hold, the carrier tolerance must be
+tighter than the gap's; if not, one of them changes. It is a spec decision, not a fix.
+
+### F2 — Busbar 0 lifts on an in-spec shift
+
+**What it is.** `pod/busbar_shift/L0_0.1_s0`: busbar 0 shifted dy −0.10 mm (pose tolerance ±0.2)
+comes to rest at z +0.506 mm, tilted 4.8°, and at dy −0.163. It is resting on something along its
+−Y edge (≈ y −63.6). E7's 1.5 mm slot relief should prevent this, so something else is in the way.
+The detector reads `busbar_liftoff` 0.50, which is right for the generated part.
+
+**To close.** In Fusion, check what is within 0.1–0.2 mm of busbar 0's −Y edge (carrier rib,
+terminal window, wall). Then either add clearance or record the real limit.
+
+### F3 — Narrow beads read about 1.4× in width change
+
+**What it is.** The sensor model's flank sampling makes a narrower bead read narrower still, so
+in-spec ×0.84 beads can be rejected (2 of 10 in-spec `width_deviation`). An area/crown estimate
+was tried (`width_change_area`, kept in the reports): it reads narrow beads better, but reads
++0.03 to +0.05 on clean beads and a −0.1 mm crown as +0.07 width. Kept the edge measure.
+
+**To close.** A decision: accept and state it, or revisit with the welding follow-up
+(`welding_followup.md`), which judges beads against their expected shape.
+
+### F4 — Weld bow noise reaches its tolerance
+
+**What it is.** On untouched seams the bow (sagitta) reading has p99.9 ≈ 0.098–0.106 mm against
+`arc_tol` 0.10. The single false alarm in the 775-case fixed run was one of those (0.1009).
+
+**To close.** A decision: accept about 1 per 1000 modules, smooth the bow measure, or source a
+real seam limit (ISO 13919-2, §3.7.9).
+
+### F5 — The arm column runs on one core
+
+**What it is.** An arm case takes ~115 s before welding and ~260–290 s after: the bead geometry
+roughly doubles every step. From the per-case `timings_s` in `arm.report.json` (welded module):
+golden render ~100 s, residual ~70 s, measure ~35 s, align ~20 s, scan ~45 s. About 85% of the
+wall time is the main thread (11 Nov: 356 CPU-min against ~38 per helper thread). Only the ray
+casting uses the 32 threads, and the GPU (RTX 4060, 8 GB; torch+CUDA in the venv) sits idle. A full
+arm column is ~1.5 days, so every detector change costs that again.
+
+**What will not work.** Two arm jobs at once: one peaks at 8.4 GB RSS (10.7 GB with page cache) on a
+16 GB machine. They would also share `_spill/` if they ever took the same case: that SIGBUS'd on 11 Nov.
+
+**To do, after the 1.7 run (never mid-run: half a column from changed code is a mixed dataset).**
+1. Profile one welded case (cProfile or `py-spy`; py-spy needs sudo on a live PID, ptrace_scope 1).
+2. Run the 12 captures in parallel. They are independent through golden, align, measure and
+   residual; a thread pool keeps one copy of the scene if the hot loops release the GIL.
+3. Vectorise what the profile shows is Python-level looping in `detect.py`.
+4. Optionally put the nearest-point and residual work on the GPU. It is float32, so it is not
+   bit-identical: that is a full rerun of both columns, not a patch.
+
+**Done when.** A sample of finished cases (both setups, every stage) reruns to identical
+`score.json` and `report.json` apart from `timings_s` and `seconds`, and the welded arm case time
+is measured again. For step 4: the 1.8/1.9 numbers are recomputed and unchanged within their intervals.
+
+**First pass, done 12 Nov 2026.**
+- **What changed.** `scan.line_scan` runs its profile chunks on a thread pool (`DEFECTGEN_THREADS`, default 8;
+  the gain levels off at about 4). Each chunk keeps its own drop counts, merged in chunk order. The Open3D
+  scene sits behind a lock, and Open3D threads it itself. The default chunk went from 400 to 100 profiles, so
+  memory stays bounded; results don't depend on chunking (`test_scans_are_reproducible...`).
+  `detect.Reference._cast` gathers two pose columns per point instead of a 4×4 copy (1.5 GB per 12 M-point
+  sweep). Profiling showed that 166 of 293 s in a welded arm case was the line-sensor model's numpy, run
+  for the scan and for every golden recast. Ray tracing itself was 4.5 s.
+- **Speed.** Welded arm case 281–306 → 141–175 s. Pre-weld arm 110–118 → 69–91 s. Fixed 21–26 → 13–18 s.
+  Peak RSS 8.4 → 8.0 GB.
+- **Proof it changes no data.** Threaded vs serial sweeps on the welded module and every post-weld arm
+  sweep plus the fixed pass: bit-identical, including drop counts and their key order. Eleven finished cases
+  (pod at all three stages, clean post-weld, one GRR trial; both setups) rerun to identical `score.json`, and
+  every report number within 1e-9. The largest difference was 3e-14, the same as rerunning the unchanged
+  code, which isn't bit-reproducible: threaded reductions in Open3D/BLAS. New test:
+  `test_threaded_sweep_is_identical_to_serial`. 179 tests pass.
+- **Left for later.** The detector's own numpy (measure, fits, residual regions: ~95 s of a welded arm case)
+  still runs on one core. Running captures in parallel would hold several 12 M-point captures at once. Not
+  worth it at 16 GB for now. GPU: step 4 above, unchanged.
+
+### F6 — The arm column measured a flawed arm plan
+
+**What it was.** The first finished arm column (12 Nov 2026) beat the fixed station on cell and busbar pose
+and weld arcs, but debris recall was 60 %, 10/10 in-spec reinforcement and 9/10 in-spec width welds were
+rejected, and wall dents were found 12/20. None of these is a property of an arm. Each is a fault in the
+plan or the detector, and the first run is what found them. It is archived as the "before" (`data/coverage_v1/`,
+the first `data/dataset/`).
+
+**Causes and fixes.**
+1. *Coverage promised too much* (plan §4B.6). The FOD class used D = 1.0 mm for 0.4–0.6 mm particles, so a
+   centre strip no sweep resolved counted as covered. Handling damage was judged with snapshot points too
+   noisy for 0.1 mm dents. Fix: FOD D = 0.5; a class may set `noise_D` apart from its spacing D
+   (handling damage: 0.1), `coverage.yaml`.
+2. *Fast wall sweeps.* With the noise rule fixed, the plan grew to 92–105 s per stage. Each sweep now
+   also has a 200 mm/s variant at the same 1 kHz (0.2 mm pitch). A sweep counts for a class only if its
+   pitch ≤ D/2, so fast sweeps serve the walls (D = 2) and never cell or busbar pose (D = 0.2). Final
+   plan: 15 / 13 / 15 captures, 51 / 46 / 63 s.
+3. *Misregistration on steep surfaces.* The residual threshold assumed only noise, but X/Y/yaw come from
+   the housing datum, good to half a sample. A surface moved sideways by d reads d·|n_h|/|n·a| along the
+   ray. That is zero on a level top, d on a wall seen side-on (3,592 false regions from the side-on
+   sweeps), and ~3 d on a cap's recess wall seen edge-on by a close-up snapshot (2 false regions).
+   `tau ≥ misreg × that gain`, with the normal taken from the golden grid, steepest face at a crease
+   (`detect.sideways_gain`). Tests: `test_sideways_gain_...`, `test_a_steep_face_moved_...`.
+4. *In-spec welds read as defects.* The as-measured reference moves beads but does not reshape them, so
+   an in-spec crown or width change stayed as residual. Residuals inside a judged seam's footprint now
+   count as explained. Cost: spatter landing on a bead goes unreported. Reshaping the reference bead
+   is in status_update's "Deferred to refine".
+
+**Proof.** Clean modules through the final plan, every stage, placed exactly and with fixture error
+(`python -m defectgen.regress arm`): 0 findings in 6/6. Before fix 3's second form: 2 false findings.
+Every-class sensitivity through the arm: see the 1.7 rerun entry in status_update.
+
+**Done when.** Both columns are rerun on this detector (fixed too: it shares the detector) and the
+1.8/1.9/1.10 numbers are recomputed.

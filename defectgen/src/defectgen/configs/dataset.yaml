@@ -1,0 +1,64 @@
+# The labelled dataset (task 1.7, project_plan.md §4B.6 "1.7 dataset").
+# Tags as in the other configs: S sourced, D derived, A assumed.
+
+out: data/dataset
+
+# Pallet reload: each scan places the module with a fresh random rigid error.
+fixture:
+  sigma_xy: 0.03             # A  mm; 3-2-1 pallet locators repeat to a few hundredths (source it, §3.7.9)
+  sigma_z: 0.01              # A  mm
+  sigma_yaw_deg: 0.01        # A
+  sigma_tilt_deg: 0.005      # A  roll and pitch
+
+setups: [fixed, arm]         # fixed = Ranger3 pass; arm = data/coverage/<stage>.plan.json (task 1.5)
+
+# Size levels. Tolerance classes: multiples of their detect.yaml tolerance (two in spec, dense
+# around the threshold). Presence classes: absolute sizes spanning the detection limit.
+tolerance_factors: [0.5, 0.8, 1.1, 1.3, 1.6, 2.0, 3.0]   # A
+
+# Class families. kind: tolerance | presence | binary.
+#   tol: dotted key into detect.yaml (tolerance classes), or a number
+#   D:   presence threshold (same units as the levels): at or above it the defect must be found
+#   levels: presence sizes; tolerance classes use tolerance_factors x tol
+families:
+  # pre_busbar
+  cell_shift:        {stage: pre_busbar, cls: cell_placement, kind: tolerance, tol: cell.pos_tol}        # mm, random direction
+  cell_yaw:          {stage: pre_busbar, cls: cell_placement, kind: tolerance, tol: cell.yaw_tol}        # deg, random sign
+  terminal_height:   {stage: pre_busbar, cls: terminal_height, kind: tolerance, tol: terminal.height_tol}  # mm, random sign
+  terminal_tilt:     {stage: pre_busbar, cls: terminal_tilt, kind: tolerance, tol: terminal.tilt_tol}      # deg, random axis
+  missing_cell:      {stage: pre_busbar, cls: missing_cell, kind: binary}
+  reversed_polarity: {stage: pre_busbar, cls: reversed_polarity, kind: binary}
+  missing_pad:       {stage: pre_busbar, cls: missing_pad, kind: binary}
+  fod:               {stage: pre_busbar, cls: fod, kind: presence, D: 0.25,                               # A radius, mm
+                      levels: [0.05, 0.1, 0.15, 0.25, 0.4, 0.6]}
+  handling_damage:   {stage: pre_busbar, cls: handling_damage, kind: presence, D: 0.1,                    # A depth, mm
+                      levels: [0.02, 0.05, 0.1, 0.2, 0.4, 0.8], radius: 4.0}                              # A dent radius
+  # pre_weld
+  busbar_shift:      {stage: pre_weld, cls: busbar_pose, kind: tolerance, tol: busbar.pos_tol}
+  busbar_liftoff:    {stage: pre_weld, cls: busbar_liftoff, kind: tolerance, tol: busbar.gap_tol}
+  carrier_seating:   {stage: pre_weld, cls: carrier_seating, kind: tolerance, tol: carrier.dz_tol}
+  # post_weld
+  missing_weld:      {stage: post_weld, cls: missing_weld, kind: binary}
+  short_weld:        {stage: post_weld, cls: short_weld, kind: tolerance, tol: seam.short_tol}           # fraction short
+  seam_deviation:    {stage: post_weld, cls: seam_deviation, kind: tolerance, tol: seam.offset_tol}      # mm, random sign
+  width_deviation:   {stage: post_weld, cls: width_deviation, kind: tolerance, tol: seam.width_tol}      # fraction, random sign
+  reinforcement:     {stage: post_weld, cls: reinforcement, kind: tolerance, tol: seam.crown_tol}        # mm, random sign
+  weld_path_drift:   {stage: post_weld, cls: weld_path_drift, kind: tolerance, tol: seam.drift_tol}      # mm amplitude
+  weld_arc:          {stage: post_weld, cls: weld_arc, kind: tolerance, tol: seam.arc_tol}               # mm sagitta
+  spatter:           {stage: post_weld, cls: spatter, kind: presence, D: 0.15,                           # D radius: coverage D 0.3 diameter
+                      levels: [0.05, 0.075, 0.1, 0.15, 0.2, 0.3], count: 5}                              # A drops per module
+
+tiers:
+  pod:
+    seeds: 5                 # A  per (family, level); Wilson intervals need several
+  clean:
+    modules: 10              # A  per stage
+  grr:                       # AIAG crossed study: parts x appraisers (pallet loads) x trials (noise)
+    parts: 10                # S  AIAG MSA 4th ed. typical 10 parts
+    loads: 3                 # S  ... 3 appraisers
+    trials: 2                # A  (AIAG uses 2-3)
+    spread: 1.5              # A  true values spread over +/- this x tolerance across the parts
+    characteristics:         # characteristic -> the family whose injection sets its true value
+      terminal_height: terminal_height
+      cell_position: cell_shift        # along X, signed
+      busbar_gap: busbar_liftoff

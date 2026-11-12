@@ -2222,6 +2222,486 @@ so every number has an error bar. Then measure:
   which sensor class is actually required.
 - **Detection latency** per capture and per module
 
+#### 1.7 dataset — Design, 8 Nov 2026 (`defectgen/dataset.py`, `configs/dataset.yaml`)
+
+**A case is one module:** the stage that inspects the class, one injected
+defect of that class at one size, and a seed. The seed fixes everything
+random:
+- where the defect goes (which cell, terminal, busbar or stitch, which
+  direction, which surface point);
+- each scan's fixture placement;
+- each scan's sensor noise.
+
+The dataset is a list of recipes, regenerable bit for bit. Only the small
+outputs are kept: recipe, labels, report and score per sensor setup. A
+point cloud is ~150 MB and comes back from its seed.
+
+**Two sensor setups per case**, as 1.10 compares them:
+- `fixed`: the Ranger3 pass;
+- `arm`: the 1.5 view plan for that stage (`data/coverage/<stage>.plan.json`).
+
+**Fixture placement per scan.** Before each scan, the module is moved by a
+random rigid error, as a pallet reload would place it:
+
+```
+(dx, dy) ~ N(0, σ_xy²),  dz ~ N(0, σ_z²),  yaw ~ N(0, σ_yaw²),  roll, pitch ~ N(0, σ_tilt²)
+```
+
+σ values are assumed (`dataset.yaml`, A). This is also what varies the
+sampling phase that §4B.4 found makes the line-scan's X quantised. Without
+it, every scan of a part would share one phase, and %GRR would flatter the
+sensor.
+
+**Out of spec or not: the scoring fix 1.4 left open.** Every injection is
+labelled, but not every label is a defect. Each class is one of three
+kinds:
+
+| Kind | Classes | Defect when | Found below the threshold |
+|---|---|---|---|
+| tolerance | cell placement (xy, yaw), terminal height and tilt, busbar pose and gap, carrier seating, weld shape | magnitude > its `detect.yaml` tolerance | **false reject** (FP): the part was in spec |
+| presence | spatter, FOD, handling damage | size ≥ D (the smallest that matters) | neither credit nor penalty; kept for POD only |
+| binary | missing cell, reversed polarity, missing pad, missing weld | always | — |
+
+The judgement uses the recipe's true parameters, not the label's single
+magnitude. Cell placement, for example, has separate position and yaw
+tolerances, and the label holds only the shift.
+
+Per case and setup, the score is:
+- `hit` / `miss` for an out-of-spec defect (a same-class finding on it, or
+  none);
+- `not_covered` for an out-of-spec defect missed where the setup does not
+  look by design: no patch the class requires inside the label's box is
+  covered by that setup in 1.5's coverage map
+  (`data/coverage/<stage>.patches.npz`). POD is conditional on the location
+  being inspected (MIL-HDBK-1823A). What a setup cannot reach is a property
+  of the station, and it is reported beside POD, not folded into it. Added
+  9 Nov, after the fixed run's side-plate dents (below);
+- `false_reject` / `pass` for an in-spec one;
+- the count of false alarms elsewhere (findings on no label);
+- `other` (findings of another class on the label: knock-on or cross-talk,
+  kept apart, §4B.4 scoring caveats).
+
+**Tiers.**
+
+| Tier | Content | Feeds |
+|---|---|---|
+| `pod` | 20 class families × 6–7 sizes × seeds. Tolerance classes at f × tol, f ∈ {0.5, 0.8, 1.1, 1.3, 1.6, 2, 3}, so two levels are in spec and the transition is dense; presence classes span their detection limit; binary at one level | P/R and specificity with CIs (1.8), POD (1.11), fixed vs arm recall (1.10) |
+| `clean` | clean modules per stage | false alarms per module, the denominator precision needs |
+| `grr` | three characteristics (terminal height, cell position, busbar gap); 10 parts with true values spread over ±1.5 tol × 3 loads (re-fixtured) × 2 trials (noise only) | %GRR (1.9), AIAG crossed design, with "appraiser" = pallet load |
+
+FOD and handling damage are injected at pre-busbar only. Their detector
+(residual regions) does not depend on the stage, and later stages would
+triple the cost for little new information.
+
+#### 1.7 dataset — Pilot, 9 Nov 2026
+
+**Fixed setup: works.** One case per family at its largest size (20
+cases): 19 hits and 1 partial (spatter), each case re-fixtured at random.
+The detector's reading of the injected feature matches the injection:
+
+| | injected | measured |
+|---|---|---|
+| terminal height | 0.30 | 0.300 |
+| tilt | 0.93° | 0.959° |
+| cell yaw | 0.30° | 0.293° |
+| cell shift | 0.60 | 0.654 (X quantised to the 0.1 mm pitch) |
+| busbar shift | 0.60 | 0.611 |
+| gap | 0.45 | 0.452 |
+| carrier | 0.60 | 0.600 |
+| short weld | 0.30 | 0.298 |
+| seam offset | 0.75 | 0.752 |
+| crown | 0.30 | 0.287 |
+| drift | 0.30 | 0.286 |
+| bow | 0.30 | 0.312 |
+| width change | −0.60 | −0.78 (a very narrow bead; past tolerance either way) |
+
+About 25 s per case.
+
+**Two detector changes the pilot forced (§4B.4), both re-verified against
+1.4's regression:**
+
+- *Drift window.* Under a random fixture offset, a bead's fine ripple
+  sampled at the 0.1 mm pitch aliased into a bin-by-bin alternation of the
+  estimated centreline (±0.12 mm, period 0.5 mm). That read as 0.2 mm of
+  `weld_path_drift` on clean stitches. Path drift wanders over millimetres,
+  so the centreline is now smoothed over `drift_window` = 1 mm before its
+  wander is measured. A real 0.3 mm drift still reads 0.288; a 6 mm
+  wavelength loses ~5%.
+- *Discontinuity band.* Residual regions mostly within misregistration
+  reach of a discontinuity in the golden capture's own range image are not
+  defects. A discontinuity is a depth step between neighbouring rays, or a
+  shadow / silhouette boundary. Reach is half a sample where the end-plate
+  datum fixed X and Y, else `fixture_tol`. This generalises the outline band
+  to every edge in every view, and was needed for any capture that keeps the
+  fixture pose.
+
+**Memory, on a 16 GB laptop.** A full-length Keyence sweep is 24 M rays and
+10.7 M points. The arm's post-weld plan has six of them. The first pilot
+was OOM-killed at 12 GB. What it took, in `detect.py` and `dataset.py`:
+- the golden cache is bounded by points, and aligned poses (never seen
+  again) are forgotten;
+- each capture's sorted copies and golden are released once it has been
+  measured;
+- an aligned capture replaces its original in place;
+- the as-measured module is built once per detection, not per capture;
+- freed memory is handed back to the OS (`malloc_trim`);
+- the golden stores directions and footprints as float32;
+- sweeps are joined field by field;
+- the dataset spills captures to disk and memory-maps them back, as a real
+  cell streams captures to disk.
+
+Peak for the heaviest arm case is now ~5–7 GB. Dataset runs are capped at
+7 GB (`systemd-run --user --scope -p MemoryMax=7G`), so an overrun kills the
+job, not the desktop.
+
+**Arm setup: blocked on oblique-view detection** (as found by the pilot;
+resolved 9 Nov, see "Arm hardening" below: the cause was registration, and
+the per-ray noise threshold and slope allowance proposed here have not been
+needed). Detection was built and verified on level views. The 1.5 plan adds views it has never seen: tilted
+snapshots, sweeps rolled ±60°, side-on sweeps. On the first arm case these
+raised 90 false alarms; 32 remain after the band. Experiments on a clean,
+perfectly placed module separate the causes:
+
+- *The comparison itself is exact for oblique sweeps.* The noise-free scan
+  matches the golden to 0.0 µm on all 12.5 M rays, so there is no geometry
+  bug.
+- *Partial outlines.* A rolled sweep sees part of a busbar at the end of its
+  line. The outline is then set by where the view ends, and reads 1.4 mm /
+  1.0° of "pose". Outline-based positions need the whole face in view.
+- *Heavy-tailed noise on weak returns.* Grazing copper returns little light,
+  and the model raises its noise up to 10×. A threshold from the material's
+  median noise flags those rays. The threshold should be per ray, from
+  returned signal, which real sensors report.
+- *Misregistration on sloped surfaces seen obliquely* (the moulded
+  carrier). A first per-ray slope allowance fragmented the regions instead
+  of removing them, and was withdrawn.
+
+Until these are fixed and re-verified, the arm column of the dataset would
+measure the detector's oblique-view gaps, not the arm's value. The `pod`
+tier therefore runs with `--setups fixed` first. The arm setup waits on a
+dedicated hardening step, which is a prerequisite of 1.10.
+
+The arm case costs ~4 min (post-weld, 12 captures) against ~25 s fixed.
+
+#### 1.7 dataset — Fixed run, 9 Nov 2026
+
+`clean` (30) and `grr` (180) finished with no false alarms. `pod` stopped at
+case 462 of 565. Two things it showed:
+
+- *A crown lost entirely divided by zero.* `reinforcement` at 3 × tol with a
+  negative sign is −0.30 mm on the 0.30 mm crown. That leaves a flush weld,
+  which is a real outcome (underfill), not an impossible draw. `weld._shape`
+  scaled its ripple and crater by the crown height. A crown ≤ 0 is now built
+  as flush or sunk, with its ripples and no crater. A crown above zero is
+  built exactly as before, so finished cases still reproduce bit for bit.
+  Before resuming, every remaining recipe was built once without scanning,
+  and all built.
+- *Dents on the side plates' outer faces were scored as misses.* All 8
+  `handling_damage` misses, at every size up to 8 × D, sit on a vertical outer
+  face that a downward line scan never sees. Every dent on a top face was
+  found. These are coverage, not detection, so the scoring rule above now
+  calls them `not_covered`. `python -m defectgen.dataset --tier <t>
+  --rescore` re-scores stored reports without detecting again. On the stored
+  cases it changed exactly those 8 and nothing else.
+
+**Results, fixed setup (775 cases).** No false alarm anywhere: 0 findings
+on any of the 30 clean modules, and 0 findings off the injected defect in
+any of the 565 `pod` or 180 `grr` cases. Out-of-spec defects: 343 hit,
+17 partial, 27 miss and 8 not covered, out of 395. In-spec defects: 8 false
+rejects out of 120. Tabulated by `--summary`. Intervals, POD and %GRR are
+1.8, 1.11 and 1.9. Per family:
+
+| Family | Found on every seed from | In-spec false rejects | Notes |
+|---|---|---|---|
+| terminal height, gap, carrier, width | 1.1 × tol | 0 / 0 / 0 / 2 of 10 | readings within µm of truth, except width, which reads high (0.6 → 0.78) |
+| terminal tilt | 1.1 × tol | 0 | |
+| busbar shift, cell shift | 1.3 × tol | 2 / 2 of 10 | X steps at the 0.1 mm profile pitch: 0.22 can read 0.177 |
+| seam offset, short weld, path drift | 1.3 × tol | 0 / 0 / 1 | short weld reads ~0.025 short |
+| cell yaw, weld bow | 1.6 × tol | 0 / 1 | yaw also steps with the pitch (~0.025°) |
+| crown | 1.3–2 × tol | 0 | a sagging crown reads 10–20 % short, so 1.1 × misses on every seed. At 3 ×, the two negative draws leave a flush weld, rejected as `missing_weld` on both stitches: right decision, wrong class. Height alone cannot tell a flush weld from no weld (heat tint can: [welding_followup.md](welding_followup.md)) |
+| binary (missing cell, pad, weld; reversed polarity) | always | — | |
+| FOD | D (0.25) | — | below D found 2 of 15 |
+| handling damage | D, on faces the setup sees | — | every dent on a top face found, every side-plate dent `not_covered` |
+| spatter | never | — | 2 of 15 cases complete. Of 75 drops ≥ D: 0 of 13 on a bead found, 4 of 16 within 1.5 mm of one, 30 of 43 clear of the beads (10 of those 13 misses are at D itself; 3 sit by a wall shadow or busbar edge). The bead band hides spatter on and beside the weld: a detector limitation, kept, since judging a bead against its expected shape is the welding follow-up's job |
+
+`grr`: the 10 terminal heights and the 10 busbar gaps read to ~1 µm across
+loads and trials. Cell position X steps with the profile pitch: a true
+0.167 reads 0.100 or 0.175 depending on the load (3 false rejects), and a
+true 0.233 reads 0.200 once (1 miss). This is the line-scan pitch, not
+noise, and it is what %GRR (1.9) will show.
+
+#### 1.7 dataset — Arm hardening, 9 Nov 2026
+
+**What the arm's false alarms were.** The same clean modules, through the
+arm plan:
+
+| | pre_busbar | pre_weld | post_weld |
+|---|---|---|---|
+| placed exactly | 0 | 0 | 0 |
+| with the fixture error (0.15 / −0.10 / 0.03 mm, 0.05° yaw, 0.02° roll) | 6 | 6 | 50 |
+
+Detection on oblique views was not the problem: with the module placed
+exactly, every view compared clean. The problem was registration. Measured
+against the known fixture error (`python -m defectgen.probe_arm`):
+
+- *No arm view registered itself.* X, Y and yaw came from the end-plate
+  outlines. A sweep along X sees ~40 mm of a 148 mm end plate, so the view
+  sets the outline's far edge, on the golden as on the scan. The ±60°
+  sweeps were left 0.1 mm off in Y, the end-on sweeps 0.17–0.34 mm off
+  (yaw from one plate), the snapshots 0.25 mm off (too coarse to register
+  at all). Yet the residual pass assumed 0.025 mm. Seen at 60°, 0.1–0.2 mm
+  of misregistration reads as 0.2–0.4 mm "dents" on the sloped carrier.
+- *The end-plate datum was biased, in the fixed pass too.* The side plates
+  run the full length and are flush with the end plates. An end-plate
+  outline taken out to its corners runs on along them to the edge of the
+  search window, which is fixed in the module frame. An end plate read
+  0.045 of a 0.15 mm shift. In 1.4 the residual band absorbed it.
+
+**What changed (`detect.py`: `datum_strips`, `solve_datum`, `joint_datum`,
+`housing_fit`, `align`):**
+
+- *Four housing strips, each trusted across its own width only.* These are
+  the two end-plate tops and the two side-plate tops, over their middle
+  spans, clear of the corners. An end strip fixes X, a side strip Y, and a
+  long edge yaw. A strip whose golden outline is short of its design width
+  (`fit.outline_slack` + 3 samples) was cut by the view and counts for
+  nothing. X, Y and yaw are solved together by least squares, and an axis
+  no strip fixes keeps the fixture pose.
+- *One registration per load.* All captures of one pallet load see one
+  module in one placement, and the station knows its own poses. So X, Y
+  and yaw are solved once, from each strip's best whole view across all
+  captures, and every capture is registered with it. Z, roll and pitch stay
+  per capture, from ICP on the housing. The fixed pass sees all four strips
+  in one sweep and so registers itself, as before but without the bias.
+- *The residual pass allows the fixture tolerance on any capture not fully
+  registered*, not only on the ones that kept the fixture pose outright.
+
+Measured on post-weld through the arm plan with the fixture error: every
+capture is registered to ≤ 0.002 mm in X and Y (0.017 mm in Z for the
+tilted snapshots), and the clean module gives **0 findings (was 50)**.
+
+Re-verified with `python -m defectgen.regress`, which gained an `arm` group
+(the three stages through the arm plan, placed exactly and with the fixture
+error) and a `--setup` option:
+- `arm`: 0 findings on all six (was 0 / 6 / 0 / 6 / 0 / 50);
+- `single`, `fixture`, `seeds`, `subtol` (line-scan): unchanged decisions and
+  no false alarm. The misses are the known ones: spatter on beads (8 of 10
+  drops), one liftoff stitch, and the under-tolerance cases, which are
+  correct not to be flagged.
+
+The fixed column was re-run with this detector so that both columns of the
+dataset come from one detector; the earlier fixed results are kept in
+`data/dataset_prestrips/`. `python -m defectgen.probe_arm --stage <s>
+[--fixture]` prints, per capture, the registration error against the known
+placement, the strips it saw whole or cut, and what the residual pass
+assumed.
+
+**Assumption.** Capture poses are exact. A real arm adds its own pose
+error (HC10DT repeatability plus hand-eye calibration), which this
+registration would inherit per capture. Modelling it belongs with Phase 2's
+robot model.
+
+#### 1.7 dataset — A strip that moves with the defect, 9 Nov 2026
+
+The fixed column re-run on the strip datum finished (775 cases, kept in
+`data/dataset_strips_v1/`): 0 findings on the 30 clean modules, 1 false
+alarm in 775 (a weld bow of 0.1009 on an untouched seam, tol 0.10: the far
+tail of the bow measure's noise, p99.9 0.098 mm, unchanged from the first
+pass). In-spec short welds rejected fell from 5 of 10 to 0.
+
+The full test suite then failed one test: a cell shifted (0.3, 0.2) read
+(0.25, 0.14) through the profilometer. A clean module read exactly zero, and
+HEAD's detector read it right, so it was the strip datum. A cell set off its
+pitch toward a side plate bows the 1.5 mm sheet out (settle.py, by design),
+and the side-plate strip moved with the bow. One outline round the whole
+strip follows its worst edge, so the datum took up part of the cell's own
+shift and subtracted it from the cell: 33 % of it through the part view, and
+in the fixed run a dy error against true dy with slope −0.11 (first pass:
+0.00). Recall did not show it (cell shift 21 of 25 vs 22), and no test of
+the dataset would have: only the reading's error against truth did.
+
+**Fix (`detect._strip_offset`, `icp.datum_bin`).** Each strip's centreline
+is taken per 2 mm bin along it (midway between the edges seen in that bin).
+A line is fitted to golden − scan, bins more than 3 robust σ off it (at
+least one sample spacing) are dropped, and the line is refitted. The line
+gives the strip's offset at its centre and, from its slope, the yaw. A bow
+over a minority of the strip drops out: on a synthetic 0.2 mm bow over 40 of
+140 mm, the old outline was 100 µm off and the robust line is 2 µm off. The
+cell now reads 0.2007 for 0.20. All 25 detector tests pass, and the new
+`test_a_locally_bowed_strip_does_not_move_the_datum` covers it.
+
+The whole dataset re-runs on this detector: the regression first (every
+group, `arm` included), then the arm `clean` tier, the fixed column, and the
+arm `pod` tier.
+
+**Lesson for 1.8.** Recall and decisions can hide a measurement bias that
+the reading-vs-truth error shows at once. 1.8 reports the reading error per
+family as well (mean, sd and slope against truth).
+
+**Also found: a generator contradiction, not a detector fault.** In-spec
+`busbar_shift` L0_0.1_s0 (dy −0.10) is rejected as `busbar_liftoff` 0.50.
+The generated module really has busbar 0 resting 0.506 mm high, tilted
+4.8°, at dy −0.163. So a 0.1 mm Y shift, inside the ±0.2 pose tolerance,
+puts the busbar onto something it then rests on. This is the same kind as
+the carrier at 0.16 mm lifting the busbars past the 0.15 gap tolerance:
+either the geometry has less clearance than the tolerance allows, or the
+tolerance is wrong. To be checked against the CAD.
+
+#### 1.8 and 1.9 — Statistics over the dataset, 9 Nov 2026 (`defectgen/validate.py`)
+
+`python -m defectgen.validate pr|grr [--setup fixed|arm]` reads only the stored
+cases (index, recipe, labels, report), so it is light and runs beside a heavy
+job. It prints the tables below and writes `data/dataset/validation/`.
+
+**1.8 method.** The unit is a case (one module, one injected defect, one
+setup).
+- *Recall* is of out-of-spec defects, conditional on the setup looking there
+  by design: `not_covered` cases are counted but outside it (MIL-HDBK-1823A).
+  A case with several targets where only some were found (`partial`) is not
+  a hit.
+- *Rejected* is the module decision (NOK) on the same cases. A partial earns
+  it, and so does a right decision with the wrong class: a flush weld rejected
+  as `missing_weld`.
+- *False reject rate* is over in-spec cases.
+- *Precision* is per finding class, from `pod`: correct findings over
+  correct + false-reject + false-alarm findings.
+- *Other* findings (a finding of another class on the injected defect) are
+  counted apart, and broken down by the case's injected class. This
+  separates knock-on effects (a lifted carrier raises its busbars:
+  `busbar_liftoff` on `carrier_seating`) from cross-talk between measures (a
+  short weld's bare busbar end read as `handling_damage`; bead width read as
+  bow). These are the two §4B.4 caveats.
+- *False alarms* (findings on no label) are counted over every scanned module
+  of all three tiers, each an independent fixture and noise draw. The bound
+  is the exact Poisson 95% upper bound.
+- *Reading error* per family: |reading| − injected size over every `pod`
+  case with a reading, as mean, sd, and slope over the size (± its standard
+  error). A slope off zero is a proportional bias. This is the check that
+  found the datum fault above: cell shift slope +0.018 ± 0.048 in the first
+  pass and −0.081 ± 0.034 on the unfixed strip datum, while recall barely
+  moved.
+
+All proportions are given with Wilson 95% intervals. At 25 cases per family,
+a perfect score bounds recall only to ≥ 87%. Tightening that needs more
+seeds, not a better detector.
+
+Results: after the fixed re-run (`pod`) completes.
+
+**1.9 %GRR, fixed setup (line-scan).** AIAG MSA ANOVA method, crossed:
+10 parts × 3 loads × 2 trials per characteristic, with the pallet load as
+"appraiser". The part × load interaction is pooled into repeatability when
+p > 0.05. %GRR to tolerance is 6 σ_GRR / (USL − LSL); the gap's spec is
+one-sided, from 0 to 0.15. The parts were spread over ±1.5 tol by design,
+not drawn from a process. So %GRR to study variation and ndc describe that
+design, and %GRR to tolerance is the figure to judge the gauge by.
+
+| Characteristic | EV σ (µm) | AV σ (µm) | GRR σ (µm) | %GRR to tolerance | %GRR to study | ndc | mean bias (µm) |
+|---|---|---|---|---|---|---|---|
+| terminal height (±0.10) | 0.5 | 0.1 | 0.5 | **1.5 %** | 0.5 % | 285 | −0.0 ± 0.1 |
+| busbar gap (0–0.15) | 0.1 | 0.0 | 0.1 | **0.5 %** | 0.1 % | 1781 | +0.5 ± 0.2 |
+| cell position X (±0.20) | 7.2 | 36.7 | 37.4 | **56 %** | 18 % | 7 | −21 ± 5 |
+
+AIAG's guide is < 10% acceptable, 10–30% conditional, > 30% not acceptable.
+- *Heights and gaps* are plane fits over thousands of points: the gauge is
+  far inside the guide.
+- *Cell position along X fails it.* It is almost all reproducibility, load
+  to load, with a strong part × load interaction (p < 0.001). The readings
+  step in 0.05 mm: the centre of two edges, each quantised to the 0.1 mm
+  profile pitch. Each load shifts the sampling phase, so the same part reads
+  0.10 or 0.15 depending on the load. With σ_xy = 0.03 mm, a third of the
+  pitch, 30 loads cover the phase unevenly. The −21 µm mean bias is most
+  likely that, not a calibration offset (not chased further).
+- This is the line-scan's pitch, not its noise (EV is 7 µm), and it is what
+  1.10 and 1.11 should test: the profilometer's 0.05 mm pitch, or the arm's
+  views. Before the strip datum (prestrips run) the same study gave 50%,
+  with the same structure.
+
+#### Later: a held-out validation set (added 10 Nov 2026)
+
+**Why.** The 1.7 dataset is not a clean test set any more. Three detector
+changes were made *because of* what it showed: the short-bead stretch, the
+strip datum, and the robust strip centreline. Each was right, but numbers
+reported on the data that shaped the detector are optimistic. That is the
+same train/test leak as in ML, and a reviewer from quality engineering will
+ask about it.
+
+**What.** Once the detector is frozen (after the arm column and any fix it
+needs), generate a fresh dataset with the same recipe (`configs/dataset.yaml`)
+but **new seeds**, never looked at while tuning. Run both setups on it once,
+change nothing, and report 1.8–1.12 from it. The current dataset becomes the
+development set. Size: the same tiers, or at least `clean` and `pod`. The
+`grr` tier measures the gauge, not a decision rule, so it can stay.
+
+**Rule from then on.** Any detector change after the held-out run means a
+new held-out seed set, not a re-run of the old one.
+
+**Open from the arm column (partial, 222 of 565 `pod`, 10 Nov).** All 30
+clean modules are clean, but 8 findings on no label in 4 cases, all on Zivid
+snapshot views:
+- three large cell shifts (2–3 × tol), where the shifted cell's bowed side or
+  end plate is flagged as `fod` / `handling_damage`. The module was already
+  rejected for the cell, so this is a knock-on effect, scored as a false
+  alarm;
+- one below-D dent case (`handling_damage` L1_0.05_s0), where the snapshot
+  flags raised regions on the foam pads and rejects a module it should not.
+Investigate once the column completes, before freezing the detector.
+
+#### Optional, after the held-out set: a learned region classifier (added 10 Nov 2026)
+
+**Where it fits.** The detector has two halves. *Measurement* (plane and
+outline fits: terminal height, gap, cell and busbar pose, seam profile) is a
+gauge, with %GRR of 0.5–1.6 % on heights and gaps, and stays rule-based so it
+stays traceable (automotive MSA). *Classification* of residual regions (after
+the comparison with the golden capture: is this region FOD, a dent, spatter, a
+knock-on of another defect, or nothing?) is hand-written thresholds
+(`residual` in `detect.yaml`: area, peak, aspect, material, edge band). The
+known errors are all in that second half: a bowed side plate read as `fod`
+on arm snapshots, foam pads read as raised regions, spatter on and beside
+the bead missed, a flush weld classed `missing_weld`. Only that half is
+replaced.
+
+**What.** A gradient-boosted tree classifier (e.g. LightGBM or scikit-learn
+`HistGradientBoostingClassifier`) over per-region features:
+- area, peak |r|, aspect, sign;
+- material under it;
+- capture, its sample spacing and view angle to the surface normal;
+- distance to the nearest measured outline, and how far that part moved;
+- distance to the nearest bead.
+
+Labels are exact and free, from the generator's labels: the defect class,
+`knock_on` (inside a part that a labelled defect moved or deformed), or
+`none`.
+
+**Steps.**
+1. `detect.py` writes every residual region it segments, with its features,
+   into the report, kept or not. That is a report-only change; the
+   decisions are unchanged.
+2. Regenerate the development set (the current 1.7 recipe and seeds) to get
+   the regions. The dataset does not keep point clouds, so this is one full
+   re-run, both setups.
+3. Train on development regions only. Tune with grouped cross-validation by
+   module, never by region, so regions from one module do not land on both
+   sides.
+4. Score once on the held-out set: rules vs classifier, the same 1.8 tables
+   (recall, precision, false alarms per module, Wilson / Poisson intervals),
+   per setup. Report whichever wins, with feature importances to show what
+   it learned.
+
+**Stated limitation.** Trained and tested on synthetic scans only. It can
+learn the generator's and sensor model's quirks, so the result says "a
+learned classifier fixes these errors in simulation", not on a real line.
+Real scans would be the test that closes that, which is out of scope.
+
+**Not chosen, recorded so they are not re-asked:**
+- *Learning the measurements.* It would break traceability and gain
+  nothing on a gauge already well inside AIAG's limits.
+- *Unsupervised anomaly detection on height maps (PatchCore-style).* The
+  comparison with the golden capture is already anomaly detection with a
+  perfect reference. A side-by-side would be a fair, probably negative
+  result, worth at most a paragraph.
+- *POD curves (1.11).* Hit/miss logistic regression: statistics, and
+  reported as such.
+
 ### 4B.7 — Correction loop, in numpy
 
 §9.9 needs no arm, so it runs here. *k* is the cell index. *e_k* is the
@@ -2273,6 +2753,24 @@ defect is *caused by* the placement error, exactly as the report describes.
 This gives the write-up a documented, recent, safety-critical case with an
 official root cause, and shows the method addressing that cause rather than a
 hypothetical one.
+
+---
+
+### 4B.10 — Parked: process-driven welds (follow-up project)
+
+Weld defects in §4B.2 are idealised shapes injected directly. A later,
+welding-specific project would make them *consequences* of the process:
+- scanner speed, power and wobble;
+- seam-position error;
+- part vibration on the conveyor;
+- the gap.
+
+Spatter would become time-ordered events with interactions (remelted
+under the beam, on the bead, in a burn-through), and heat tint would join
+the 2D camera. Out of MotoBat scope by decision (9 Nov 2026): none of
+MotoBat's claims (coverage, recall, %GRR, the correction loop) needs a
+physical weld model. Design sketch, research digest and first steps:
+[`welding_followup.md`](welding_followup.md).
 
 ---
 
