@@ -4,6 +4,7 @@
     python -m defectgen.dataset --tier pod                  # the whole tier (resumes)
     python -m defectgen.dataset --tier clean
     python -m defectgen.dataset --tier grr
+    python -m defectgen.dataset --tier pod --shard 3/14    # worker 3 of 14 (cloud/run_remote.sh)
 
 A case is one module at the stage that inspects its class, with one injected
 defect of one size, and a seed. The seed fixes where the defect goes, each
@@ -671,7 +672,19 @@ def main() -> None:
     ap.add_argument("--summary", action="store_true", help="tabulate what this tier has so far, and exit")
     ap.add_argument("--rescore", action="store_true",
                     help="score the finished cases again from their stored reports (no detection), and exit")
+    ap.add_argument("--shard", default=None, metavar="I/N",
+                    help="run only every N-th case starting at I (0 <= I < N), so N workers split a tier "
+                         "with no case run twice (cloud/run_remote.sh)")
     args = ap.parse_args()
+    shard = None
+    if args.shard is not None:
+        try:
+            i, n = (int(x) for x in args.shard.split("/"))
+        except ValueError:
+            ap.error("--shard takes I/N, e.g. 0/14")
+        if not 0 <= i < n:
+            ap.error("--shard I/N needs 0 <= I < N")
+        shard = (i, n)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s", datefmt="%H:%M:%S")
     for noisy in ("defectgen.detect", "defectgen.scan"):
         logging.getLogger(noisy).setLevel(logging.WARNING)
@@ -696,6 +709,9 @@ def main() -> None:
                 seen.add(key)
                 pick.append(max((x for x in cases if x.family == key), key=lambda x: (x.magnitude, -len(x.name))))
         cases = pick
+    if shard is not None:
+        # Two workers on one case would share its scan scratch folder (SIGBUS, 11 Nov 2026).
+        cases = cases[shard[0]::shard[1]]
     if args.list:
         for c in cases:
             print(c.tier, c.family, c.name, c.magnitude, c.stage)

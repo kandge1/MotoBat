@@ -209,7 +209,17 @@ class Reference:
                       for pl in self.plan.placements]
         moved_beads = {i: (b.copy().apply_transform(beads[i]) if i in beads else b)
                        for i, b in self.plan.beads.items()}
-        plan = replace(self.plan, placements=placements, beads=moved_beads)
+        plan = replace(self.plan, placements=placements, beads=moved_beads, overrides=dict(self.plan.overrides))
+        # A cell moved toward a side plate pushes the sheet out (settle.py), so
+        # the module as measured carries that bulge too. Without it an in-spec
+        # cell 0.09 mm proud left its bulge as residual, ~tau deep, which noise
+        # broke into hundreds of "fod" regions on the plate wherever a side-on
+        # sweep saw it: 1,119 regions in 9 of the first 128 arm pod modules
+        # (13 Nov 2026). Out of spec, the cell's own finding absorbed them.
+        if any(ref[0] == "cell" for ref in motions):
+            from .settle import _bulge_side_plates
+
+            _bulge_side_plates(plan, self.parts)
         groups = {g: m for g, m in realise_groups(plan, self.parts).items() if g in self.groups}
         return Scene.from_groups(groups)
 
@@ -979,6 +989,36 @@ def step_band(gold: Golden, grid: tuple, misreg: float, q: dict):
     return ndimage.binary_dilation(edge, np.ones((3, 3), bool), iterations=k).ravel()
 
 
+def noise_vs_signal(r: np.ndarray, s: np.ndarray, per_bin: int) -> np.ndarray | None:
+    """Each ray's noise sigma from its returned signal, fitted to the capture
+    itself: sigma^2 = a^2 + b^2 / s, a floor plus shot noise (variance
+    inversely proportional to the light returned). The rays are cut into bins
+    of `per_bin` in order of signal; each bin's robust sigma (1.4826 MAD) is a
+    sample, and a, b come from a non-negative least squares fit weighted to
+    relative error. Robust bins mean a defect's few rays do not move the fit.
+    None if there are too few bins to fit."""
+    from scipy.optimize import nnls
+
+    s = np.maximum(s, 1e-3)
+    order = np.argsort(s, kind="stable")
+    n_bins = len(order) // per_bin
+    if n_bins < 3:
+        return None
+    rows, target = [], []
+    for chunk in np.array_split(order, n_bins):
+        rc = r[chunk]
+        sig = 1.4826 * float(np.median(np.abs(rc - np.median(rc))))
+        if sig <= 0:
+            continue
+        rows.append([1.0, float(np.mean(1.0 / s[chunk]))])
+        target.append(sig ** 2)
+    if len(rows) < 3:
+        return None
+    a_mat, t = np.asarray(rows), np.asarray(target)
+    (a2, b2), _ = nnls(a_mat / t[:, None], np.ones(len(t)))
+    return np.sqrt(a2 + b2 / s)
+
+
 def sideways_gain(gold: Golden, grid: tuple, rays: np.ndarray, cap: float = 20.0) -> np.ndarray:
     """|n_h| / |n . a| for golden rays `rays` (indices into gold's arrays): how
     much a sideways shift of the surface under each ray changes the depth it
@@ -1043,15 +1083,33 @@ def residuals(cap: Capture, gold: Golden, p: dict, regions: bool = True,
     r = ((gold.points[gi] - cap.points[si]) * gold.axis[gi]).sum(axis=1)
     mat = gold.material[gi]
     tau = np.zeros(len(r))
+    sd = np.zeros(len(r))           # per-ray noise sigma (material-wide, raised by the signal fit)
     sigma = {}
+    signal = np.asarray(cap.signal, float)[si] if cap.signal is not None else None
     for m in np.unique(mat):
         sel = mat == m
         mad = float(np.median(np.abs(r[sel] - np.median(r[sel]))))
         sigma[gold.material_names[m]] = 1.4826 * mad
         tau[sel] = max(q["k_sigma"] * 1.4826 * mad, q["floor"])
+        sd[sel] = 1.4826 * mad
+        # Noise is not one number per material: a dim return is noisier than a
+        # bright one (shot noise), and polished aluminium seen away from its
+        # mirror angle returns little. One snapshot's cap rays ran from 0.028 mm
+        # (bright) to 0.073 mm (signal < 0.1) against a material-wide 0.033, so
+        # 5 sigma was ~2 sigma on the dim patches and noise alone made 6-ray
+        # regions: 7 arm false alarms in ~300 modules (13 Nov 2026). Only ever
+        # raises the threshold, where the data say the rays are noisier.
+        if signal is not None and sel.sum() >= 4 * q["noise_bin_rays"]:
+            s_dep = noise_vs_signal(r[sel], signal[sel], q["noise_bin_rays"])
+            if s_dep is not None:
+                tau[sel] = np.maximum(tau[sel], q["k_sigma"] * s_dep)
+                sd[sel] = np.maximum(sd[sel], s_dep)
     noise = float(1.4826 * np.median(np.abs(r - np.median(r)))) if len(r) else 0.0
     if not regions:
         return [], {"rays_compared": int(len(r)), "noise_mm": noise, "sigma_by_material_mm": sigma}
+    # The weak threshold (region growing, below): k_grow sigma, but never under
+    # the floor or the misregistration allowances, which are bounds, not noise.
+    weak = np.maximum(q["k_grow"] * sd, q["floor"])
     if misreg is not None:
         # X, Y and yaw come from the housing datum, good to about `misreg`; Z, roll
         # and pitch each capture registers from its own housing. A ray measuring
@@ -1061,15 +1119,20 @@ def residuals(cap: Capture, gold: Golden, p: dict, regions: bool = True,
         # straight down this adds nothing.
         horiz = np.hypot(gold.axis[gi, 0], gold.axis[gi, 1]).astype(float)
         tau = np.maximum(tau, misreg * horiz)
+        weak = np.maximum(weak, misreg * horiz)
         # The general form: a surface moved sideways by d reads d |n_h| / |n . a|
         # along the ray (n its normal). Zero on a level top, the term above on a
         # wall seen side-on, and several times d on a wall seen nearly edge-on from
         # above: a close-up snapshot read a cell cap's 2 mm recess walls ~0.08 mm
         # off from a 0.027 mm residual shift, 2 false regions (12 Nov 2026). Only
-        # rays already over threshold need it.
-        cand = np.flatnonzero(np.abs(r) > tau)
+        # rays already over threshold need it. (Rays over the weak threshold are a
+        # superset; raising tau on rays under it changes nothing.)
+        cand = np.flatnonzero(np.abs(r) > np.minimum(tau, weak))
         if len(cand):
-            tau[cand] = np.maximum(tau[cand], misreg * sideways_gain(gold, cap.grid, gi[cand]))
+            side = misreg * sideways_gain(gold, cap.grid, gi[cand])
+            tau[cand] = np.maximum(tau[cand], side)
+            weak[cand] = np.maximum(weak[cand], side)
+    weak = np.minimum(weak, tau)
 
     rows, cols = cap.grid
     raised = np.zeros(rows * cols, bool)
@@ -1078,6 +1141,11 @@ def residuals(cap: Capture, gold: Golden, p: dict, regions: bool = True,
     missing[common[r < -tau]] = True
     lost = np.setdiff1d(gold.index, cap.index, assume_unique=True)
     missing[lost] = True
+    raised_w = np.zeros(rows * cols, bool)
+    missing_w = np.zeros(rows * cols, bool)
+    raised_w[common[r > weak]] = True
+    missing_w[common[r < -weak]] = True
+    missing_w[lost] = True
 
     # Per grid cell, where the evidence lives.
     gold_at = np.full(rows * cols, -1, np.int64)
@@ -1087,55 +1155,84 @@ def residuals(cap: Capture, gold: Golden, p: dict, regions: bool = True,
     r_at = np.full(rows * cols, np.nan)
     r_at[common] = r
 
-    regions: list[Region] = []
     band = step_band(gold, cap.grid, misreg, q) if misreg is not None else None
     eight = np.ones((3, 3), bool)
-    for kind, mask in (("raised", raised), ("missing", missing)):
+
+    def components(mask):
         lab, n = ndimage.label(mask.reshape(rows, cols), structure=eight)
         if not n:
-            continue
+            return []
         flat = lab.ravel()
         cells = np.flatnonzero(flat)
         ids = flat[cells]
         order = np.argsort(ids, kind="stable")
         cells, ids = cells[order], ids[order]
-        splits = np.flatnonzero(np.diff(ids)) + 1
-        for group in np.split(cells, splits):
-            g = gold_at[group]
-            sidx = scan_at[group]
-            area = float(gold.footprint[g[g >= 0]].sum())
-            npts = len(group)
-            if npts < q["min_points"]:
+        return np.split(cells, np.flatnonzero(np.diff(ids)) + 1)
+
+    def region(kind, group):
+        """The region these grid cells make, or None if it fails a filter."""
+        g = gold_at[group]
+        sidx = scan_at[group]
+        area = float(gold.footprint[g[g >= 0]].sum())
+        npts = len(group)
+        if npts < q["min_points"]:
+            return None
+        # A ray or two wide along its whole length: a ray that grazed an
+        # edge onto the other side of it, not something on the part.
+        span = max(len(np.unique(group // cols)), len(np.unique(group % cols)))
+        if span >= 3 * q["min_thickness"] and npts / span < q["min_thickness"]:
+            return None
+        gone = float((sidx < 0).mean())
+        if area < (q["missing_min_area"] if kind == "missing" and gone > 0.5 else q["min_area"]):
+            return None
+        pts = [gold.points[g[g >= 0]], cap.points[sidx[sidx >= 0]]]
+        pts = np.vstack([x for x in pts if len(x)])
+        here = cap.points[sidx[sidx >= 0]] if kind == "raised" and (sidx >= 0).any() else gold.points[g[g >= 0]]
+        if not len(here):
+            return None
+        mats = gold.material[g[g >= 0]]
+        material = gold.material_names[int(np.bincount(mats).argmax())] if len(mats) else "none"
+        rr = r_at[group]
+        peak = float(np.nanmax(np.abs(rr))) if np.isfinite(rr).any() else float("nan")
+        # Far deeper (or taller) than it is wide: a ray that crossed a
+        # step edge onto the surface beside it, not a dent or a particle.
+        if np.isfinite(peak) and peak > q["max_aspect"] * np.sqrt(max(area, 1e-12)):
+            return None
+        return Region(kind, npts, area, peak, material, gone,
+                      tuple(map(float, here.mean(axis=0))),
+                      (tuple(map(float, pts.min(axis=0))), tuple(map(float, pts.max(axis=0)))),
+                      sidx[sidx >= 0], gold.points[g[g >= 0]],
+                      float(band[group].mean()) if band is not None else 0.0)
+
+    regions: list[Region] = []
+    grown = 0
+    for kind, mask, mask_w in (("raised", raised, raised_w), ("missing", missing, missing_w)):
+        taken = np.zeros(rows * cols, bool)
+        for group in components(mask):
+            reg = region(kind, group)
+            if reg is not None:
+                regions.append(reg)
+                taken[group] = True
+        # Evidence spread over a region (fixlist F8). A small particle on a dim
+        # return can put five rays over 5 sigma and its sixth at 3.4: one ray
+        # short of min_points, though six rays all over 3 sigma beside one over
+        # 5 is ~1e-10 per capture from noise. So: a connected group of rays over
+        # the weak threshold (k_grow sigma, and every misregistration allowance)
+        # that holds at least one ray over the full threshold, and overlaps no
+        # region already kept, is judged as a region by the same filters. Every
+        # region the strict pass keeps is unchanged.
+        for group in components(mask_w):
+            if taken[group].any() or not mask[group].any():
                 continue
-            # A ray or two wide along its whole length: a ray that grazed an
-            # edge onto the other side of it, not something on the part.
-            span = max(len(np.unique(group // cols)), len(np.unique(group % cols)))
-            if span >= 3 * q["min_thickness"] and npts / span < q["min_thickness"]:
-                continue
-            gone = float((sidx < 0).mean())
-            if area < (q["missing_min_area"] if kind == "missing" and gone > 0.5 else q["min_area"]):
-                continue
-            pts = [gold.points[g[g >= 0]], cap.points[sidx[sidx >= 0]]]
-            pts = np.vstack([x for x in pts if len(x)])
-            here = cap.points[sidx[sidx >= 0]] if kind == "raised" and (sidx >= 0).any() else gold.points[g[g >= 0]]
-            if not len(here):
-                continue
-            mats = gold.material[g[g >= 0]]
-            material = gold.material_names[int(np.bincount(mats).argmax())] if len(mats) else "none"
-            rr = r_at[group]
-            peak = float(np.nanmax(np.abs(rr))) if np.isfinite(rr).any() else float("nan")
-            # Far deeper (or taller) than it is wide: a ray that crossed a
-            # step edge onto the surface beside it, not a dent or a particle.
-            if np.isfinite(peak) and peak > q["max_aspect"] * np.sqrt(max(area, 1e-12)):
-                continue
-            regions.append(Region(kind, npts, area, peak, material, gone,
-                                  tuple(map(float, here.mean(axis=0))),
-                                  (tuple(map(float, pts.min(axis=0))), tuple(map(float, pts.max(axis=0)))),
-                                  sidx[sidx >= 0], gold.points[g[g >= 0]],
-                                  float(band[group].mean()) if band is not None else 0.0))
+            if kind == "missing" and not (np.isfinite(r_at[group]) & mask[group]).any():
+                continue            # seeded only by rays that returned nothing: as before
+            reg = region(kind, group)
+            if reg is not None:
+                regions.append(reg)
+                grown += 1
     stats = {"rays_compared": int(len(r)), "noise_mm": noise,
              "sigma_by_material_mm": sigma, "missing_rays": int(len(lost)),
-             "regions": len(regions)}
+             "regions": len(regions), "regions_grown": grown}
     return regions, stats
 
 

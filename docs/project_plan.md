@@ -1677,6 +1677,10 @@ Included (`scan.py`, `configs/sensors.yaml`, `configs/materials.yaml`):
 - **Motion during capture.** No robot vibration, no motion blur within a profile, no encoder jitter. Robot pose error enters only through `weld_path_drift`-style perturbations, not through the sensor.
 - **Sub-surface scattering and translucency** in plastics.
 - **Temperature drift and warm-up** (Zivid trueness changes during warm-up).
+- **Part-to-part variation.** Every module is the CAD model exactly, apart from the one injected defect and the fixture placement. A real module has every cell, terminal, busbar and weld somewhere inside its tolerance at once, and its parts deviate in form (flatness, can bulge), not only in pose. (Added 13 Nov 2026: an in-spec cell shift was enough to expose a detector fault, fixlist F7.)
+- **Beam footprint.** Rays are infinitely thin and edges perfectly sharp, so an edge found between two samples snaps to the sample pitch. A real spot (~70 µm on the Ranger3) blurs the edge across samples, which sub-pixel edge fitting exploits. Seen in the data: the fixed station reads cell yaw in ~0.025° steps, and the arm reads cell yaws below ~0.1° as 0.
+
+**Dataset 1 is ideal-world by design (decision, 13 Nov 2026).** The 1.7 dataset is built on exactly these assumptions, on purpose: it is the upper bound and the baseline. Later datasets add one realism factor at a time (robot and conveyor motion error, part-to-part variation, beam footprint, then the rest), so each factor's cost in recall or false alarms is measured against this baseline rather than mixed in with the others. A nuisance factor such as robot pose error is drawn at random per scan from its real distribution, as the fixture placement already is; it adds no cases. A sweep of its size (perfect, at spec, beyond) is a separate, smaller sensitivity study, not a multiplier on the dataset.
 
 The README's Limitations section should carry this list.
 

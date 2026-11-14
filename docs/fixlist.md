@@ -11,7 +11,7 @@ date (`~~item~~ — **done 5 Nov 2026**`) rather than deleting it, per the house
 Section references like §4A.4 point into `project_plan.md`; §7 and §12 point into
 `module_spec.md`.
 
-*Last updated: 12 Nov 2026. **§F is new**: six findings from the 1.7 dataset (F5: run speed, first pass done 12 Nov; F6: the arm plan and detector faults the arm column exposed, fixed 12 Nov). F1 and F2 are
+*Last updated: 13 Nov 2026. **§F is new**: eight findings from the 1.7 dataset (F5: run speed, first pass done 12 Nov; F6: the arm plan and detector faults the arm column exposed, fixed 12 Nov; F7: the v2 rerun's arm false alarms, fixed 13 Nov; F8: a spatter drop F7's threshold lost, fixed 13 Nov). F1 and F2 are
 geometry against tolerance contradictions, F3 and F4 detector limitations. D1 now matters more: the
 dataset's in-spec / out-of-spec labels rest on the tolerances. A, B, C and E are closed (1 Nov and 4 Nov).*
 
@@ -315,6 +315,8 @@ CAD, not the detector. Write-up: `project_plan.md` §4B.6, "A strip that moves w
 | F4 | Weld bow measure has ~no margin to its tolerance | detector limitation | false-alarm rate (1.8) |
 | ~~F5~~ | ~~Arm cases run on one core: ~270 s per welded module~~ — **first pass done 12 Nov 2026**: 1.6–2× faster, results unchanged | speed | cheap reruns: 1.13 held-out set, any detector change |
 | F6 | The arm column measured a flawed arm plan: FOD 60 %, in-spec welds rejected, wall dents 12/20 — **fixed 12 Nov 2026**, arm column to be rerun | coverage + detector | a fair fixed-vs-arm verdict (1.10) |
+| F7 | The v2 arm rerun raised 1,126 false-alarm regions in 9 of its first 128 modules, plus 7 single ones — **fixed 13 Nov 2026**, rerun v2 stopped | detector | a false-alarm rate that means something; the v2 run was spending 30 h on it |
+| F8 | F7's honest dim-ray threshold lost two fixed spatter drops: a region one ray short at 5σ — **fixed 13 Nov 2026** (region growing), gates running | detector | spatter detection rate on both setups (1.8) |
 
 ### F1 — Carrier seating vs busbar gap
 
@@ -432,3 +434,78 @@ Every-class sensitivity through the arm: see the 1.7 rerun entry in status_updat
 
 **Done when.** Both columns are rerun on this detector (fixed too: it shares the detector) and the
 1.8/1.9/1.10 numbers are recomputed.
+
+### F7 — The v2 rerun's arm false alarms: a bulge it did not expect, and dim rays
+
+**What it was.** Paused at arm pod 127/565 (13 Nov 2026, 11:56). The fixed column had finished and
+matched v1 case for case. The arm column had 1,126 false-alarm *regions*. They came from 9 modules with
+a bulge (1,119 regions) and 4 separate noise events (7 regions, over clean, GRR and pod). Per module that is about 4 %, against ≤ 0.39 % for the fixed station. A per-region count overstates
+it, since one bulge broke into 489 regions; the per-module rate is what a line feels.
+
+**Causes and fixes.**
+1. *A cell pushes the side plate out; the reference did not.* The generator bulges a 1.5 mm side plate
+   outward wherever a shifted cell stands proud of it (`settle._bulge_side_plates`), which is physical. The
+   detector's "module as measured" moved the measured cell but did not re-apply the bulge. An in-spec
+   cell 0.09 mm toward a plate left a ~0.1 mm bulge as residual, about one threshold deep, so noise cut it
+   into hundreds of 6–9-ray "fod" regions. Only the new side-on fast sweep (`sweep_x_y∓75.5_r±60_fast`) looks
+   straight at the plates. v1's arm saw them only obliquely; 2 of its 8 false alarms sat on the side plate beside a shifted cell. Out of
+   spec, the cell's own finding absorbed the regions, which is why only in-spec and near-tolerance
+   shifts showed it. Fix: `Reference.as_measured_scene` re-applies the bulge for measured cell motion.
+   Test: `test_the_module_as_measured_bulges_the_side_plate_a_measured_cell_pushes`. Worst case
+   (`cell_shift L0_0.1_s0`): 489 → 0, measurement unchanged (0.1025).
+2. *One noise figure per material, but dim rays are noisier.* Sensor noise scales with returned signal
+   (shot noise). Polished aluminium seen away from its mirror angle returns little. In one snapshot, cap
+   rays ran from σ 0.028 mm (bright) to 0.073 mm (signal < 0.1), against the material-wide 0.033 the
+   threshold used. 5σ was about 2σ on the dim patches, so noise alone made 6-ray regions. Fix: per
+   capture and material, fit σ² = a² + b²/signal to signal-binned robust σ (`detect.noise_vs_signal`,
+   `residual.noise_bin_rays` = 2000) and threshold each ray at k·σ(signal). This only ever raises the
+   threshold; the material σ stays the lower bound. Real sensors return the signal (Zivid SNR, Keyence
+   intensity), so this needs nothing a station lacks. Test: `test_noise_follows_the_returned_signal_...`.
+   The three cases that reproduced it: 1 → 0 each.
+
+**Why the gates missed it.** The pre-launch arm gate ran `single` (one defect above tolerance) and
+clean modules, and `subtol` only on the fixed setup. Its only cell shift was 0.36 mm, out of spec, so
+the cell's finding absorbed the bulge. The v3 gates add `subtol` and `fixture` on the arm, and the L0–L2
+(in-spec to just-out) seed-0 case of every tolerance family, every level of FOD, damage and spatter, and
+the binary classes, on both setups: `data/gates_v3.sh`, logs `data/regress_logs/*_v3.log`.
+
+**Done when.** The gates show no lost detections against v2 and no false alarms. Then both columns are
+rerun on this detector (v2 archived to `data/dataset_plan_v2`).
+
+### F8 — F7's dim-ray threshold lost two spatter drops: a region one ray short
+
+**What it is.** The F7 gate on the fixed setup found 59 of 61 targeted cases unchanged. The other two,
+`spatter L3_0.15_s0` and `L4_0.2_s0`, went from *partial* (1 of 5 drops found, as in v1 and v2) to *miss*.
+The lost drop sat on copper, and its rays came back dim (signal 0.02–0.03, against ~0.96 around it).
+F7's noise fit raised the threshold there from 0.050 to 0.10–0.12 mm, and the drop kept 5 rays over it,
+one short of `min_points` (6). With the fit off, both cases return to *partial*.
+
+**Which threshold was right.** The simulator's noise on those rays is ~0.044 mm (σ grows as
+√(0.5/signal) below 0.5). So v2's 0.050 was ~1σ there and its find was luck, and F7's threshold is the
+honest one, still under the true 5σ. The drop *is* there, though: its six rays are all well above the
+noise taken together. A test that judges each ray alone throws that away.
+
+**Fix: grow a region over weaker rays joined to a strong one** (`detect.residuals`, `residual.k_grow` = 3).
+After the strict pass, a connected group of rays each over 3σ, *and* over every misregistration
+allowance (those are bounds, not noise), that holds at least one ray over the full 5σ threshold and
+overlaps no region the strict pass kept, is judged as a region by the same filters (min_points, area,
+thinness, aspect). Every region the strict pass keeps is unchanged, so this can only add findings.
+In noise alone a 5σ ray (one-sided p ≈ 3×10⁻⁷) with five connected neighbours each over 3σ (p ≈ 1.3×10⁻³,
+at most 8 neighbours each) is ~10⁻¹⁰ per capture. The risk is systematic residuals, not noise, and the
+gates measure that. `stats["regions_grown"]` counts the added regions per capture. Test:
+`test_a_region_one_ray_short_at_5_sigma_is_kept_on_its_3_sigma_neighbour`. Spatter L3/L4/L5 on fixed:
+back to *partial*, 0 false alarms.
+
+**Done when.** `data/gates_f8.sh` (the F7 gate groups, plus the 8 other arm modules v2 had false alarms
+on) shows no lost detection against v3's gates and no new false alarm. Then v3 launches on this detector.
+
+**Why this keeps happening, and the guard (13 Nov 2026).** Each fix moves the trade-off between
+finding defects and raising false alarms. F7 raised a threshold to kill false alarms and cost a
+real find, so a fix has to be checked against every past failure, not only its own. The checks were
+rebuilt by hand for each fix and compared by eye. They are now a committed list,
+`defectgen/known_cases/cases.yaml`: 138 cases, each with its accepted outcome and false-alarm count
+and the fix-list item it came from. `run.py` judges them PASS / BETTER / FAIL. A full pass records a
+fingerprint of the detector's code and configs. `data/chain_v3.sh` and `cloud/run_remote.sh` refuse to
+start without a pass for the code as it is. Tested on old results: v3-without-F8 fails exactly the 2
+spatter cases, and v2 fails 12 of the 13 F7 cases.
+

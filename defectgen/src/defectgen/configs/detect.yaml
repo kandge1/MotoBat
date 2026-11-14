@@ -14,6 +14,10 @@
 residual:                    # per-ray residual against the golden capture (§4B.4 step 5)
   k_sigma: 5.0               # A  flag |r| > k * sigma_m, sigma_m robust per nominal material
   floor: 0.005               # A  never flag below 5 um, whatever the estimated noise
+  noise_bin_rays: 2000       # A  rays per signal bin when fitting sigma(signal) per material
+                             #    (sigma^2 = a^2 + b^2/signal); sigma_m above is the lower bound
+  k_grow: 3.0                # A  a region may grow over rays above this x sigma (still above every
+                             #    misregistration allowance) if it holds one ray above k_sigma: fixlist F8
   min_points: 6              # A  smallest connected region that counts
   min_area: 0.02             # A  mm^2; a 0.15 mm-radius spatter drop shows ~0.07 mm^2
   min_thickness: 2.5         # A  rays: a region thinner than this along its length is an edge

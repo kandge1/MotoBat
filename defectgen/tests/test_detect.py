@@ -300,6 +300,84 @@ def test_a_steep_face_moved_within_registration_is_not_a_region():
         assert len([g for g in regions if g.kind == "raised"]) == want
 
 
+def test_a_region_one_ray_short_at_5_sigma_is_kept_on_its_3_sigma_neighbour():
+    """Fixlist F8: a 0.15 mm spatter drop on dim copper put five rays over
+    5 sigma and its sixth at 3.4 sigma, one short of min_points, and was lost.
+    Rays over 3 sigma joined to one over 5 make the region; noise alone makes
+    none, and a lone 5 sigma ray with no neighbours over 3 is not one."""
+    from defectgen.detect import Capture, load_detect_params, residuals
+
+    p = load_detect_params()
+    sd = 0.01
+    gold, grid = _surface(lambda x: np.zeros_like(x), rows=150, cols=150)
+    rows, cols = grid
+    rng = np.random.default_rng(1)
+
+    def run(bumps):
+        pts = gold.points.copy()
+        pts[:, 2] += np.clip(rng.normal(0.0, sd, len(pts)), -2.5 * sd, 2.5 * sd)
+        for (rr, cc), h in bumps.items():
+            pts[rr * cols + cc, 2] = h
+        cap = Capture("toy", pts, gold.index, grid, np.eye(4)[None], {})
+        regions, stats = residuals(cap, gold, p, misreg=0.0)
+        return [g for g in regions if g.kind == "raised"], stats
+
+    drop = {(70, 70): 8 * sd, (70, 71): 8 * sd, (71, 70): 8 * sd, (71, 71): 8 * sd, (72, 71): 8 * sd}
+    strict, stats = run(drop)
+    assert strict == [] and stats["regions_grown"] == 0                # 5 rays: below min_points
+    grown, stats = run({**drop, (72, 72): 4 * sd})
+    assert len(grown) == 1 and grown[0].n == 6 and stats["regions_grown"] == 1
+    alone, _ = run({(30, 30): 8 * sd, (30, 31): 2.5 * sd})              # neighbours under 3 sigma
+    assert alone == []
+    noise, stats = run({})
+    assert noise == [] and stats["regions_grown"] == 0
+
+
+def test_noise_follows_the_returned_signal_and_a_defect_does_not_move_it():
+    """Shot noise: dim rays are noisier. The fit must track it (a material-wide
+    sigma made 5 sigma ~2 sigma on dim patches) and stay put when a defect's
+    rays sit in the data."""
+    from defectgen.detect import noise_vs_signal
+
+    rng = np.random.default_rng(0)
+    s = np.exp(rng.uniform(np.log(0.02), np.log(4.0), 60000))
+    true = 0.03 * np.sqrt(np.maximum(0.5 / s, 1.0))
+    r = rng.normal(0.0, true)
+    fit = noise_vs_signal(r, s, 2000)
+    for lo, hi in ((0.02, 0.05), (0.05, 0.2), (0.5, 4.0)):
+        sel = (s >= lo) & (s < hi)
+        ratio = np.median(fit[sel] / true[sel])
+        assert 0.85 < ratio < 1.5, (lo, hi, ratio)
+    r[:300] += 0.5                                   # a 300-ray dent anywhere in signal
+    assert np.allclose(noise_vs_signal(r, s, 2000), fit, rtol=0.1)
+    assert noise_vs_signal(r[:5000], s[:5000], 2000) is None
+
+
+def _side_hit(scene: Scene, x: float, z: float) -> float:
+    """Y where a ray along +Y from outside the -Y side first meets the module."""
+    rays = o3d.core.Tensor([[x, -100.0, z, 0.0, 1.0, 0.0]], dtype=o3d.core.Dtype.Float32)
+    return -100.0 + float(scene.raycaster.cast_rays(rays)["t_hit"].numpy()[0])
+
+
+def test_the_module_as_measured_bulges_the_side_plate_a_measured_cell_pushes(refs, parts):
+    """An in-spec cell 0.1 mm toward a side plate pushes the sheet out
+    (settle.py). The module as measured must carry that bulge, or a side-on
+    sweep reads it as hundreds of 'fod' regions (1.7 arm rerun, 13 Nov 2026)."""
+    k, dy = 8, -0.1
+    ref = refs("pre_busbar")
+    plan = injected_plan("pre_busbar", CFG, 0, [D.cell_placement(k, dy=dy)], parts)
+    built = Scene.from_groups({g: m for g, m in realise_groups(plan, parts).items() if g in ref.groups})
+    move = np.eye(4)
+    move[1, 3] = dy
+    measured = ref.as_measured_scene({("cell", k): move}, {})
+    x, z = CFG.cell_centre_x(k), (CFG.z_cell_bottom + CFG.z_cell_top) / 2
+    nominal, real = _side_hit(ref.scene, x, z), _side_hit(built, x, z)
+    assert real < nominal - 0.09                                    # the plate did bulge
+    assert abs(_side_hit(measured, x, z) - real) < 0.01             # and the model knows
+    far = CFG.cell_centre_x(2)                                      # not where no cell pushed
+    assert abs(_side_hit(measured, far, z) - _side_hit(ref.scene, far, z)) < 1e-4
+
+
 # -- registration from the housing strips (arm hardening, plan §4B.6) ----------
 
 def _strip_obs(t, strip, at, axis, edge=100.0, whole=True, spacing=0.05):

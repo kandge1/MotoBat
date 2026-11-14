@@ -1,0 +1,159 @@
+# Known cases: dataset cases a detector change must not get worse on.
+# Run before any dataset run: python defectgen/known_cases/run.py   (README.md here)
+#
+# Each entry is one dataset case (regenerated bit for bit from its seed) on one setup.
+#   outcome  the accepted outcome. A run must do at least as well:
+#              must_find: hit > partial > miss = not_covered
+#              in_spec:   pass > false_reject
+#              dont_care / clean: any outcome
+#   fa       the most false alarms allowed (accepted count; any rise fails)
+#   meas     the accepted measurement (mm or deg); a move > meas_tol warns, does not fail
+#   src      why it is here: a fixlist item (F6, F7, F8, ...), "targeted" (the L0-L2
+#            seed-0 sweep of every tolerance family, every level of FOD, damage and spatter,
+#            the binary classes), or "clean"
+#
+# Adding a failure: put its reproducing cases here with the outcome they SHOULD have and the
+# fixlist item, before fixing it. A fix is done when this whole file passes.
+# Accepted values come from the v3 gates (13 Nov 2026, detector F7 + F8). An improvement
+# prints BETTER: review it, then raise the accepted value here by hand.
+
+meas_tol: 0.01
+cases:
+  - {setup: "fixed", tier: "pod", family: "cell_shift", name: "L0_0.1_s0", outcome: "pass", fa: 0, meas: 0.1448, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "cell_shift", name: "L1_0.16_s0", outcome: "pass", fa: 0, meas: 0.1134, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "cell_shift", name: "L2_0.22_s0", outcome: "miss", fa: 0, meas: 0.1826, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "cell_yaw", name: "L0_0.05_s0", outcome: "pass", fa: 0, meas: 0.0498, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "cell_yaw", name: "L1_0.08_s0", outcome: "pass", fa: 0, meas: 0.0997, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "cell_yaw", name: "L2_0.11_s0", outcome: "miss", fa: 0, meas: 0.0747, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "terminal_height", name: "L0_0.05_s0", outcome: "pass", fa: 0, meas: 0.0503, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "terminal_height", name: "L1_0.08_s0", outcome: "pass", fa: 0, meas: 0.0795, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "terminal_height", name: "L2_0.11_s0", outcome: "hit", fa: 0, meas: 0.1101, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "terminal_tilt", name: "L0_0.155_s0", outcome: "pass", fa: 0, meas: 0.1538, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "terminal_tilt", name: "L1_0.248_s0", outcome: "pass", fa: 0, meas: 0.2439, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "terminal_tilt", name: "L2_0.341_s0", outcome: "hit", fa: 0, meas: 0.3453, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "fod", name: "L0_0.05_s0", outcome: "not_found", fa: 0, meas: null, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "fod", name: "L1_0.1_s0", outcome: "not_found", fa: 0, meas: null, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "fod", name: "L2_0.15_s0", outcome: "found", fa: 0, meas: null, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "fod", name: "L3_0.25_s0", outcome: "hit", fa: 0, meas: null, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "fod", name: "L4_0.4_s0", outcome: "hit", fa: 0, meas: null, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "fod", name: "L5_0.6_s0", outcome: "hit", fa: 0, meas: null, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "handling_damage", name: "L0_0.02_s0", outcome: "not_found", fa: 0, meas: null, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "handling_damage", name: "L1_0.05_s0", outcome: "not_found", fa: 0, meas: null, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "handling_damage", name: "L2_0.1_s0", outcome: "hit", fa: 0, meas: null, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "handling_damage", name: "L3_0.2_s0", outcome: "not_covered", fa: 0, meas: null, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "handling_damage", name: "L4_0.4_s0", outcome: "not_covered", fa: 0, meas: null, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "handling_damage", name: "L5_0.8_s0", outcome: "hit", fa: 0, meas: null, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "missing_cell", name: "L0_1_s0", outcome: "hit", fa: 0, meas: null, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "reversed_polarity", name: "L0_1_s0", outcome: "hit", fa: 0, meas: null, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "missing_pad", name: "L0_1_s0", outcome: "hit", fa: 0, meas: null, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "busbar_shift", name: "L0_0.1_s0", outcome: "pass", fa: 0, meas: 0.1064, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "busbar_shift", name: "L1_0.16_s0", outcome: "pass", fa: 0, meas: 0.1744, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "busbar_shift", name: "L2_0.22_s0", outcome: "hit", fa: 0, meas: 0.2053, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "busbar_liftoff", name: "L0_0.075_s0", outcome: "pass", fa: 0, meas: 0.0752, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "busbar_liftoff", name: "L1_0.12_s0", outcome: "pass", fa: 0, meas: 0.1202, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "busbar_liftoff", name: "L2_0.165_s0", outcome: "hit", fa: 0, meas: 0.1654, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "carrier_seating", name: "L0_0.1_s0", outcome: "pass", fa: 0, meas: 0.1, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "carrier_seating", name: "L1_0.16_s0", outcome: "pass", fa: 0, meas: 0.16, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "carrier_seating", name: "L2_0.22_s0", outcome: "hit", fa: 0, meas: 0.22, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "short_weld", name: "L0_0.05_s0", outcome: "pass", fa: 0, meas: 0.0213, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "short_weld", name: "L1_0.08_s0", outcome: "pass", fa: 0, meas: 0.0638, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "short_weld", name: "L2_0.11_s0", outcome: "miss", fa: 0, meas: 0.0851, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "seam_deviation", name: "L0_0.125_s0", outcome: "pass", fa: 0, meas: -0.1615, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "seam_deviation", name: "L1_0.2_s0", outcome: "pass", fa: 0, meas: 0.2063, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "seam_deviation", name: "L2_0.275_s0", outcome: "partial", fa: 0, meas: -0.2597, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "width_deviation", name: "L0_0.1_s0", outcome: "pass", fa: 0, meas: -0.1439, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "width_deviation", name: "L1_0.16_s0", outcome: "false_reject", fa: 0, meas: -0.2461, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "width_deviation", name: "L2_0.22_s0", outcome: "hit", fa: 0, meas: -0.3204, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "reinforcement", name: "L0_0.05_s0", outcome: "pass", fa: 0, meas: -0.0472, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "reinforcement", name: "L1_0.08_s0", outcome: "pass", fa: 0, meas: 0.0759, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "reinforcement", name: "L2_0.11_s0", outcome: "miss", fa: 0, meas: 0.099, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "weld_path_drift", name: "L0_0.05_s0", outcome: "pass", fa: 0, meas: 0.0441, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "weld_path_drift", name: "L1_0.08_s0", outcome: "false_reject", fa: 0, meas: 0.1106, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "weld_path_drift", name: "L2_0.11_s0", outcome: "miss", fa: 0, meas: 0.0928, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "weld_arc", name: "L0_0.05_s0", outcome: "pass", fa: 0, meas: 0.0526, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "weld_arc", name: "L1_0.08_s0", outcome: "pass", fa: 0, meas: 0.0515, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "weld_arc", name: "L2_0.11_s0", outcome: "hit", fa: 0, meas: 0.1562, src: [targeted]}
+  - {setup: "fixed", tier: "pod", family: "spatter", name: "L0_0.05_s0", outcome: "not_found", fa: 0, meas: null, src: [F8]}
+  - {setup: "fixed", tier: "pod", family: "spatter", name: "L1_0.075_s0", outcome: "not_found", fa: 0, meas: null, src: [F8]}
+  - {setup: "fixed", tier: "pod", family: "spatter", name: "L2_0.1_s0", outcome: "not_found", fa: 0, meas: null, src: [F8]}
+  - {setup: "fixed", tier: "pod", family: "spatter", name: "L3_0.15_s0", outcome: "partial", fa: 0, meas: null, src: [F8], note: "F7's dim-ray threshold lost the one drop found; region growing recovered it"}
+  - {setup: "fixed", tier: "pod", family: "spatter", name: "L4_0.2_s0", outcome: "partial", fa: 0, meas: null, src: [F8], note: "F7's dim-ray threshold lost the one drop found; region growing recovered it"}
+  - {setup: "fixed", tier: "pod", family: "spatter", name: "L5_0.3_s0", outcome: "partial", fa: 0, meas: null, src: [F8]}
+  - {setup: "fixed", tier: "pod", family: "missing_weld", name: "L0_1_s0", outcome: "hit", fa: 0, meas: null, src: [targeted]}
+  - {setup: "arm", tier: "pod", family: "cell_shift", name: "L0_0.1_s0", outcome: "pass", fa: 0, meas: 0.1025, src: [F7]}
+  - {setup: "arm", tier: "pod", family: "cell_shift", name: "L1_0.16_s0", outcome: "pass", fa: 0, meas: 0.1604, src: [F7]}
+  - {setup: "arm", tier: "pod", family: "cell_shift", name: "L2_0.22_s0", outcome: "miss", fa: 0, meas: 0.181, src: [F7]}
+  - {setup: "arm", tier: "pod", family: "cell_yaw", name: "L0_0.05_s0", outcome: "pass", fa: 0, meas: -0.0001, src: [targeted]}
+  - {setup: "arm", tier: "pod", family: "cell_yaw", name: "L1_0.08_s0", outcome: "pass", fa: 0, meas: 0.0133, src: [targeted]}
+  - {setup: "arm", tier: "pod", family: "cell_yaw", name: "L2_0.11_s0", outcome: "miss", fa: 0, meas: 0.0969, src: [targeted]}
+  - {setup: "arm", tier: "pod", family: "terminal_height", name: "L0_0.05_s0", outcome: "pass", fa: 0, meas: 0.05, src: [targeted]}
+  - {setup: "arm", tier: "pod", family: "terminal_height", name: "L1_0.08_s0", outcome: "pass", fa: 0, meas: 0.08, src: [targeted]}
+  - {setup: "arm", tier: "pod", family: "terminal_height", name: "L2_0.11_s0", outcome: "hit", fa: 0, meas: 0.11, src: [targeted]}
+  - {setup: "arm", tier: "pod", family: "terminal_tilt", name: "L0_0.155_s0", outcome: "pass", fa: 0, meas: 0.155, src: [targeted]}
+  - {setup: "arm", tier: "pod", family: "terminal_tilt", name: "L1_0.248_s0", outcome: "pass", fa: 0, meas: 0.248, src: [targeted]}
+  - {setup: "arm", tier: "pod", family: "terminal_tilt", name: "L2_0.341_s0", outcome: "hit", fa: 0, meas: 0.3409, src: [targeted]}
+  - {setup: "arm", tier: "pod", family: "fod", name: "L0_0.05_s0", outcome: "not_found", fa: 0, meas: null, src: [F6]}
+  - {setup: "arm", tier: "pod", family: "fod", name: "L1_0.1_s0", outcome: "not_found", fa: 0, meas: null, src: [F6]}
+  - {setup: "arm", tier: "pod", family: "fod", name: "L2_0.15_s0", outcome: "found", fa: 0, meas: null, src: [F6]}
+  - {setup: "arm", tier: "pod", family: "fod", name: "L3_0.25_s0", outcome: "hit", fa: 0, meas: null, src: [F6]}
+  - {setup: "arm", tier: "pod", family: "fod", name: "L4_0.4_s0", outcome: "hit", fa: 0, meas: null, src: [F6]}
+  - {setup: "arm", tier: "pod", family: "fod", name: "L5_0.6_s0", outcome: "hit", fa: 0, meas: null, src: [F6]}
+  - {setup: "arm", tier: "pod", family: "handling_damage", name: "L0_0.02_s0", outcome: "found", fa: 0, meas: null, src: [F6]}
+  - {setup: "arm", tier: "pod", family: "handling_damage", name: "L1_0.05_s0", outcome: "not_found", fa: 1, meas: null, src: [F6], note: "a 0.05 mm dent below the scored size; v1 had 4 false alarms here"}
+  - {setup: "arm", tier: "pod", family: "handling_damage", name: "L2_0.1_s0", outcome: "hit", fa: 0, meas: null, src: [F6]}
+  - {setup: "arm", tier: "pod", family: "handling_damage", name: "L3_0.2_s0", outcome: "hit", fa: 0, meas: null, src: [F6]}
+  - {setup: "arm", tier: "pod", family: "handling_damage", name: "L4_0.4_s0", outcome: "hit", fa: 0, meas: null, src: [F6]}
+  - {setup: "arm", tier: "pod", family: "handling_damage", name: "L5_0.8_s0", outcome: "hit", fa: 0, meas: null, src: [F6]}
+  - {setup: "arm", tier: "pod", family: "missing_cell", name: "L0_1_s0", outcome: "hit", fa: 0, meas: null, src: [targeted]}
+  - {setup: "arm", tier: "pod", family: "reversed_polarity", name: "L0_1_s0", outcome: "hit", fa: 0, meas: null, src: [targeted]}
+  - {setup: "arm", tier: "pod", family: "missing_pad", name: "L0_1_s0", outcome: "hit", fa: 0, meas: null, src: [targeted]}
+  - {setup: "arm", tier: "pod", family: "busbar_shift", name: "L0_0.1_s0", outcome: "pass", fa: 0, meas: 0.0436, src: [targeted]}
+  - {setup: "arm", tier: "pod", family: "busbar_shift", name: "L1_0.16_s0", outcome: "pass", fa: 0, meas: 0.1558, src: [targeted]}
+  - {setup: "arm", tier: "pod", family: "busbar_shift", name: "L2_0.22_s0", outcome: "hit", fa: 0, meas: 0.2255, src: [targeted]}
+  - {setup: "arm", tier: "pod", family: "busbar_liftoff", name: "L0_0.075_s0", outcome: "pass", fa: 0, meas: 0.075, src: [targeted]}
+  - {setup: "arm", tier: "pod", family: "busbar_liftoff", name: "L1_0.12_s0", outcome: "pass", fa: 0, meas: 0.1202, src: [targeted]}
+  - {setup: "arm", tier: "pod", family: "busbar_liftoff", name: "L2_0.165_s0", outcome: "hit", fa: 0, meas: 0.1653, src: [targeted]}
+  - {setup: "arm", tier: "pod", family: "carrier_seating", name: "L0_0.1_s0", outcome: "pass", fa: 0, meas: 0.1, src: [targeted]}
+  - {setup: "arm", tier: "pod", family: "carrier_seating", name: "L1_0.16_s0", outcome: "pass", fa: 0, meas: 0.16, src: [targeted]}
+  - {setup: "arm", tier: "pod", family: "carrier_seating", name: "L2_0.22_s0", outcome: "hit", fa: 0, meas: 0.22, src: [targeted]}
+  - {setup: "arm", tier: "pod", family: "short_weld", name: "L0_0.05_s0", outcome: "pass", fa: 0, meas: 0.0426, src: [targeted]}
+  - {setup: "arm", tier: "pod", family: "short_weld", name: "L1_0.08_s0", outcome: "pass", fa: 0, meas: 0.0638, src: [targeted]}
+  - {setup: "arm", tier: "pod", family: "short_weld", name: "L2_0.11_s0", outcome: "miss", fa: 0, meas: 0.0851, src: [targeted]}
+  - {setup: "arm", tier: "pod", family: "seam_deviation", name: "L0_0.125_s0", outcome: "pass", fa: 0, meas: -0.1242, src: [targeted]}
+  - {setup: "arm", tier: "pod", family: "seam_deviation", name: "L1_0.2_s0", outcome: "pass", fa: 0, meas: 0.2027, src: [targeted]}
+  - {setup: "arm", tier: "pod", family: "seam_deviation", name: "L2_0.275_s0", outcome: "hit", fa: 0, meas: -0.2733, src: [targeted]}
+  - {setup: "arm", tier: "pod", family: "width_deviation", name: "L0_0.1_s0", outcome: "pass", fa: 0, meas: -0.1215, src: [F6]}
+  - {setup: "arm", tier: "pod", family: "width_deviation", name: "L1_0.16_s0", outcome: "pass", fa: 0, meas: -0.1602, src: [F6]}
+  - {setup: "arm", tier: "pod", family: "width_deviation", name: "L2_0.22_s0", outcome: "hit", fa: 0, meas: -0.2417, src: [F6]}
+  - {setup: "arm", tier: "pod", family: "reinforcement", name: "L0_0.05_s0", outcome: "pass", fa: 0, meas: -0.0465, src: [F6]}
+  - {setup: "arm", tier: "pod", family: "reinforcement", name: "L1_0.08_s0", outcome: "pass", fa: 0, meas: 0.073, src: [F6]}
+  - {setup: "arm", tier: "pod", family: "reinforcement", name: "L2_0.11_s0", outcome: "miss", fa: 0, meas: 0.0984, src: [F6]}
+  - {setup: "arm", tier: "pod", family: "weld_path_drift", name: "L0_0.05_s0", outcome: "pass", fa: 0, meas: 0.0591, src: [targeted]}
+  - {setup: "arm", tier: "pod", family: "weld_path_drift", name: "L1_0.08_s0", outcome: "pass", fa: 0, meas: 0.0629, src: [targeted]}
+  - {setup: "arm", tier: "pod", family: "weld_path_drift", name: "L2_0.11_s0", outcome: "hit", fa: 0, meas: 0.1107, src: [targeted]}
+  - {setup: "arm", tier: "pod", family: "weld_arc", name: "L0_0.05_s0", outcome: "pass", fa: 0, meas: 0.0534, src: [targeted]}
+  - {setup: "arm", tier: "pod", family: "weld_arc", name: "L1_0.08_s0", outcome: "pass", fa: 0, meas: 0.0808, src: [targeted]}
+  - {setup: "arm", tier: "pod", family: "weld_arc", name: "L2_0.11_s0", outcome: "miss", fa: 0, meas: 0.0951, src: [targeted]}
+  - {setup: "arm", tier: "pod", family: "spatter", name: "L0_0.05_s0", outcome: "not_found", fa: 0, meas: null, src: [F8]}
+  - {setup: "arm", tier: "pod", family: "spatter", name: "L1_0.075_s0", outcome: "not_found", fa: 0, meas: null, src: [F8]}
+  - {setup: "arm", tier: "pod", family: "spatter", name: "L2_0.1_s0", outcome: "not_found", fa: 0, meas: null, src: [F8]}
+  - {setup: "arm", tier: "pod", family: "spatter", name: "L3_0.15_s0", outcome: "hit", fa: 0, meas: null, src: [F8]}
+  - {setup: "arm", tier: "pod", family: "spatter", name: "L4_0.2_s0", outcome: "partial", fa: 0, meas: null, src: [F8]}
+  - {setup: "arm", tier: "pod", family: "spatter", name: "L5_0.3_s0", outcome: "partial", fa: 0, meas: null, src: [F8]}
+  - {setup: "arm", tier: "pod", family: "missing_weld", name: "L0_1_s0", outcome: "hit", fa: 0, meas: null, src: [targeted]}
+  - {setup: "arm", tier: "pod", family: "cell_shift", name: "L0_0.1_s4", outcome: "pass", fa: 0, meas: null, src: [F7], note: "v2 had 504 false alarms (side-plate bulge / dim rays)"}
+  - {setup: "arm", tier: "pod", family: "cell_shift", name: "L1_0.16_s1", outcome: "pass", fa: 0, meas: null, src: [F7], note: "v2 had 4 false alarms (side-plate bulge / dim rays)"}
+  - {setup: "arm", tier: "pod", family: "cell_shift", name: "L1_0.16_s2", outcome: "pass", fa: 0, meas: null, src: [F7], note: "v2 had 5 false alarms (side-plate bulge / dim rays)"}
+  - {setup: "arm", tier: "pod", family: "cell_shift", name: "L2_0.22_s2", outcome: "hit", fa: 0, meas: null, src: [F7], note: "v2 had 44 false alarms (side-plate bulge / dim rays)"}
+  - {setup: "arm", tier: "pod", family: "cell_shift", name: "L3_0.26_s4", outcome: "hit", fa: 0, meas: null, src: [F7], note: "v2 had 46 false alarms (side-plate bulge / dim rays)"}
+  - {setup: "arm", tier: "pod", family: "cell_shift", name: "L5_0.4_s1", outcome: "hit", fa: 0, meas: null, src: [F7], note: "v2 had 1 false alarms (side-plate bulge / dim rays)"}
+  - {setup: "arm", tier: "pod", family: "cell_shift", name: "L6_0.6_s3", outcome: "hit", fa: 0, meas: null, src: [F7], note: "v2 had 1 false alarms (side-plate bulge / dim rays)"}
+  - {setup: "arm", tier: "pod", family: "terminal_height", name: "L1_0.08_s2", outcome: "pass", fa: 0, meas: null, src: [F7], note: "v2 had 1 false alarms (side-plate bulge / dim rays)"}
+  - {setup: "arm", tier: "grr", family: "cell_shift", name: "cell_position_p6_l0_t0", outcome: "pass", fa: 0, meas: null, src: [F7], note: "dim-ray noise: v2 had 1 false alarm"}
+  - {setup: "arm", tier: "grr", family: "busbar_liftoff", name: "busbar_gap_p9_l0_t0", outcome: "hit", fa: 0, meas: null, src: [F7], note: "dim-ray noise: v2 had 1 false alarm"}
+  - {setup: "fixed", tier: "clean", family: "pre_busbar", name: "m0", outcome: "clean_ok", fa: 0, meas: null, src: [clean]}
+  - {setup: "fixed", tier: "clean", family: "pre_weld", name: "m0", outcome: "clean_ok", fa: 0, meas: null, src: [clean]}
+  - {setup: "fixed", tier: "clean", family: "post_weld", name: "m0", outcome: "clean_ok", fa: 0, meas: null, src: [clean]}
+  - {setup: "arm", tier: "clean", family: "pre_busbar", name: "m0", outcome: "clean_ok", fa: 0, meas: null, src: [clean]}
+  - {setup: "arm", tier: "clean", family: "pre_weld", name: "m0", outcome: "clean_ok", fa: 0, meas: null, src: [clean]}
+  - {setup: "arm", tier: "clean", family: "post_weld", name: "m0", outcome: "clean_ok", fa: 0, meas: null, src: [clean]}
