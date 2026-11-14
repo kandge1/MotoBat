@@ -1,0 +1,1269 @@
+{
+  "stage": "pre_weld",
+  "findings": [
+    {
+      "cls": "busbar_liftoff",
+      "magnitude": 0.45073418033985035,
+      "location": [
+        154.0,
+        -57.5,
+        101.0
+      ],
+      "bounds": [
+        [
+          9.774307677291347,
+          -63.50713170839465,
+          100.5
+        ],
+        [
+          158.22714253834408,
+          -51.48847320887752,
+          105.5
+        ]
+      ],
+      "capture": "sweep_x_y-57.5_r+0",
+      "feature": "busbar 2",
+      "measured": {
+        "max_gap": 0.45073418033985035,
+        "at_pin": 12
+      }
+    }
+  ],
+  "measurements": {
+    "busbars": {
+      "0": {
+        "capture": "sweep_x_y-57.5_r+0",
+        "seen": true,
+        "dx": -2.7814046177354612e-05,
+        "dy": -0.004123987721499134,
+        "dyaw_deg": 0.0007603684236245936,
+        "dz": 7.107867148192781e-06,
+        "tilt_deg": 4.353408482428142e-06,
+        "extent": [
+          148.45263567797085,
+          12.016956601315137
+        ],
+        "pose_measured": true
+      },
+      "1": {
+        "capture": "sweep_x_y+57.5_r+0",
+        "seen": true,
+        "dx": -2.0399884973586538e-05,
+        "dy": -0.0012878225982930758,
+        "dyaw_deg": 0.005521344016299092,
+        "dz": -5.1576875961245605e-06,
+        "tilt_deg": 6.331754823653221e-06,
+        "extent": [
+          148.45202572780423,
+          12.017039402848773
+        ],
+        "pose_measured": true
+      },
+      "2": {
+        "capture": "sweep_x_y-57.5_r+0",
+        "seen": true,
+        "dx": -1.6885184905390815e-05,
+        "dy": 0.0021921575854904063,
+        "dyaw_deg": 0.0008315458927290186,
+        "dz": 0.23203874200909524,
+        "tilt_deg": 0.17901879235055534,
+        "extent": [
+          148.4526616917985,
+          12.01651896887764
+        ],
+        "pose_measured": true
+      },
+      "3": {
+        "capture": "sweep_x_y+57.5_r+0",
+        "seen": true,
+        "dx": -9.855411462922348e-05,
+        "dy": -0.009117716351305205,
+        "dyaw_deg": -0.026480744666660627,
+        "dz": -6.47234088546611e-06,
+        "tilt_deg": 8.711420314611016e-05,
+        "extent": [
+          64.45347082568361,
+          12.00988534142536
+        ],
+        "pose_measured": true
+      },
+      "4": {
+        "capture": "sweep_x_y+57.5_r+0",
+        "seen": true,
+        "dx": 2.9239538406500287e-05,
+        "dy": 0.009782604798786565,
+        "dyaw_deg": 0.02732678031143177,
+        "dz": 3.2214572058819613e-06,
+        "tilt_deg": 3.6111698470598234e-05,
+        "extent": [
+          64.45022361180602,
+          12.00959846184395
+        ],
+        "pose_measured": true
+      }
+    },
+    "gaps": {
+      "busbar 0 pin 1": {
+        "capture": "sweep_x_y-57.5_r+0",
+        "gap": 6.860702200128799e-06
+      },
+      "busbar 0 pin 2": {
+        "capture": "sweep_x_y-57.5_r+0",
+        "gap": 1.167222151821079e-06
+      },
+      "busbar 0 pin 3": {
+        "capture": "sweep_x_y-57.5_r+0",
+        "gap": -4.17215119341563e-06
+      },
+      "busbar 0 pin 4": {
+        "capture": "sweep_x_y-57.5_r+0",
+        "gap": -7.68885647062234e-06
+      },
+      "busbar 0 pin 5": {
+        "capture": "sweep_x_y-57.5_r+0",
+        "gap": 7.844332003514864e-06
+      },
+      "busbar 0 pin 6": {
+        "capture": "sweep_x_y-57.5_r+0",
+        "gap": 1.8245579070708118e-05
+      },
+      "busbar 1 pin 21": {
+        "capture": "sweep_x_y+57.5_r+0",
+        "gap": -1.907223236230493e-06
+      },
+      "busbar 1 pin 20": {
+        "capture": "sweep_x_y+57.5_r+0",
+        "gap": -7.815670826971655e-06
+      },
+      "busbar 1 pin 19": {
+        "capture": "sweep_x_y+57.5_r+0",
+        "gap": -1.0545964997277224e-05
+      },
+      "busbar 1 pin 18": {
+        "capture": "sweep_x_y+57.5_r+0",
+        "gap": 1.2023837811625526e-05
+      },
+      "busbar 1 pin 17": {
+        "capture": "sweep_x_y+57.5_r+0",
+        "gap": -2.521442894476422e-07
+      },
+      "busbar 1 pin 16": {
+        "capture": "sweep_x_y+57.5_r+0",
+        "gap": -1.0222305519391739e-05
+      },
+      "busbar 2 pin 7": {
+        "capture": "sweep_x_y-57.5_r+0",
+        "gap": 0.013327543184715296
+      },
+      "busbar 2 pin 8": {
+        "capture": "sweep_x_y-57.5_r+0",
+        "gap": 0.10080904030020577
+      },
+      "busbar 2 pin 9": {
+        "capture": "sweep_x_y-57.5_r+0",
+        "gap": 0.1882890867628646
+      },
+      "busbar 2 pin 10": {
+        "capture": "sweep_x_y-57.5_r+0",
+        "gap": 0.275765719396702
+      },
+      "busbar 2 pin 11": {
+        "capture": "sweep_x_y-57.5_r+0",
+        "gap": 0.363268761613881
+      },
+      "busbar 2 pin 12": {
+        "capture": "sweep_x_y-57.5_r+0",
+        "gap": 0.45073418033985035
+      },
+      "busbar 3 pin 24": {
+        "capture": "sweep_x_y+57.5_r+0",
+        "gap": -1.7815385973563025e-05
+      },
+      "busbar 3 pin 23": {
+        "capture": "sweep_x_y+57.5_r+0",
+        "gap": -5.974576694711686e-06
+      },
+      "busbar 3 pin 22": {
+        "capture": "sweep_x_y+57.5_r+0",
+        "gap": -6.547633972786571e-07
+      },
+      "busbar 4 pin 15": {
+        "capture": "sweep_x_y+57.5_r+0",
+        "gap": 1.0585189855305543e-05
+      },
+      "busbar 4 pin 14": {
+        "capture": "sweep_x_y+57.5_r+0",
+        "gap": 1.2105595430966787e-05
+      },
+      "busbar 4 pin 13": {
+        "capture": "sweep_x_y+57.5_r+0",
+        "gap": 1.2779623830283526e-05
+      }
+    },
+    "carrier": {
+      "capture": "sweep_x_y-57.5_r+0",
+      "dz": 1.641086318215912e-05,
+      "tilt_deg": 1.010198601586461e-05
+    }
+  },
+  "uncovered": {},
+  "captures": [
+    {
+      "name": "snap_e90_a0",
+      "sensor": "snapshot",
+      "params_hash": "779e2255dc4c679bff09da317967fd4541b93358a590ca177a20092ddafd8e08",
+      "points": 205155,
+      "settings": {
+        "pose_xyz_mm": [
+          0.0,
+          0.0,
+          701.0
+        ],
+        "rays": 1253376,
+        "seed": 39081,
+        "stride": 2
+      },
+      "icp": {
+        "datum_points": 20578,
+        "spacing_mm": 0.49531539200184954,
+        "fitness": 0.9912527942462824,
+        "rmse_mm": 0.1250587555368459,
+        "icp_yaw_dropped_deg": 0.01202863211114899,
+        "datum": "housing tops + strip outlines, registered once per load (from sweep_x_y+57.5_r+0, sweep_x_y-57.5_r+0)",
+        "registered_axes": [
+          "x",
+          "y",
+          "yaw"
+        ],
+        "translation_mm": [
+          -0.054195508075002716,
+          0.01187981118894353,
+          -0.003972774338469166
+        ],
+        "rotation_mrad": 0.3955290319183786,
+        "transform": [
+          [
+            0.9999999263664735,
+            -0.0003714063478213287,
+            9.656278765734142e-05,
+            -0.054195508075002716
+          ],
+          [
+            0.00037141559608665957,
+            0.9999999264388619,
+            -9.57743452612737e-05,
+            0.01187981118894353
+          ],
+          [
+            -9.652720935428448e-05,
+            9.581020313440852e-05,
+            0.9999999907514516,
+            -0.003972774338469166
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "residual": {
+        "rays_compared": 204957,
+        "noise_mm": 0.13276259396993972,
+        "sigma_by_material_mm": {
+          "aluminium_cap": 0.09290308392885371,
+          "aluminium_cast": 0.0909923656171732,
+          "aluminium_sheet": 0.07903470719208633,
+          "aluminium_terminal": 0.10539796015114966,
+          "copper_rolled": 0.07967395425764309,
+          "foam": 0.09162961080604193,
+          "plastic_black": 0.161795936944411
+        },
+        "missing_rays": 152,
+        "regions": 1,
+        "regions_grown": 0,
+        "misregistration_mm": 0.24763666676456575,
+        "against": "the module as measured (2 parts, 0 beads moved)"
+      }
+    },
+    {
+      "name": "snap_near_+1-1",
+      "sensor": "snapshot",
+      "params_hash": "779e2255dc4c679bff09da317967fd4541b93358a590ca177a20092ddafd8e08",
+      "points": 390537,
+      "settings": {
+        "pose_xyz_mm": [
+          88.75,
+          -37.75,
+          451.0
+        ],
+        "rays": 1253376,
+        "seed": 39082,
+        "stride": 2
+      },
+      "icp": {
+        "datum_points": 31591,
+        "spacing_mm": 0.2924906639939002,
+        "fitness": 0.9999683454148334,
+        "rmse_mm": 0.09248284694771461,
+        "icp_yaw_dropped_deg": 0.01841683694317541,
+        "datum": "housing tops + strip outlines, registered once per load (from sweep_x_y+57.5_r+0, sweep_x_y-57.5_r+0)",
+        "registered_axes": [
+          "x",
+          "y",
+          "yaw"
+        ],
+        "translation_mm": [
+          -0.054195508075002716,
+          0.01187981118894353,
+          -0.0010434494560159955
+        ],
+        "rotation_mrad": 0.41151468942129443,
+        "transform": [
+          [
+            0.9999999275070173,
+            -0.0003714025001716066,
+            8.394130920640678e-05,
+            -0.054195508075002716
+          ],
+          [
+            0.00037141559651027536,
+            0.9999999188484707,
+            -0.00015605610216238485,
+            0.01187981118894353
+          ],
+          [
+            -8.3883342767931e-05,
+            0.00015608726796084344,
+            0.9999999843001748,
+            -0.0010434494560159955
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "residual": {
+        "rays_compared": 390409,
+        "noise_mm": 0.04690915732075638,
+        "sigma_by_material_mm": {
+          "aluminium_cap": 0.04267889209046553,
+          "aluminium_cast": 0.031334537577540726,
+          "aluminium_sheet": 0.02640981180956791,
+          "aluminium_terminal": 0.04471106356186832,
+          "cell_wrap": 0.055944916701552015,
+          "copper_rolled": 0.02903814348398848,
+          "foam": 0.028844174524174194,
+          "plastic_black": 0.05616058540932289
+        },
+        "missing_rays": 148,
+        "regions": 0,
+        "regions_grown": 0,
+        "misregistration_mm": 0.1462458899660752,
+        "against": "the module as measured (2 parts, 0 beads moved)"
+      }
+    },
+    {
+      "name": "snap_near_-1-1",
+      "sensor": "snapshot",
+      "params_hash": "779e2255dc4c679bff09da317967fd4541b93358a590ca177a20092ddafd8e08",
+      "points": 390919,
+      "settings": {
+        "pose_xyz_mm": [
+          -88.75,
+          -37.75,
+          451.0
+        ],
+        "rays": 1253376,
+        "seed": 39083,
+        "stride": 2
+      },
+      "icp": {
+        "datum_points": 31390,
+        "spacing_mm": 0.2924734785448474,
+        "fitness": 0.9999362854412234,
+        "rmse_mm": 0.10690434277759733,
+        "icp_yaw_dropped_deg": 0.019928118479424852,
+        "datum": "housing tops + strip outlines, registered once per load (from sweep_x_y+57.5_r+0, sweep_x_y-57.5_r+0)",
+        "registered_axes": [
+          "x",
+          "y",
+          "yaw"
+        ],
+        "translation_mm": [
+          -0.054195508075002716,
+          0.01187981118894353,
+          -0.0016305541559358979
+        ],
+        "rotation_mrad": 0.4094945958322321,
+        "transform": [
+          [
+            0.9999999274478117,
+            -0.0003714028814209858,
+            8.464201496938326e-05,
+            -0.054195508075002716
+          ],
+          [
+            0.00037141559648828557,
+            0.9999999197368632,
+            -0.00015025552322236272,
+            0.01187981118894353
+          ],
+          [
+            -8.458620284147535e-05,
+            0.00015028694968547362,
+            0.9999999851295033,
+            -0.0016305541559358979
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "residual": {
+        "rays_compared": 390678,
+        "noise_mm": 0.04699176716844614,
+        "sigma_by_material_mm": {
+          "aluminium_cap": 0.043851282602197034,
+          "aluminium_cast": 0.03157286198107417,
+          "aluminium_sheet": 0.027126132980105667,
+          "aluminium_terminal": 0.044662644944655584,
+          "cell_wrap": 0.05715433595678953,
+          "copper_rolled": 0.029128962310597785,
+          "foam": 0.02903214218794514,
+          "plastic_black": 0.05596592429123125
+        },
+        "missing_rays": 157,
+        "regions": 0,
+        "regions_grown": 0,
+        "misregistration_mm": 0.14623967790981582,
+        "against": "the module as measured (2 parts, 0 beads moved)"
+      }
+    },
+    {
+      "name": "sweep_side_y-1_fast",
+      "sensor": "profilometer",
+      "params_hash": "779e2255dc4c679bff09da317967fd4541b93358a590ca177a20092ddafd8e08",
+      "points": 5680000,
+      "settings": {
+        "length_mm": 375.0,
+        "pitch_mm": 0.2,
+        "profiles": 1876,
+        "points_per_profile": 3200,
+        "seed": 39084,
+        "speed_mm_s": 200.0,
+        "rate_hz": 1000.0,
+        "scan_time_s": 1.875,
+        "exposure_vs_reference": 1.0
+      },
+      "icp": {
+        "datum_points": 5676800,
+        "spacing_mm": 0.2,
+        "fitness": 1.0,
+        "rmse_mm": 0.07911541683821659,
+        "icp_yaw_dropped_deg": 0.01983317869027862,
+        "datum": "housing tops + strip outlines, registered once per load (from sweep_x_y+57.5_r+0, sweep_x_y-57.5_r+0)",
+        "registered_axes": [
+          "x",
+          "y",
+          "yaw"
+        ],
+        "translation_mm": [
+          -0.054195508075002716,
+          0.01187981118894353,
+          9.512176073614965e-12
+        ],
+        "rotation_mrad": 0.4006712929703247,
+        "transform": [
+          [
+            0.9999999310252243,
+            -0.0003714155936222788,
+            5.5820820946243365e-08,
+            -0.054195508075002716
+          ],
+          [
+            0.00037141559781699235,
+            0.9999999197312591,
+            -0.00015029280968003502,
+            0.01187981118894353
+          ],
+          [
+            2.7665889402809775e-13,
+            0.0001502928200463458,
+            0.999999988706034,
+            9.512176073614965e-12
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "residual": {
+        "rays_compared": 5680000,
+        "noise_mm": 0.0033310317616898795,
+        "sigma_by_material_mm": {
+          "aluminium_sheet": 0.0033310317616898795
+        },
+        "missing_rays": 0,
+        "regions": 0,
+        "regions_grown": 0,
+        "misregistration_mm": 0.1,
+        "against": "the module as measured (2 parts, 0 beads moved)"
+      }
+    },
+    {
+      "name": "sweep_side_y+1_fast",
+      "sensor": "profilometer",
+      "params_hash": "779e2255dc4c679bff09da317967fd4541b93358a590ca177a20092ddafd8e08",
+      "points": 5680000,
+      "settings": {
+        "length_mm": 375.0,
+        "pitch_mm": 0.2,
+        "profiles": 1876,
+        "points_per_profile": 3200,
+        "seed": 39085,
+        "speed_mm_s": 200.0,
+        "rate_hz": 1000.0,
+        "scan_time_s": 1.875,
+        "exposure_vs_reference": 1.0
+      },
+      "icp": {
+        "datum_points": 5676800,
+        "spacing_mm": 0.2,
+        "fitness": 1.0,
+        "rmse_mm": 0.07911876077230899,
+        "icp_yaw_dropped_deg": 0.019832941524347267,
+        "datum": "housing tops + strip outlines, registered once per load (from sweep_x_y+57.5_r+0, sweep_x_y-57.5_r+0)",
+        "registered_axes": [
+          "x",
+          "y",
+          "yaw"
+        ],
+        "translation_mm": [
+          -0.054195508075002716,
+          0.01187981118894353,
+          -1.4489286156626103e-12
+        ],
+        "rotation_mrad": 0.4007145234439072,
+        "transform": [
+          [
+            0.9999999310252243,
+            -0.000371415593615797,
+            5.586393213173951e-08,
+            -0.054195508075002716
+          ],
+          [
+            0.0003714155978169924,
+            0.9999999197139368,
+            -0.00015040802386277662,
+            0.01187981118894353
+          ],
+          [
+            -4.2179072152806554e-14,
+            0.00015040803423715268,
+            0.9999999886887115,
+            -1.4489286156626103e-12
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "residual": {
+        "rays_compared": 5680000,
+        "noise_mm": 0.0033316878614365777,
+        "sigma_by_material_mm": {
+          "aluminium_sheet": 0.0033316878614365777
+        },
+        "missing_rays": 0,
+        "regions": 0,
+        "regions_grown": 0,
+        "misregistration_mm": 0.1,
+        "against": "the module as measured (2 parts, 0 beads moved)"
+      }
+    },
+    {
+      "name": "sweep_x_y+57.5_r+0",
+      "sensor": "profilometer",
+      "params_hash": "779e2255dc4c679bff09da317967fd4541b93358a590ca177a20092ddafd8e08",
+      "points": 16217017,
+      "settings": {
+        "length_mm": 375.0,
+        "pitch_mm": 0.05,
+        "profiles": 7501,
+        "points_per_profile": 3200,
+        "seed": 39086
+      },
+      "icp": {
+        "datum_points": 1429529,
+        "spacing_mm": 0.05,
+        "fitness": 0.999969,
+        "rmse_mm": 0.013463054943562149,
+        "icp_yaw_dropped_deg": 0.00032523660646200346,
+        "datum": "housing tops + strip outlines, registered once per load (from sweep_x_y+57.5_r+0, sweep_x_y-57.5_r+0)",
+        "registered_axes": [
+          "x",
+          "y",
+          "yaw"
+        ],
+        "translation_mm": [
+          -0.054195508075002716,
+          0.01187981118894353,
+          -0.0011918179721743902
+        ],
+        "rotation_mrad": 0.409311122855527,
+        "transform": [
+          [
+            0.999999927525696,
+            -0.00037140301903326386,
+            8.371618808021824e-05,
+            -0.054195508075002716
+          ],
+          [
+            0.00037141559651721295,
+            0.9999999197340677,
+            -0.00015027412451761263,
+            0.01187981118894353
+          ],
+          [
+            -8.366036909713195e-05,
+            0.00015030520712453401,
+            0.9999999852046435,
+            -0.0011918179721743902
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "residual": {
+        "rays_compared": 16208737,
+        "noise_mm": 0.001413777152722297,
+        "sigma_by_material_mm": {
+          "aluminium_cap": 0.0010599309301427009,
+          "aluminium_cast": 0.0009787850371322335,
+          "aluminium_sheet": 0.0009764827635454133,
+          "aluminium_terminal": 0.001012605636877946,
+          "copper_rolled": 0.0009987219888964879,
+          "foam": 0.0010617353156588706,
+          "plastic_black": 0.0019946850520266212
+        },
+        "missing_rays": 8944,
+        "regions": 0,
+        "regions_grown": 0,
+        "misregistration_mm": 0.025,
+        "against": "the module as measured (2 parts, 0 beads moved)"
+      }
+    },
+    {
+      "name": "sweep_x_y-57.5_r+0",
+      "sensor": "profilometer",
+      "params_hash": "779e2255dc4c679bff09da317967fd4541b93358a590ca177a20092ddafd8e08",
+      "points": 16251502,
+      "settings": {
+        "length_mm": 375.0,
+        "pitch_mm": 0.05,
+        "profiles": 7501,
+        "points_per_profile": 3200,
+        "seed": 39087
+      },
+      "icp": {
+        "datum_points": 1431573,
+        "spacing_mm": 0.05,
+        "fitness": 0.999986,
+        "rmse_mm": 0.013512364071105279,
+        "icp_yaw_dropped_deg": -0.00032864763924679395,
+        "datum": "housing tops + strip outlines, registered once per load (from sweep_x_y+57.5_r+0, sweep_x_y-57.5_r+0)",
+        "registered_axes": [
+          "x",
+          "y",
+          "yaw"
+        ],
+        "translation_mm": [
+          -0.054195508075002716,
+          0.01187981118894353,
+          -0.0011772673292956043
+        ],
+        "rotation_mrad": 0.4093275570692015,
+        "transform": [
+          [
+            0.9999999275278774,
+            -0.00037140301799392007,
+            8.369012915724347e-05,
+            -0.054195508075002716
+          ],
+          [
+            0.0003714155965180231,
+            0.9999999197251594,
+            -0.00015033339381017428,
+            0.01187981118894353
+          ],
+          [
+            -8.363428816286533e-05,
+            0.0001503644667344378,
+            0.9999999851979164,
+            -0.0011772673292956043
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "residual": {
+        "rays_compared": 16248465,
+        "noise_mm": 0.0014164371298115066,
+        "sigma_by_material_mm": {
+          "aluminium_cap": 0.0010589817765682074,
+          "aluminium_cast": 0.0009803580401404868,
+          "aluminium_sheet": 0.0009772006784197953,
+          "aluminium_terminal": 0.0010106289643599757,
+          "copper_rolled": 0.000998073360572398,
+          "foam": 0.0010628729571738919,
+          "plastic_black": 0.001994145137788746
+        },
+        "missing_rays": 3632,
+        "regions": 0,
+        "regions_grown": 0,
+        "misregistration_mm": 0.025,
+        "against": "the module as measured (2 parts, 0 beads moved)"
+      }
+    },
+    {
+      "name": "sweep_end_x-1_fast",
+      "sensor": "profilometer",
+      "params_hash": "779e2255dc4c679bff09da317967fd4541b93358a590ca177a20092ddafd8e08",
+      "points": 2416000,
+      "settings": {
+        "length_mm": 171.0,
+        "pitch_mm": 0.2,
+        "profiles": 856,
+        "points_per_profile": 3200,
+        "seed": 39088,
+        "speed_mm_s": 200.0,
+        "rate_hz": 1000.0,
+        "scan_time_s": 0.855,
+        "exposure_vs_reference": 1.0
+      },
+      "icp": {
+        "datum_points": 2412800,
+        "spacing_mm": 0.2,
+        "fitness": 1.0,
+        "rmse_mm": 0.06831430506475264,
+        "icp_yaw_dropped_deg": 0.019831036149558015,
+        "datum": "housing tops + strip outlines, registered once per load (from sweep_x_y+57.5_r+0, sweep_x_y-57.5_r+0)",
+        "registered_axes": [
+          "x",
+          "y",
+          "yaw"
+        ],
+        "translation_mm": [
+          -0.054195508075002716,
+          0.01187981118894353,
+          2.340974856695405e-11
+        ],
+        "rotation_mrad": 0.38075595029207954,
+        "transform": [
+          [
+            0.9999999275124543,
+            -0.0003714155978169764,
+            8.381849319072596e-05,
+            -0.054195508075002716
+          ],
+          [
+            0.0003714155965122948,
+            0.9999999310252244,
+            3.113130580703743e-08,
+            0.01187981118894353
+          ],
+          [
+            -8.381849897201678e-05,
+            1.9209678972548617e-13,
+            0.9999999964872296,
+            2.340974856695405e-11
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "residual": {
+        "rays_compared": 2416000,
+        "noise_mm": 0.0015853336075107775,
+        "sigma_by_material_mm": {
+          "aluminium_cast": 0.0015644073739685827,
+          "aluminium_sheet": 0.0027699608847190377
+        },
+        "missing_rays": 0,
+        "regions": 0,
+        "regions_grown": 0,
+        "misregistration_mm": 0.1,
+        "against": "the module as measured (2 parts, 0 beads moved)"
+      }
+    },
+    {
+      "name": "sweep_end_x+1_fast",
+      "sensor": "profilometer",
+      "params_hash": "779e2255dc4c679bff09da317967fd4541b93358a590ca177a20092ddafd8e08",
+      "points": 2416000,
+      "settings": {
+        "length_mm": 171.0,
+        "pitch_mm": 0.2,
+        "profiles": 856,
+        "points_per_profile": 3200,
+        "seed": 39089,
+        "speed_mm_s": 200.0,
+        "rate_hz": 1000.0,
+        "scan_time_s": 0.855,
+        "exposure_vs_reference": 1.0
+      },
+      "icp": {
+        "datum_points": 2416000,
+        "spacing_mm": 0.2,
+        "fitness": 1.0,
+        "rmse_mm": 0.030164007005167602,
+        "icp_yaw_dropped_deg": 0.019834340193385466,
+        "datum": "housing tops + strip outlines, registered once per load (from sweep_x_y+57.5_r+0, sweep_x_y-57.5_r+0)",
+        "registered_axes": [
+          "x",
+          "y",
+          "yaw"
+        ],
+        "translation_mm": [
+          -0.054195508075002716,
+          0.01187981118894353,
+          -1.7803569395861056e-09
+        ],
+        "rotation_mrad": 0.3807227123588453,
+        "transform": [
+          [
+            0.9999999275251091,
+            -0.0003714155978318324,
+            8.366737768814572e-05,
+            -0.054195508075002716
+          ],
+          [
+            0.000371415596516995,
+            0.9999999310252244,
+            3.1252738452514975e-08,
+            0.01187981118894353
+          ],
+          [
+            -8.366738352496162e-05,
+            -1.7736719442081746e-10,
+            0.9999999964998846,
+            -1.7803569395861056e-09
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "residual": {
+        "rays_compared": 2416000,
+        "noise_mm": 0.0015840360811536706,
+        "sigma_by_material_mm": {
+          "aluminium_cast": 0.0015630798163429741,
+          "aluminium_sheet": 0.0027509045195575105
+        },
+        "missing_rays": 0,
+        "regions": 0,
+        "regions_grown": 0,
+        "misregistration_mm": 0.1,
+        "against": "the module as measured (2 parts, 0 beads moved)"
+      }
+    },
+    {
+      "name": "sweep_x_y+75.5_r-60_fast",
+      "sensor": "profilometer",
+      "params_hash": "779e2255dc4c679bff09da317967fd4541b93358a590ca177a20092ddafd8e08",
+      "points": 3342082,
+      "settings": {
+        "length_mm": 375.0,
+        "pitch_mm": 0.2,
+        "profiles": 1876,
+        "points_per_profile": 3200,
+        "seed": 39090,
+        "speed_mm_s": 200.0,
+        "rate_hz": 1000.0,
+        "scan_time_s": 1.875,
+        "exposure_vs_reference": 1.0
+      },
+      "icp": {
+        "datum_points": 2970361,
+        "spacing_mm": 0.2,
+        "fitness": 0.999922,
+        "rmse_mm": 0.053767936417577274,
+        "icp_yaw_dropped_deg": 0.019829923238808177,
+        "datum": "housing tops + strip outlines, registered once per load (from sweep_x_y+57.5_r+0, sweep_x_y-57.5_r+0)",
+        "registered_axes": [
+          "x",
+          "y",
+          "yaw"
+        ],
+        "translation_mm": [
+          -0.054195508075002716,
+          0.01187981118894353,
+          -0.0011535723168740687
+        ],
+        "rotation_mrad": 0.40927547903969536,
+        "transform": [
+          [
+            0.9999999275400657,
+            -0.0003714030450009168,
+            8.354424867727173e-05,
+            -0.054195508075002716
+          ],
+          [
+            0.00037141559652255005,
+            0.9999999197342819,
+            -0.00015027269996737254,
+            0.01187981118894353
+          ],
+          [
+            -8.348843023318424e-05,
+            0.00015030371871558107,
+            0.9999999852192369,
+            -0.0011535723168740687
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "residual": {
+        "rays_compared": 3341593,
+        "noise_mm": 0.004493869394708265,
+        "sigma_by_material_mm": {
+          "aluminium_cap": 0.0051330561806801865,
+          "aluminium_cast": 0.002348102643307372,
+          "aluminium_sheet": 0.0044965602414286324,
+          "copper_rolled": 0.006681049153803359,
+          "foam": 0.0016009557223184293,
+          "plastic_black": 0.005225251000412914
+        },
+        "missing_rays": 296,
+        "regions": 0,
+        "regions_grown": 0,
+        "misregistration_mm": 0.1,
+        "against": "the module as measured (2 parts, 0 beads moved)"
+      }
+    },
+    {
+      "name": "sweep_x_y-75.5_r+60_fast",
+      "sensor": "profilometer",
+      "params_hash": "779e2255dc4c679bff09da317967fd4541b93358a590ca177a20092ddafd8e08",
+      "points": 3339522,
+      "settings": {
+        "length_mm": 375.0,
+        "pitch_mm": 0.2,
+        "profiles": 1876,
+        "points_per_profile": 3200,
+        "seed": 39091,
+        "speed_mm_s": 200.0,
+        "rate_hz": 1000.0,
+        "scan_time_s": 1.875,
+        "exposure_vs_reference": 1.0
+      },
+      "icp": {
+        "datum_points": 2971708,
+        "spacing_mm": 0.2,
+        "fitness": 1.0,
+        "rmse_mm": 0.05989665562720169,
+        "icp_yaw_dropped_deg": 0.019832466736025935,
+        "datum": "housing tops + strip outlines, registered once per load (from sweep_x_y+57.5_r+0, sweep_x_y-57.5_r+0)",
+        "registered_axes": [
+          "x",
+          "y",
+          "yaw"
+        ],
+        "translation_mm": [
+          -0.054195508075002716,
+          0.01187981118894353,
+          -0.0011970178533466792
+        ],
+        "rotation_mrad": 0.40920099632721857,
+        "transform": [
+          [
+            0.9999999275198976,
+            -0.00037140303700960515,
+            8.378534279625758e-05,
+            -0.054195508075002716
+          ],
+          [
+            0.0003714155965150593,
+            0.9999999197849325,
+            -0.00014993526211325246,
+            0.01187981118894353
+          ],
+          [
+            -8.3729649663707e-05,
+            0.0001499663704290032,
+            0.9999999852497166,
+            -0.0011970178533466792
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "residual": {
+        "rays_compared": 3339430,
+        "noise_mm": 0.004490453434786202,
+        "sigma_by_material_mm": {
+          "aluminium_cap": 0.005027319269106048,
+          "aluminium_cast": 0.002343540017386488,
+          "aluminium_sheet": 0.004496732889518401,
+          "copper_rolled": 0.005840113556074914,
+          "foam": 0.0015723232550381942,
+          "plastic_black": 0.005181683846933402
+        },
+        "missing_rays": 239,
+        "regions": 0,
+        "regions_grown": 0,
+        "misregistration_mm": 0.1,
+        "against": "the module as measured (2 parts, 0 beads moved)"
+      }
+    },
+    {
+      "name": "sweep_y_x-172.375_r-60_fast",
+      "sensor": "profilometer",
+      "params_hash": "779e2255dc4c679bff09da317967fd4541b93358a590ca177a20092ddafd8e08",
+      "points": 1519070,
+      "settings": {
+        "length_mm": 171.0,
+        "pitch_mm": 0.2,
+        "profiles": 856,
+        "points_per_profile": 3200,
+        "seed": 39092,
+        "speed_mm_s": 200.0,
+        "rate_hz": 1000.0,
+        "scan_time_s": 0.855,
+        "exposure_vs_reference": 1.0
+      },
+      "icp": {
+        "datum_points": 1299997,
+        "spacing_mm": 0.2,
+        "fitness": 1.0,
+        "rmse_mm": 0.07612566894206621,
+        "icp_yaw_dropped_deg": 0.01982739821405791,
+        "datum": "housing tops + strip outlines, registered once per load (from sweep_x_y+57.5_r+0, sweep_x_y-57.5_r+0)",
+        "registered_axes": [
+          "x",
+          "y",
+          "yaw"
+        ],
+        "translation_mm": [
+          -0.054195508075002716,
+          0.01187981118894353,
+          -0.0011847712708246178
+        ],
+        "rotation_mrad": 0.40923654299711165,
+        "transform": [
+          [
+            0.9999999275312986,
+            -0.0003714030429823887,
+            8.364913049444266e-05,
+            -0.054195508075002716
+          ],
+          [
+            0.0003714155965192938,
+            0.9999999197589842,
+            -0.00015010822685729473,
+            0.01187981118894353
+          ],
+          [
+            -8.359337313011998e-05,
+            0.00015013928457084742,
+            0.9999999852351715,
+            -0.0011847712708246178
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "residual": {
+        "rays_compared": 1519061,
+        "noise_mm": 0.003151289889695438,
+        "sigma_by_material_mm": {
+          "aluminium_cast": 0.002375883311719197,
+          "aluminium_sheet": 0.008593022122307128,
+          "copper_rolled": 0.005790413177705163,
+          "plastic_black": 0.005347836274285539
+        },
+        "missing_rays": 39,
+        "regions": 0,
+        "regions_grown": 0,
+        "misregistration_mm": 0.1,
+        "against": "the module as measured (2 parts, 0 beads moved)"
+      }
+    },
+    {
+      "name": "sweep_y_x+172.375_r+60_fast",
+      "sensor": "profilometer",
+      "params_hash": "779e2255dc4c679bff09da317967fd4541b93358a590ca177a20092ddafd8e08",
+      "points": 1519172,
+      "settings": {
+        "length_mm": 171.0,
+        "pitch_mm": 0.2,
+        "profiles": 856,
+        "points_per_profile": 3200,
+        "seed": 39093,
+        "speed_mm_s": 200.0,
+        "rate_hz": 1000.0,
+        "scan_time_s": 0.855,
+        "exposure_vs_reference": 1.0
+      },
+      "icp": {
+        "datum_points": 1302229,
+        "spacing_mm": 0.2,
+        "fitness": 0.999885,
+        "rmse_mm": 0.016916023344086237,
+        "icp_yaw_dropped_deg": 0.019825912573676125,
+        "datum": "housing tops + strip outlines, registered once per load (from sweep_x_y+57.5_r+0, sweep_x_y-57.5_r+0)",
+        "registered_axes": [
+          "x",
+          "y",
+          "yaw"
+        ],
+        "translation_mm": [
+          -0.054195508075002716,
+          0.01187981118894353,
+          -0.001227575202672263
+        ],
+        "rotation_mrad": 0.4091755527151345,
+        "transform": [
+          [
+            0.9999999275430045,
+            -0.0003714030714005192,
+            8.350894593173915e-05,
+            -0.054195508075002716
+          ],
+          [
+            0.00037141559652364157,
+            0.9999999197722307,
+            -0.00015001995492050168,
+            0.01187981118894353
+          ],
+          [
+            -8.345322135997388e-05,
+            0.00015005096057547475,
+            0.9999999852601343,
+            -0.001227575202672263
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "residual": {
+        "rays_compared": 1518993,
+        "noise_mm": 0.0031544374870390458,
+        "sigma_by_material_mm": {
+          "aluminium_cast": 0.0023755652914254476,
+          "aluminium_sheet": 0.008505340010427857,
+          "copper_rolled": 0.005537887223347489,
+          "plastic_black": 0.005303683162081278
+        },
+        "missing_rays": 81,
+        "regions": 0,
+        "regions_grown": 0,
+        "misregistration_mm": 0.1,
+        "against": "the module as measured (2 parts, 0 beads moved)"
+      }
+    }
+  ],
+  "detect_hash": "b4921f018f596625141751463216fbac82652760e8b4d43057c08bc4ba589a0a",
+  "timings_s": {
+    "snap_e90_a0:golden": 0.86,
+    "snap_e90_a0:align": 0.05,
+    "snap_near_+1-1:golden": 1.08,
+    "snap_near_+1-1:align": 0.05,
+    "snap_near_-1-1:golden": 1.07,
+    "snap_near_-1-1:align": 0.05,
+    "sweep_side_y-1_fast:golden": 2.45,
+    "sweep_side_y-1_fast:align": 1.1,
+    "sweep_side_y+1_fast:golden": 2.41,
+    "sweep_side_y+1_fast:align": 1.13,
+    "sweep_x_y+57.5_r+0:golden": 7.3,
+    "sweep_x_y+57.5_r+0:align": 3.77,
+    "sweep_x_y-57.5_r+0:golden": 7.6,
+    "sweep_x_y-57.5_r+0:align": 3.8,
+    "sweep_end_x-1_fast:golden": 1.15,
+    "sweep_end_x-1_fast:align": 0.93,
+    "sweep_end_x+1_fast:golden": 1.14,
+    "sweep_end_x+1_fast:align": 0.92,
+    "sweep_x_y+75.5_r-60_fast:golden": 1.96,
+    "sweep_x_y+75.5_r-60_fast:align": 1.2,
+    "sweep_x_y-75.5_r+60_fast:golden": 1.94,
+    "sweep_x_y-75.5_r+60_fast:align": 1.19,
+    "sweep_y_x-172.375_r-60_fast:golden": 0.98,
+    "sweep_y_x-172.375_r-60_fast:align": 1.09,
+    "sweep_y_x+172.375_r+60_fast:golden": 0.95,
+    "sweep_y_x+172.375_r+60_fast:align": 1.1,
+    "snap_e90_a0:measure": 0.34,
+    "snap_near_+1-1:measure": 0.51,
+    "snap_near_-1-1:measure": 0.52,
+    "sweep_side_y-1_fast:measure": 1.5,
+    "sweep_side_y+1_fast:measure": 1.46,
+    "sweep_x_y+57.5_r+0:measure": 9.31,
+    "sweep_x_y-57.5_r+0:measure": 9.4,
+    "sweep_end_x-1_fast:measure": 0.85,
+    "sweep_end_x+1_fast:measure": 0.84,
+    "sweep_x_y+75.5_r-60_fast:measure": 0.92,
+    "sweep_x_y-75.5_r+60_fast:measure": 0.9,
+    "sweep_y_x-172.375_r-60_fast:measure": 0.55,
+    "sweep_y_x+172.375_r+60_fast:measure": 0.56,
+    "snap_e90_a0:residual": 0.53,
+    "snap_near_+1-1:residual": 0.62,
+    "snap_near_-1-1:residual": 0.62,
+    "sweep_side_y-1_fast:residual": 2.52,
+    "sweep_side_y+1_fast:residual": 2.47,
+    "sweep_x_y+57.5_r+0:residual": 11.89,
+    "sweep_x_y-57.5_r+0:residual": 13.03,
+    "sweep_end_x-1_fast:residual": 1.03,
+    "sweep_end_x+1_fast:residual": 1.05,
+    "sweep_x_y+75.5_r-60_fast:residual": 1.78,
+    "sweep_x_y-75.5_r+60_fast:residual": 1.79,
+    "sweep_y_x-172.375_r-60_fast:residual": 0.79,
+    "sweep_y_x+172.375_r+60_fast:residual": 0.8
+  },
+  "result": "NOK"
+}

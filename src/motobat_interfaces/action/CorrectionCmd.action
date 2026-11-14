@@ -1,0 +1,23 @@
+# Offset the next cell's placement by the correction loop's output (plan §9.9, task 1.12).
+# u_{k+1} = -Kp e_k - Ki sum(e_j), e = measured placement error of the cells so far.
+# Frame: module (pallet datum) frame. Units: m, rad.
+
+# Goal
+string module_id
+uint32 cell_index             # k+1: the cell this offset is for
+uint32 based_on_cell          # k: the last cell whose measurement went into it
+float64 dx                    # m
+float64 dy                    # m
+float64 dyaw                  # rad
+float64[] error_used          # e_k that produced it: [x m, y m, yaw rad]
+---
+# Result
+bool placed
+string message
+float64[] measured_error      # e_{k+1}, once the placed cell is measured: [x m, y m, yaw rad]
+---
+# Feedback
+string PICKING=picking
+string PLACING=placing
+string MEASURING=measuring
+string phase
