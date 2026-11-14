@@ -22,6 +22,8 @@ Groups (task 1.4 and its reviews, project_plan.md §4B.4):
            and side-on sweeps), placed exactly and with the fixture error: zero
            findings. `--setup arm|fixed` sends any other group through a dataset
            setup instead of `--sensors`.
+* fixtures clean modules under three more ~5-sigma fixture errors in other directions
+           (FIXTURES): zero findings. Arm unless --setup says otherwise.
 
 Each case prints one line (TP / FN / FP / other) and its findings; FN lines say
 what was found there instead. Lives in the package, not a scratch folder:
@@ -136,6 +138,16 @@ def line(tag, rep, ev, td, extra=""):
 
 X = CFG.cell_centre_x
 FIXTURE = (0.15, -0.10, 0.03, 0.05, 0.02)
+# More reloads at the same severity (~5 sigma of the dataset's pallet error, dataset.yaml
+# `fixture`), in other directions. One draw was all the gates tried, and the arm's
+# false alarms under it never showed under the dataset's own draws, nor the reverse
+# (fixlist F8, 13 Nov 2026).
+FIXTURES = {
+    "mirror": (-0.15, 0.10, -0.03, -0.05, -0.02),
+    "yaw": (0.03, -0.03, 0.0, -0.05, 0.02),
+    "y": (0.0, -0.15, 0.02, 0.02, -0.02),
+}
+STAGES = ("pre_busbar", "pre_weld", "post_weld")
 
 
 def single_cases():
@@ -167,57 +179,76 @@ def single_cases():
     ]
 
 
+def fixture_cases():
+    return [("pre_busbar", "fixture + cell_placement", [D.cell_placement(4, dx=0.3, dy=0.0)]),
+            ("pre_busbar", "fixture + terminal_height", [D.terminal_height(6, "pos", dz=0.15)]),
+            ("pre_weld", "fixture + carrier .3", [D.carrier_seating(0.3)]),
+            ("pre_weld", "fixture + busbar_pose", [D.busbar_pose(0, dx=0.3)]),
+            ("post_weld", "fixture + seam_deviation", [D.seam_deviation(1, 7, dy=0.4)]),
+            ("post_weld", "fixture + weld_path_drift .15", [D.weld_path_drift(1, 5, amp=0.15, wavelength=6.0)]),
+            ("post_weld", "fixture clean", [])]
+
+
+def subtol_cases():
+    return [("pre_busbar", "terminal_height 0.08", [D.terminal_height(6, "pos", dz=0.08)]),
+            ("pre_busbar", "cell dy 0.15", [D.cell_placement(4, dy=0.15)]),
+            ("pre_weld", "busbar_liftoff 0.1", [D.busbar_liftoff(2, gap=0.1)]),
+            ("pre_weld", "carrier dz 0.1", [D.carrier_seating(0.1)]),
+            ("post_weld", "seam_deviation 0.15", [D.seam_deviation(1, 7, dy=0.15)]),
+            # 8 % short: the bare bead ends once read as dents (1.8)
+            ("post_weld", "short_weld 0.08", [D.short_weld(1, 7, fraction=0.92)])]
+
+
+def group_cases(group: str) -> list[tuple[str, str, list, dict]]:
+    """(tag, stage, defects, run() keywords) for each case of a group that is a
+    list of cases. The tag is the line `main` prints, and what
+    defectgen/known_cases names a regress case by."""
+    if group == "single":
+        return [(f"{st} {name}", st, d, {}) for st, name, d in single_cases()]
+    if group == "fixture":
+        return [(f"{st} {name}", st, d, {"fixture": FIXTURE}) for st, name, d in fixture_cases()]
+    if group == "seeds":
+        return [(f"{st} clean noise={n}", st, [], {"noise": n}) for st in STAGES for n in (1, 2, 3)]
+    if group == "subtol":
+        return [(f"{st} {name} (under tolerance: expect no findings)", st, d, {}) for st, name, d in subtol_cases()]
+    if group == "arm":
+        return [(f"{st} clean {'fixture' if fx else 'placed'}", st, [], {"fixture": fx})
+                for st in STAGES for fx in (None, FIXTURE)]
+    if group == "fixtures":
+        return [(f"{st} clean fixture {name}", st, [], {"fixture": fx}) for name, fx in FIXTURES.items() for st in STAGES]
+    raise ValueError(f"{group} is not a list of cases")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(prog="python -m defectgen.regress", description=__doc__.split("\n")[0])
     ap.add_argument("group", choices=["single", "fixture", "seeds", "subtol", "snapshot", "overlap", "arm",
-                                      "width"])
+                                      "fixtures", "width"])
     ap.add_argument("--sensors", nargs="+", default=["line_scan"])
     ap.add_argument("--setup", choices=["fixed", "arm"], default=None,
                     help="scan through this dataset setup instead of --sensors")
-    ap.add_argument("--stage", default=None, help="single: only this stage's cases")
+    ap.add_argument("--stage", default=None, help="only this stage's cases")
     args = ap.parse_args()
     import logging
 
     logging.basicConfig(level=logging.WARNING)
     g, sens = args.group, args.sensors
-    setup = "arm" if g == "arm" else args.setup
+    setup = "arm" if g == "arm" else args.setup if g != "fixtures" or args.setup else "arm"
     print(f"group {g}, " + (f"setup {setup}" if setup else f"sensors {sens}"), flush=True)
 
     def run_(*a, **kw):
         return run(*a, setup=setup, **kw)
-    if g == "single":
-        for st, name, d in single_cases():
+    if g in ("single", "fixture", "seeds", "subtol", "arm", "fixtures"):
+        for tag, st, d, kw in group_cases(g):
             if args.stage and st != args.stage:
                 continue
-            rep, ev, td = run_(st, d, sens)
-            line(f"{st} {name}", rep, ev, td)
-    elif g == "fixture":
-        for st, name, d in [("pre_busbar", "fixture + cell_placement", [D.cell_placement(4, dx=0.3, dy=0.0)]),
-                            ("pre_busbar", "fixture + terminal_height", [D.terminal_height(6, "pos", dz=0.15)]),
-                            ("pre_weld", "fixture + carrier .3", [D.carrier_seating(0.3)]),
-                            ("pre_weld", "fixture + busbar_pose", [D.busbar_pose(0, dx=0.3)]),
-                            ("post_weld", "fixture + seam_deviation", [D.seam_deviation(1, 7, dy=0.4)]),
-                            ("post_weld", "fixture + weld_path_drift .15",
-                             [D.weld_path_drift(1, 5, amp=0.15, wavelength=6.0)]),
-                            ("post_weld", "fixture clean", [])]:
-            rep, ev, td = run_(st, d, sens, fixture=FIXTURE)
-            line(f"{st} {name}", rep, ev, td, str(np.round(rep.captures[0].get("icp", {}).get("translation_mm", []), 4)))
-    elif g == "seeds":
-        for st in ("pre_busbar", "pre_weld", "post_weld"):
-            for n in (1, 2, 3):
-                rep, ev, td = run_(st, [], sens, noise=n)
-                line(f"{st} clean noise={n}", rep, ev, td)
-    elif g == "subtol":
-        for st, name, d in [("pre_busbar", "terminal_height 0.08", [D.terminal_height(6, "pos", dz=0.08)]),
-                            ("pre_busbar", "cell dy 0.15", [D.cell_placement(4, dy=0.15)]),
-                            ("pre_weld", "busbar_liftoff 0.1", [D.busbar_liftoff(2, gap=0.1)]),
-                            ("pre_weld", "carrier dz 0.1", [D.carrier_seating(0.1)]),
-                            ("post_weld", "seam_deviation 0.15", [D.seam_deviation(1, 7, dy=0.15)]),
-                            # 8 % short: the bare bead ends once read as dents (1.8)
-                            ("post_weld", "short_weld 0.08", [D.short_weld(1, 7, fraction=0.92)])]:
-            rep, ev, td = run_(st, d, sens)
-            line(f"{st} {name} (under tolerance: expect no findings)", rep, ev, td)
-    elif g == "snapshot":
+            rep, ev, td = run_(st, d, sens, **kw)
+            extra = ""
+            if g == "fixture":
+                extra = str(np.round(rep.captures[0].get("icp", {}).get("translation_mm", []), 4))
+            elif g in ("arm", "fixtures"):
+                extra = str({k: len(v) for k, v in rep.uncovered.items()})
+            line(tag, rep, ev, td, extra)
+    if g == "snapshot":
         for st in ("pre_busbar", "pre_weld", "post_weld"):
             rep, ev, td = run_(st, [], ["snapshot"])
             line(f"{st} clean", rep, ev, td, str({k: len(v) for k, v in rep.uncovered.items()}))

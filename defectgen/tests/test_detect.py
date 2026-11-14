@@ -300,37 +300,69 @@ def test_a_steep_face_moved_within_registration_is_not_a_region():
         assert len([g for g in regions if g.kind == "raised"]) == want
 
 
-def test_a_region_one_ray_short_at_5_sigma_is_kept_on_its_3_sigma_neighbour():
-    """Fixlist F8: a 0.15 mm spatter drop on dim copper put five rays over
-    5 sigma and its sixth at 3.4 sigma, one short of min_points, and was lost.
-    Rays over 3 sigma joined to one over 5 make the region; noise alone makes
-    none, and a lone 5 sigma ray with no neighbours over 3 is not one."""
+def _bumped(surface, bumps, sd=0.01, seed=1, misreg=0.0, rows=150, cols=150):
+    """Raised regions on a noisy scan of `surface` with rays set to given heights."""
     from defectgen.detect import Capture, load_detect_params, residuals
 
-    p = load_detect_params()
-    sd = 0.01
-    gold, grid = _surface(lambda x: np.zeros_like(x), rows=150, cols=150)
-    rows, cols = grid
-    rng = np.random.default_rng(1)
+    gold, grid = _surface(surface, rows=rows, cols=cols)
+    pts = gold.points.copy()
+    pts[:, 2] += np.clip(np.random.default_rng(seed).normal(0.0, sd, len(pts)), -2.5 * sd, 2.5 * sd)
+    for (rr, cc), h in bumps.items():
+        pts[rr * cols + cc, 2] = gold.points[rr * cols + cc, 2] + h
+    cap = Capture("toy", pts, gold.index, grid, np.eye(4)[None], {})
+    regions, stats = residuals(cap, gold, load_detect_params(), misreg=misreg)
+    return [g for g in regions if g.kind == "raised"], stats
 
-    def run(bumps):
-        pts = gold.points.copy()
-        pts[:, 2] += np.clip(rng.normal(0.0, sd, len(pts)), -2.5 * sd, 2.5 * sd)
-        for (rr, cc), h in bumps.items():
-            pts[rr * cols + cc, 2] = h
-        cap = Capture("toy", pts, gold.index, grid, np.eye(4)[None], {})
-        regions, stats = residuals(cap, gold, p, misreg=0.0)
-        return [g for g in regions if g.kind == "raised"], stats
 
-    drop = {(70, 70): 8 * sd, (70, 71): 8 * sd, (71, 70): 8 * sd, (71, 71): 8 * sd, (72, 71): 8 * sd}
-    strict, stats = run(drop)
+def test_a_small_compact_group_is_a_region_on_its_summed_evidence():
+    """Fixlist F8: spatter drops on dim copper put 2-5 rays over 5 sigma and
+    6-8 over 3 sigma in compact blobs, and were lost ray by ray. A small
+    compact group of rays over 3 sigma with two or more over 5 is a region.
+    Noise alone makes nothing, nor does a lone strong ray."""
+    flat = lambda x: np.zeros_like(x)
+    s5, s4 = 8 * 0.01, 4 * 0.01
+    drop = {(70, 70): s5, (70, 71): s5, (71, 70): s5, (71, 71): s5, (72, 71): s5}
+    strict, stats = _bumped(flat, drop)
     assert strict == [] and stats["regions_grown"] == 0                # 5 rays: below min_points
-    grown, stats = run({**drop, (72, 72): 4 * sd})
+    grown, stats = _bumped(flat, {**drop, (72, 72): s4})
     assert len(grown) == 1 and grown[0].n == 6 and stats["regions_grown"] == 1
-    alone, _ = run({(30, 30): 8 * sd, (30, 31): 2.5 * sd})              # neighbours under 3 sigma
+    assert len(grown[0].core_scan_idx) == 5
+    l4 = {(40, 40): s5, (40, 41): s5, (40, 42): s4, (41, 40): s4, (41, 41): s4, (41, 42): s4, (42, 41): s4}
+    found, _ = _bumped(flat, l4)                                       # 2 strong + 5 weak in 3 x 3
+    assert len(found) == 1 and found[0].n == 7
+    alone, _ = _bumped(flat, {(30, 30): s5, (30, 31): 2.5 * 0.01})     # neighbours under 3 sigma
     assert alone == []
-    noise, stats = run({})
+    noise, stats = _bumped(flat, {})
     assert noise == [] and stats["regions_grown"] == 0
+
+
+def test_summed_evidence_never_makes_lines_chains_or_big_areas():
+    """Fixlist F8, first form: growing over any weak area chained single
+    strong rays along a foam pad's top into one-ray-wide 6-7 ray "fod" lines
+    (arm regression, 13 Nov 2026). Not a line, not two pieces joined by a
+    thin chain, not one strong ray, not a big weak area."""
+    flat = lambda x: np.zeros_like(x)
+    s5, s4 = 8 * 0.01, 4 * 0.01
+    line = {(40, c): s5 for c in range(40, 44)} | {(40, 44): s4, (40, 45): s4}
+    chain = {(100, 100): s5, (101, 100): s5, (100, 106): s5, (101, 106): s5} | {(100, c): s4 for c in range(101, 106)}
+    one = {(120, 120): s5} | {(r, c): s4 for r in (120, 121) for c in (121, 122)} | {(121, 120): s4}
+    big = {(r, c): s4 for r in range(60, 65) for c in range(100, 105)} | {(62, 102): s5, (62, 103): s5}
+    for name, bumps in (("line", line), ("chain", chain), ("one strong ray", one), ("big area", big)):
+        regions, stats = _bumped(flat, bumps)
+        assert regions == [] and stats["regions_grown"] == 0, name
+
+
+def test_summed_evidence_stays_off_edges():
+    """A group with any ray within the step band (where misregistration
+    lives) is not a region; the same group on open surface is."""
+    step = lambda x: np.where(x >= 7.5, 1.0, 0.0)                        # a 1 mm step at column 75
+    s5, s4 = 8 * 0.01, 4 * 0.01
+    block = lambda c0: {(70, c0): s5, (70, c0 + 1): s5, (71, c0): s5, (71, c0 + 1): s5, (72, c0 + 1): s5,
+                        (72, c0 + 2): s4}
+    on_edge, _ = _bumped(step, block(72))
+    assert on_edge == []
+    open_, stats = _bumped(step, block(20))
+    assert len(open_) == 1 and stats["regions_grown"] == 1
 
 
 def test_noise_follows_the_returned_signal_and_a_defect_does_not_move_it():

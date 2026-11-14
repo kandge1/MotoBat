@@ -11,7 +11,7 @@ date (`~~item~~ — **done 5 Nov 2026**`) rather than deleting it, per the house
 Section references like §4A.4 point into `project_plan.md`; §7 and §12 point into
 `module_spec.md`.
 
-*Last updated: 13 Nov 2026. **§F is new**: eight findings from the 1.7 dataset (F5: run speed, first pass done 12 Nov; F6: the arm plan and detector faults the arm column exposed, fixed 12 Nov; F7: the v2 rerun's arm false alarms, fixed 13 Nov; F8: a spatter drop F7's threshold lost, fixed 13 Nov). F1 and F2 are
+*Last updated: 14 Nov 2026. **§F is new**: nine findings from the 1.7 dataset (F5: run speed, first pass done 12 Nov; F6: the arm plan and detector faults the arm column exposed, fixed 12 Nov; F7: the v2 rerun's arm false alarms, fixed 13 Nov; F8: spatter drops F7's threshold lost, fixed 14 Nov; F9: one-terminal arm cell poses, fixed 14 Nov). F1 and F2 are
 geometry against tolerance contradictions, F3 and F4 detector limitations. D1 now matters more: the
 dataset's in-spec / out-of-spec labels rest on the tolerances. A, B, C and E are closed (1 Nov and 4 Nov).*
 
@@ -316,7 +316,8 @@ CAD, not the detector. Write-up: `project_plan.md` §4B.6, "A strip that moves w
 | ~~F5~~ | ~~Arm cases run on one core: ~270 s per welded module~~ — **first pass done 12 Nov 2026**: 1.6–2× faster, results unchanged | speed | cheap reruns: 1.13 held-out set, any detector change |
 | F6 | The arm column measured a flawed arm plan: FOD 60 %, in-spec welds rejected, wall dents 12/20 — **fixed 12 Nov 2026**, arm column to be rerun | coverage + detector | a fair fixed-vs-arm verdict (1.10) |
 | F7 | The v2 arm rerun raised 1,126 false-alarm regions in 9 of its first 128 modules, plus 7 single ones — **fixed 13 Nov 2026**, rerun v2 stopped | detector | a false-alarm rate that means something; the v2 run was spending 30 h on it |
-| F8 | F7's honest dim-ray threshold lost two fixed spatter drops: a region one ray short at 5σ — **fixed 13 Nov 2026** (region growing), gates running | detector | spatter detection rate on both setups (1.8) |
+| F8 | F7's honest dim-ray threshold lost fixed spatter drops: evidence spread over a region — **fixed 14 Nov 2026** (a small compact group is a region on its summed evidence; first form withdrawn: it drew foam-edge lines) | detector | spatter detection rate on both setups (1.8) |
+| F9 | Arm cells placed from one terminal: a 0.08° yaw step on a 57.5 mm lever moved unmoved cells 0.1 mm in the module as measured — **fixed 14 Nov 2026** (both terminals) | detector | arm false-alarm rate; arm cell yaw / position (1.8, 1.9) |
 
 ### F1 — Carrier seating vs busbar gap
 
@@ -472,40 +473,106 @@ the binary classes, on both setups: `data/gates_v3.sh`, logs `data/regress_logs/
 **Done when.** The gates show no lost detections against v2 and no false alarms. Then both columns are
 rerun on this detector (v2 archived to `data/dataset_plan_v2`).
 
-### F8 — F7's dim-ray threshold lost two spatter drops: a region one ray short
+### F8 — F7's dim-ray threshold lost spatter drops: evidence spread over a region
 
 **What it is.** The F7 gate on the fixed setup found 59 of 61 targeted cases unchanged. The other two,
-`spatter L3_0.15_s0` and `L4_0.2_s0`, went from *partial* (1 of 5 drops found, as in v1 and v2) to *miss*.
-The lost drop sat on copper, and its rays came back dim (signal 0.02–0.03, against ~0.96 around it).
-F7's noise fit raised the threshold there from 0.050 to 0.10–0.12 mm, and the drop kept 5 rays over it,
-one short of `min_points` (6). With the fit off, both cases return to *partial*.
+`spatter L3_0.15_s0` and `L4_0.2_s0`, went from *partial* (as in v1 and v2) to *miss*. The drops sat on
+copper, and their rays came back dim (signal 0.02–0.03, against ~0.96 around them). F7's noise fit raised
+the threshold there from 0.050 to 0.10–0.12 mm. L3's drop kept 5 rays over it, one short of `min_points`
+(6); L4's four drops kept only 2–3 each, though 6–8 of their rays were over 3σ, in compact 3 × 3 to
+2 × 5 blobs. With the fit off, both cases return to *partial*.
 
 **Which threshold was right.** The simulator's noise on those rays is ~0.044 mm (σ grows as
-√(0.5/signal) below 0.5). So v2's 0.050 was ~1σ there and its find was luck, and F7's threshold is the
-honest one, still under the true 5σ. The drop *is* there, though: its six rays are all well above the
-noise taken together. A test that judges each ray alone throws that away.
+√(0.5/signal) below 0.5). So v2's 0.050 was ~1σ there and its finds were luck, and F7's threshold is the
+honest one. The drops *are* there, though: each ray is only 2–5σ, but six to eight of them together are
+~10σ. A test that judges each ray alone throws that away.
 
-**Fix: grow a region over weaker rays joined to a strong one** (`detect.residuals`, `residual.k_grow` = 3).
-After the strict pass, a connected group of rays each over 3σ, *and* over every misregistration
-allowance (those are bounds, not noise), that holds at least one ray over the full 5σ threshold and
-overlaps no region the strict pass kept, is judged as a region by the same filters (min_points, area,
-thinness, aspect). Every region the strict pass keeps is unchanged, so this can only add findings.
-In noise alone a 5σ ray (one-sided p ≈ 3×10⁻⁷) with five connected neighbours each over 3σ (p ≈ 1.3×10⁻³,
-at most 8 neighbours each) is ~10⁻¹⁰ per capture. The risk is systematic residuals, not noise, and the
-gates measure that. `stats["regions_grown"]` counts the added regions per capture. Test:
-`test_a_region_one_ray_short_at_5_sigma_is_kept_on_its_3_sigma_neighbour`. Spatter L3/L4/L5 on fixed:
-back to *partial*, 0 false alarms.
+**First form, withdrawn: grow over any weak area** (13 Nov). After the strict pass, any connected group
+of rays over 3σ holding one ray over 5σ was judged as a region. The arm regression then raised 2 "fod"
+false alarms on a clean module under the stress fixture error, in one close-up snapshot. Both were
+**one-ray-wide lines** (0.04 × 1.5–1.8 mm) along the top of the foam pad between cells 5 and 6, built
+from single strong rays (1, and 2 + 1 + 1) chained by weak ones. A 0.15 mm shift slides the pad/can
+boundary between rays, so those were slivers of an edge, not objects. Two holes let them through: growth
+connected separate pieces, and the thinness filter only rejects lines of 7.5 rays or more. The noise-only
+arithmetic used to justify it (~10⁻¹⁰ per capture) assumed independent rays. Every false alarm so far
+has been spatially correlated structure, which is exactly what adding up neighbours collects.
 
-**Done when.** `data/gates_f8.sh` (the F7 gate groups, plus the 8 other arm modules v2 had false alarms
-on) shows no lost detection against v3's gates and no new false alarm. Then v3 launches on this detector.
+**Second form, withdrawn: complete a 4–5-ray core with one ring.** It removed the foam lines and brought
+L3 back, but L4's drops have 2–3 strong rays, so L4 stayed a miss.
+
+**Fix: a small compact group is a region on its summed evidence** (`detect.residuals`; `residual.k_grow`
+3, `grow_strong_min` 2, `grow_max_points` 16, `grow_aspect` 2.5, `grow_fill` 0.5). After the strict
+pass, a connected group of rays over the weak threshold (3σ, and every misregistration allowance: those
+are bounds, not noise) is judged as a region by the same filters if it is:
+- **small:** at most 16 rays. Large weak areas are where a systematic offset under threshold would hide,
+  and the strict pass keeps large things.
+- **compact:** two or more rays across both ways, its box no more than 2.5 × as long as it is wide, and
+  at least half full. A line or a chain fails.
+- **backed:** at least 2 of its rays over the full 5σ threshold.
+- **off every edge:** no ray in the step band, and every ray returned.
+- **clear:** of any region kept, and of any strict piece that was rejected for its *shape*
+  (6 or more rays), which growth must not overturn.
+
+Classification's fraction tests (near an edge, near an outline, explained) are judged on its strong
+rays as well, so weak rays cannot dilute them. Every region the strict pass keeps is unchanged.
+`stats["regions_grown"]` counts the added regions per capture. Tests:
+`test_a_small_compact_group_is_a_region_on_its_summed_evidence`,
+`test_summed_evidence_never_makes_lines_chains_or_big_areas` (line, chain, one strong ray, big area),
+`test_summed_evidence_stays_off_edges`. Results:
+- fixed spatter L3 / L4 / L5: *partial* / *partial* / *partial*, 0 false alarms (v1 and v2 had the same);
+- the foam case: 0 regions grown, 0 false alarms;
+- three new ~5σ stress fixture errors (`regress fixtures`), fixed pre-busbar: 0 false alarms.
+
+**Done when.** The proof run (`data/overnight_f8.sh`) passes: the stress known cases, then the null
+sweep (every clean, in-spec and below-detectable case, both setups) with no false alarm, then every
+known case.
 
 **Why this keeps happening, and the guard (13 Nov 2026).** Each fix moves the trade-off between
 finding defects and raising false alarms. F7 raised a threshold to kill false alarms and cost a
-real find, so a fix has to be checked against every past failure, not only its own. The checks were
-rebuilt by hand for each fix and compared by eye. They are now a committed list,
-`defectgen/known_cases/cases.yaml`: 138 cases, each with its accepted outcome and false-alarm count
-and the fix-list item it came from. `run.py` judges them PASS / BETTER / FAIL. A full pass records a
-fingerprint of the detector's code and configs. `data/chain_v3.sh` and `cloud/run_remote.sh` refuse to
-start without a pass for the code as it is. Tested on old results: v3-without-F8 fails exactly the 2
-spatter cases, and v2 fails 12 of the 13 F7 cases.
+real find, so a fix has to be checked against every past failure, not only its own. Two more reasons,
+found on 13–14 Nov:
+1. **The checks tried one draw of the nuisance variables.** Every regression case with a fixture error
+   used the same 0.15 / −0.10 / 0.03 mm, 0.05° offset, and the targeted cases were all seed 0. The dataset
+   draws its own fixture error per scan (σ 0.03 mm, 0.01°), and in-spec part motions, and finds the
+   corners the checks never visited.
+2. **Fixes were justified with noise-only arithmetic.** Every false alarm so far was correlated structure.
 
+The checks were rebuilt by hand for each fix and compared by eye. They are now a committed list,
+`defectgen/known_cases/cases.yaml`: 243 cases (dataset cases and `regress` group cases), each with its
+accepted result and the fix-list item it came from. `run.py` judges them PASS / BETTER / FAIL, refuses to
+compute without a memory cap, and `--judge-only` judges existing results without computing. A full pass
+records a fingerprint of the detector's code and configs, and `data/chain_v3.sh` and
+`cloud/run_remote.sh` refuse to start without a pass for the code as it is. Tested on old results:
+v3-without-F8 fails exactly the 2 spatter cases, and v2 fails 12 of the 13 F7 cases. The nuisance draws
+are covered two ways: `regress fixtures` adds three more ~5σ fixture errors in other directions, and
+the proof run's null sweep covers the realistic draws across 200 modules per setup.
+
+### F9 — An arm cell placed from one terminal: a yaw step on a lever arm
+
+**What it is.** The arm's 0.05 mm handling-damage case (`handling_damage L1_0.05_s0`) had false alarms
+in every run: 4 in v1, 1 in v3. The v3 one is a 3.9 mm² "dent" on cell 0's wrap, 31 × 32 rays, seen by
+the end-on fast sweep (`sweep_y_x-172.375_r-60_fast`). It is uniformly 0.119 mm deep (5–95 %:
+0.116–0.124), while the same material around it reads 0.000 ± 0.009. The injected dent is elsewhere, on
+the side plate.
+
+**Cause.** The module as measured had moved cell 0 by dx −0.103 mm and yaw −0.082°, and cell 2 by −0.098
+mm and −0.077°. Neither had moved. Each arm sweep sees one terminal row (y = ±57.5), so every arm cell was
+placed from **one** terminal:
+- **A quantised yaw.** A pad's yaw is known only to a sample step over its length:
+  0.025 mm / 17.5 mm = 0.082°. That's the yaw those cells got. It's also why the arm's cell yaw read
+  0 below ~0.1° in v2.
+- **A lever arm.** Pivoted about a pad 57.5 mm from the cell's centre, that step moves the centre
+  ~0.08 mm. The "resolved" test (more than half a sample) passed it, the model moved the cell, and the
+  real, unmoved cell then read 0.12 mm off. That is just past the 0.1155 mm sideways allowance on that
+  oblique facet.
+
+**Fix** (`detect._terminals_and_cells`). When the capture chosen for a cell saw only one terminal, and
+both terminals were seen by captures that each registered X, Y and yaw, the cell is fitted on both
+terminals (`rigid_2d`). Both arm sweeps register to the same load datum, so both are in the module's
+frame to half a sample. Two pads 115 mm apart give yaw to ~0.01°, with no lever arm, and the
+"resolved" test uses the coarser capture's spacing. The fixed pass sees both terminals in one capture,
+so it is unchanged. The arm's cell yaw and position measurements improve as a side effect.
+
+**Done when.** `handling_damage L1_0.05_s0` on the arm has no false alarm (known case, now accepted at
+0), and the proof run passes. The arm cell cases (cell_shift, cell_yaw, the F7 modules) in the stress
+known cases must not get worse.

@@ -24,7 +24,12 @@ systemd-run --user --scope -q -p MemoryMax=14G -p MemorySwapMax=0 python defectg
 - `--root DIR`: results folder. Reuse it to resume, or point it at an earlier run's output to
   re-judge that output without recomputing.
 - `--list`: print the selected cases and stop.
+- `--judge-only`: judge the results already in `--root`; never compute. A missing case prints MISSING.
 - `--check`: check whether a full pass is recorded for the code as it is now. Runs nothing.
+
+It refuses to compute a case outside a memory cap (one arm case can take 14 GB), unless given
+`--uncapped`. A results folder is stamped with the code that computed it (`CODE`); reusing one from
+other code is refused, and a full pass is recorded only for a folder stamped with the current code.
 
 Each case prints `PASS`, `BETTER` or `FAIL` with the reason. The exit status is 0 only if
 nothing fails.
@@ -32,6 +37,14 @@ nothing fails.
 A full run with no `--setup` or `--src` that passes writes `data/known_cases_runs/LAST_PASS.json`,
 which holds a fingerprint of every `.py` and `.yaml` in `src/defectgen/` plus `cases.yaml`. Any edit
 changes the fingerprint, so the known cases must pass again.
+
+## Two kinds of case
+
+- **Dataset cases** (`tier: pod | grr | clean`): one module from the 1.7 dataset, regenerated from its
+  seed, judged on its outcome and false alarms.
+- **Regress cases** (`tier: regress`): one case of a `python -m defectgen.regress` group (`single`,
+  `fixture`, `seeds`, `subtol`, `arm`, `fixtures`) through one setup, judged on its TP / FN / false
+  alarm counts. A sub-tolerance case carries `tp_max: 0`: finding it is a false reject.
 
 ## The rule
 
@@ -54,5 +67,6 @@ When a run turns up something wrong:
 2. Fix it, and add a mechanism test.
 3. The fix is done when the whole file passes, the new cases and every old one.
 
-Accepted values as of 13 Nov 2026 come from the v3 gates (detector with F7 and F8): 138 cases,
-64 fixed and 74 arm.
+Accepted values (13–14 Nov 2026) come from the v3 gates (detector F7), raised where a fix made a case
+what it should be (F8 spatter, F9 cell wrap), and zero findings for the new `fixtures` stress group:
+243 cases, 118 fixed and 125 arm.

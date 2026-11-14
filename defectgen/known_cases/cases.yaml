@@ -99,7 +99,7 @@ cases:
   - {setup: "arm", tier: "pod", family: "fod", name: "L4_0.4_s0", outcome: "hit", fa: 0, meas: null, src: [F6]}
   - {setup: "arm", tier: "pod", family: "fod", name: "L5_0.6_s0", outcome: "hit", fa: 0, meas: null, src: [F6]}
   - {setup: "arm", tier: "pod", family: "handling_damage", name: "L0_0.02_s0", outcome: "found", fa: 0, meas: null, src: [F6]}
-  - {setup: "arm", tier: "pod", family: "handling_damage", name: "L1_0.05_s0", outcome: "not_found", fa: 1, meas: null, src: [F6], note: "a 0.05 mm dent below the scored size; v1 had 4 false alarms here"}
+  - {setup: "arm", tier: "pod", family: "handling_damage", name: "L1_0.05_s0", outcome: "not_found", fa: 0, meas: null, src: [F6, F9], note: "v1 4 and v3 1 false alarms: cell 0 placed from one terminal, its 0.08 deg yaw step pivoted 57.5 mm, moved the cell 0.1 mm in the module as measured (F9)"}
   - {setup: "arm", tier: "pod", family: "handling_damage", name: "L2_0.1_s0", outcome: "hit", fa: 0, meas: null, src: [F6]}
   - {setup: "arm", tier: "pod", family: "handling_damage", name: "L3_0.2_s0", outcome: "hit", fa: 0, meas: null, src: [F6]}
   - {setup: "arm", tier: "pod", family: "handling_damage", name: "L4_0.4_s0", outcome: "hit", fa: 0, meas: null, src: [F6]}
@@ -157,3 +157,111 @@ cases:
   - {setup: "arm", tier: "clean", family: "pre_busbar", name: "m0", outcome: "clean_ok", fa: 0, meas: null, src: [clean]}
   - {setup: "arm", tier: "clean", family: "pre_weld", name: "m0", outcome: "clean_ok", fa: 0, meas: null, src: [clean]}
   - {setup: "arm", tier: "clean", family: "post_weld", name: "m0", outcome: "clean_ok", fa: 0, meas: null, src: [clean]}
+
+  # regress cases (defectgen.regress groups through each setup), judged on TP / FN / false alarms.
+  # Accepted: the v3 gates (13 Nov 2026, detector F7); `fixtures` is new (F8): clean, so zero findings.
+  - {setup: "fixed", tier: "regress", family: "single", name: "pre_busbar clean", tp: 0, fn: 0, fa: 0, src: [regress]}
+  - {setup: "fixed", tier: "regress", family: "single", name: "pre_busbar cell_placement", tp: 1, fn: 0, fa: 0, src: [regress]}
+  - {setup: "fixed", tier: "regress", family: "single", name: "pre_busbar terminal_height", tp: 1, fn: 0, fa: 0, src: [regress]}
+  - {setup: "fixed", tier: "regress", family: "single", name: "pre_busbar terminal_tilt", tp: 1, fn: 0, fa: 0, src: [regress]}
+  - {setup: "fixed", tier: "regress", family: "single", name: "pre_busbar missing_cell", tp: 1, fn: 0, fa: 0, src: [regress]}
+  - {setup: "fixed", tier: "regress", family: "single", name: "pre_busbar reversed_polarity", tp: 1, fn: 0, fa: 0, src: [regress]}
+  - {setup: "fixed", tier: "regress", family: "single", name: "pre_busbar missing_pad", tp: 1, fn: 0, fa: 0, src: [regress]}
+  - {setup: "fixed", tier: "regress", family: "single", name: "pre_busbar fod", tp: 1, fn: 0, fa: 0, src: [regress]}
+  - {setup: "fixed", tier: "regress", family: "single", name: "pre_busbar handling_damage(top)", tp: 1, fn: 0, fa: 0, src: [regress]}
+  - {setup: "fixed", tier: "regress", family: "single", name: "pre_weld clean", tp: 0, fn: 0, fa: 0, src: [regress]}
+  - {setup: "fixed", tier: "regress", family: "single", name: "pre_weld busbar_pose", tp: 1, fn: 0, fa: 0, src: [regress]}
+  - {setup: "fixed", tier: "regress", family: "single", name: "pre_weld busbar_liftoff", tp: 1, fn: 0, fa: 0, src: [regress]}
+  - {setup: "fixed", tier: "regress", family: "single", name: "pre_weld carrier_seating", tp: 1, fn: 0, fa: 0, src: [regress]}
+  - {setup: "fixed", tier: "regress", family: "single", name: "post_weld clean", tp: 0, fn: 0, fa: 0, src: [regress]}
+  - {setup: "fixed", tier: "regress", family: "single", name: "post_weld missing_weld", tp: 2, fn: 0, fa: 0, src: [regress]}
+  - {setup: "fixed", tier: "regress", family: "single", name: "post_weld short_weld", tp: 2, fn: 0, fa: 0, src: [regress]}
+  - {setup: "fixed", tier: "regress", family: "single", name: "post_weld weld_path_drift", tp: 2, fn: 0, fa: 0, src: [regress]}
+  - {setup: "fixed", tier: "regress", family: "single", name: "post_weld weld_arc", tp: 2, fn: 0, fa: 0, src: [regress]}
+  - {setup: "fixed", tier: "regress", family: "single", name: "post_weld seam_deviation", tp: 2, fn: 0, fa: 0, src: [regress]}
+  - {setup: "fixed", tier: "regress", family: "single", name: "post_weld width_deviation", tp: 2, fn: 0, fa: 0, src: [regress]}
+  - {setup: "fixed", tier: "regress", family: "single", name: "post_weld reinforcement", tp: 2, fn: 0, fa: 0, src: [regress]}
+  - {setup: "fixed", tier: "regress", family: "single", name: "post_weld spatter", tp: 2, fn: 8, fa: 0, src: [regress]}
+  - {setup: "fixed", tier: "regress", family: "single", name: "post_weld liftoff->weld", tp: 7, fn: 1, fa: 0, src: [regress]}
+  - {setup: "fixed", tier: "regress", family: "fixture", name: "pre_busbar fixture + cell_placement", tp: 1, fn: 0, fa: 0, src: [F8]}
+  - {setup: "fixed", tier: "regress", family: "fixture", name: "pre_busbar fixture + terminal_height", tp: 1, fn: 0, fa: 0, src: [F8]}
+  - {setup: "fixed", tier: "regress", family: "fixture", name: "pre_weld fixture + carrier .3", tp: 1, fn: 0, fa: 0, src: [F8]}
+  - {setup: "fixed", tier: "regress", family: "fixture", name: "pre_weld fixture + busbar_pose", tp: 1, fn: 0, fa: 0, src: [F8]}
+  - {setup: "fixed", tier: "regress", family: "fixture", name: "post_weld fixture + seam_deviation", tp: 2, fn: 0, fa: 0, src: [F8]}
+  - {setup: "fixed", tier: "regress", family: "fixture", name: "post_weld fixture + weld_path_drift .15", tp: 2, fn: 0, fa: 0, src: [F8]}
+  - {setup: "fixed", tier: "regress", family: "fixture", name: "post_weld fixture clean", tp: 0, fn: 0, fa: 0, src: [F8]}
+  - {setup: "fixed", tier: "regress", family: "seeds", name: "pre_busbar clean noise=1", tp: 0, fn: 0, fa: 0, src: [regress]}
+  - {setup: "fixed", tier: "regress", family: "seeds", name: "pre_busbar clean noise=2", tp: 0, fn: 0, fa: 0, src: [regress]}
+  - {setup: "fixed", tier: "regress", family: "seeds", name: "pre_busbar clean noise=3", tp: 0, fn: 0, fa: 0, src: [regress]}
+  - {setup: "fixed", tier: "regress", family: "seeds", name: "pre_weld clean noise=1", tp: 0, fn: 0, fa: 0, src: [regress]}
+  - {setup: "fixed", tier: "regress", family: "seeds", name: "pre_weld clean noise=2", tp: 0, fn: 0, fa: 0, src: [regress]}
+  - {setup: "fixed", tier: "regress", family: "seeds", name: "pre_weld clean noise=3", tp: 0, fn: 0, fa: 0, src: [regress]}
+  - {setup: "fixed", tier: "regress", family: "seeds", name: "post_weld clean noise=1", tp: 0, fn: 0, fa: 0, src: [regress]}
+  - {setup: "fixed", tier: "regress", family: "seeds", name: "post_weld clean noise=2", tp: 0, fn: 0, fa: 0, src: [regress]}
+  - {setup: "fixed", tier: "regress", family: "seeds", name: "post_weld clean noise=3", tp: 0, fn: 0, fa: 0, src: [regress]}
+  - {setup: "fixed", tier: "regress", family: "subtol", name: "pre_busbar terminal_height 0.08 (under tolerance: expect no findings)", tp: 0, tp_max: 0, fn: 1, fa: 0, src: [F7]}
+  - {setup: "fixed", tier: "regress", family: "subtol", name: "pre_busbar cell dy 0.15 (under tolerance: expect no findings)", tp: 0, tp_max: 0, fn: 1, fa: 0, src: [F7]}
+  - {setup: "fixed", tier: "regress", family: "subtol", name: "pre_weld busbar_liftoff 0.1 (under tolerance: expect no findings)", tp: 0, tp_max: 0, fn: 1, fa: 0, src: [F7]}
+  - {setup: "fixed", tier: "regress", family: "subtol", name: "pre_weld carrier dz 0.1 (under tolerance: expect no findings)", tp: 0, tp_max: 0, fn: 1, fa: 0, src: [F7]}
+  - {setup: "fixed", tier: "regress", family: "subtol", name: "post_weld seam_deviation 0.15 (under tolerance: expect no findings)", tp: 0, tp_max: 0, fn: 2, fa: 0, src: [F7]}
+  - {setup: "fixed", tier: "regress", family: "subtol", name: "post_weld short_weld 0.08 (under tolerance: expect no findings)", tp: 0, tp_max: 0, fn: 2, fa: 0, src: [F7]}
+  - {setup: "arm", tier: "regress", family: "arm", name: "pre_busbar clean placed", tp: 0, fn: 0, fa: 0, src: [F8]}
+  - {setup: "arm", tier: "regress", family: "arm", name: "pre_busbar clean fixture", tp: 0, fn: 0, fa: 0, src: [F8]}
+  - {setup: "arm", tier: "regress", family: "arm", name: "pre_weld clean placed", tp: 0, fn: 0, fa: 0, src: [F8]}
+  - {setup: "arm", tier: "regress", family: "arm", name: "pre_weld clean fixture", tp: 0, fn: 0, fa: 0, src: [F8]}
+  - {setup: "arm", tier: "regress", family: "arm", name: "post_weld clean placed", tp: 0, fn: 0, fa: 0, src: [F8]}
+  - {setup: "arm", tier: "regress", family: "arm", name: "post_weld clean fixture", tp: 0, fn: 0, fa: 0, src: [F8]}
+  - {setup: "arm", tier: "regress", family: "subtol", name: "pre_busbar terminal_height 0.08 (under tolerance: expect no findings)", tp: 0, tp_max: 0, fn: 1, fa: 0, src: [F7]}
+  - {setup: "arm", tier: "regress", family: "subtol", name: "pre_busbar cell dy 0.15 (under tolerance: expect no findings)", tp: 0, tp_max: 0, fn: 1, fa: 0, src: [F7]}
+  - {setup: "arm", tier: "regress", family: "subtol", name: "pre_weld busbar_liftoff 0.1 (under tolerance: expect no findings)", tp: 0, tp_max: 0, fn: 1, fa: 0, src: [F7]}
+  - {setup: "arm", tier: "regress", family: "subtol", name: "pre_weld carrier dz 0.1 (under tolerance: expect no findings)", tp: 0, tp_max: 0, fn: 1, fa: 0, src: [F7]}
+  - {setup: "arm", tier: "regress", family: "subtol", name: "post_weld seam_deviation 0.15 (under tolerance: expect no findings)", tp: 0, tp_max: 0, fn: 2, fa: 0, src: [F7]}
+  - {setup: "arm", tier: "regress", family: "subtol", name: "post_weld short_weld 0.08 (under tolerance: expect no findings)", tp: 0, tp_max: 0, fn: 2, fa: 0, src: [F7]}
+  - {setup: "arm", tier: "regress", family: "fixture", name: "pre_busbar fixture + cell_placement", tp: 1, fn: 0, fa: 0, src: [F8]}
+  - {setup: "arm", tier: "regress", family: "fixture", name: "pre_busbar fixture + terminal_height", tp: 1, fn: 0, fa: 0, src: [F8]}
+  - {setup: "arm", tier: "regress", family: "fixture", name: "pre_weld fixture + carrier .3", tp: 1, fn: 0, fa: 0, src: [F8]}
+  - {setup: "arm", tier: "regress", family: "fixture", name: "pre_weld fixture + busbar_pose", tp: 1, fn: 0, fa: 0, src: [F8]}
+  - {setup: "arm", tier: "regress", family: "fixture", name: "post_weld fixture + seam_deviation", tp: 2, fn: 0, fa: 0, src: [F8]}
+  - {setup: "arm", tier: "regress", family: "fixture", name: "post_weld fixture + weld_path_drift .15", tp: 2, fn: 0, fa: 0, src: [F8]}
+  - {setup: "arm", tier: "regress", family: "fixture", name: "post_weld fixture clean", tp: 0, fn: 0, fa: 0, src: [F8]}
+  - {setup: "arm", tier: "regress", family: "single", name: "pre_busbar clean", tp: 0, fn: 0, fa: 0, src: [regress]}
+  - {setup: "arm", tier: "regress", family: "single", name: "pre_busbar cell_placement", tp: 1, fn: 0, fa: 0, src: [regress]}
+  - {setup: "arm", tier: "regress", family: "single", name: "pre_busbar terminal_height", tp: 1, fn: 0, fa: 0, src: [regress]}
+  - {setup: "arm", tier: "regress", family: "single", name: "pre_busbar terminal_tilt", tp: 1, fn: 0, fa: 0, src: [regress]}
+  - {setup: "arm", tier: "regress", family: "single", name: "pre_busbar missing_cell", tp: 1, fn: 0, fa: 0, src: [regress]}
+  - {setup: "arm", tier: "regress", family: "single", name: "pre_busbar reversed_polarity", tp: 1, fn: 0, fa: 0, src: [regress]}
+  - {setup: "arm", tier: "regress", family: "single", name: "pre_busbar missing_pad", tp: 1, fn: 0, fa: 0, src: [regress]}
+  - {setup: "arm", tier: "regress", family: "single", name: "pre_busbar fod", tp: 1, fn: 0, fa: 0, src: [regress]}
+  - {setup: "arm", tier: "regress", family: "single", name: "pre_busbar handling_damage(top)", tp: 1, fn: 0, fa: 0, src: [regress]}
+  - {setup: "arm", tier: "regress", family: "single", name: "pre_weld clean", tp: 0, fn: 0, fa: 0, src: [regress]}
+  - {setup: "arm", tier: "regress", family: "single", name: "pre_weld busbar_pose", tp: 1, fn: 0, fa: 0, src: [regress]}
+  - {setup: "arm", tier: "regress", family: "single", name: "pre_weld busbar_liftoff", tp: 1, fn: 0, fa: 0, src: [regress]}
+  - {setup: "arm", tier: "regress", family: "single", name: "pre_weld carrier_seating", tp: 1, fn: 0, fa: 0, src: [regress]}
+  - {setup: "arm", tier: "regress", family: "single", name: "post_weld clean", tp: 0, fn: 0, fa: 0, src: [regress]}
+  - {setup: "arm", tier: "regress", family: "single", name: "post_weld missing_weld", tp: 2, fn: 0, fa: 0, src: [regress]}
+  - {setup: "arm", tier: "regress", family: "single", name: "post_weld short_weld", tp: 2, fn: 0, fa: 0, src: [regress]}
+  - {setup: "arm", tier: "regress", family: "single", name: "post_weld weld_path_drift", tp: 2, fn: 0, fa: 0, src: [regress]}
+  - {setup: "arm", tier: "regress", family: "single", name: "post_weld weld_arc", tp: 2, fn: 0, fa: 0, src: [regress]}
+  - {setup: "arm", tier: "regress", family: "single", name: "post_weld seam_deviation", tp: 2, fn: 0, fa: 0, src: [regress]}
+  - {setup: "arm", tier: "regress", family: "single", name: "post_weld width_deviation", tp: 2, fn: 0, fa: 0, src: [regress]}
+  - {setup: "arm", tier: "regress", family: "single", name: "post_weld reinforcement", tp: 2, fn: 0, fa: 0, src: [regress]}
+  - {setup: "arm", tier: "regress", family: "single", name: "post_weld spatter", tp: 10, fn: 0, fa: 0, src: [regress]}
+  - {setup: "arm", tier: "regress", family: "single", name: "post_weld liftoff->weld", tp: 8, fn: 0, fa: 0, src: [regress]}
+  - {setup: "fixed", tier: "regress", family: "fixtures", name: "pre_busbar clean fixture mirror", tp: 0, fn: 0, fa: 0, src: [F8]}
+  - {setup: "fixed", tier: "regress", family: "fixtures", name: "pre_weld clean fixture mirror", tp: 0, fn: 0, fa: 0, src: [F8]}
+  - {setup: "fixed", tier: "regress", family: "fixtures", name: "post_weld clean fixture mirror", tp: 0, fn: 0, fa: 0, src: [F8]}
+  - {setup: "fixed", tier: "regress", family: "fixtures", name: "pre_busbar clean fixture yaw", tp: 0, fn: 0, fa: 0, src: [F8]}
+  - {setup: "fixed", tier: "regress", family: "fixtures", name: "pre_weld clean fixture yaw", tp: 0, fn: 0, fa: 0, src: [F8]}
+  - {setup: "fixed", tier: "regress", family: "fixtures", name: "post_weld clean fixture yaw", tp: 0, fn: 0, fa: 0, src: [F8]}
+  - {setup: "fixed", tier: "regress", family: "fixtures", name: "pre_busbar clean fixture y", tp: 0, fn: 0, fa: 0, src: [F8]}
+  - {setup: "fixed", tier: "regress", family: "fixtures", name: "pre_weld clean fixture y", tp: 0, fn: 0, fa: 0, src: [F8]}
+  - {setup: "fixed", tier: "regress", family: "fixtures", name: "post_weld clean fixture y", tp: 0, fn: 0, fa: 0, src: [F8]}
+  - {setup: "arm", tier: "regress", family: "fixtures", name: "pre_busbar clean fixture mirror", tp: 0, fn: 0, fa: 0, src: [F8]}
+  - {setup: "arm", tier: "regress", family: "fixtures", name: "pre_weld clean fixture mirror", tp: 0, fn: 0, fa: 0, src: [F8]}
+  - {setup: "arm", tier: "regress", family: "fixtures", name: "post_weld clean fixture mirror", tp: 0, fn: 0, fa: 0, src: [F8]}
+  - {setup: "arm", tier: "regress", family: "fixtures", name: "pre_busbar clean fixture yaw", tp: 0, fn: 0, fa: 0, src: [F8]}
+  - {setup: "arm", tier: "regress", family: "fixtures", name: "pre_weld clean fixture yaw", tp: 0, fn: 0, fa: 0, src: [F8]}
+  - {setup: "arm", tier: "regress", family: "fixtures", name: "post_weld clean fixture yaw", tp: 0, fn: 0, fa: 0, src: [F8]}
+  - {setup: "arm", tier: "regress", family: "fixtures", name: "pre_busbar clean fixture y", tp: 0, fn: 0, fa: 0, src: [F8]}
+  - {setup: "arm", tier: "regress", family: "fixtures", name: "pre_weld clean fixture y", tp: 0, fn: 0, fa: 0, src: [F8]}
+  - {setup: "arm", tier: "regress", family: "fixtures", name: "post_weld clean fixture y", tp: 0, fn: 0, fa: 0, src: [F8]}

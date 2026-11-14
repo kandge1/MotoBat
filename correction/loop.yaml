@@ -1,0 +1,34 @@
+# Task 1.12: the cell-placement correction loop (plan §4B.7, §9.9). Units: mm, mm, deg (x, y, yaw).
+# Source letters as everywhere in MotoBat: S sourced, D derived, A assumed.
+# Tolerances are read from defectgen/src/defectgen/configs/detect.yaml (cell.pos_tol, cell.yaw_tol; terminal.height_tol),
+# measurement noise and bias from a 1.9 %GRR result (validation/grr.<setup>.json).
+
+cells: 2400            # one shift: 200 modules x 12 cells. k runs across modules: the gripper does not reset
+runs: 200              # Monte Carlo runs per controller and gain; the CI is taken across runs
+
+plant:
+  g: 1.0               # A  achieved offset per commanded offset. A robot executes its own offsets almost exactly;
+                       #    g != 1 models a scale error between the station's frame and the robot's
+  g_range: [0.8, 1.2]  # A  the sensitivity check: the loop is designed for g = 1 and run on these
+  sigma_place: [0.05, 0.05, 0.03]   # A  cell placement repeatability, 1 sigma. Robot repeatability is ~0.01 mm (GP7
+                                    #    class); the cell seating on its pads, not the robot, sets this
+  offset: [0.15, -0.10, 0.06]       # A  systematic offset from cell 0: gripper finger or TCP error
+  ramp: [0.0001, 0.0, 0.0]          # A  drift per cell: fixture wear, 0.24 mm in x over the shift
+  step_at: 1200                     # A  a gripper change halfway through the shift ...
+  step: [-0.10, 0.10, -0.05]        # A  ... moves the offset by this
+
+measure:
+  # 1.9 measures cell position X only. Y is assumed to read like X (A). Yaw is derived from two terminal
+  # positions 115 mm apart (D): sigma_yaw = sqrt(2) sigma_xy / 115 rad.
+  terminal_span_mm: 115.0
+  bias_y: 0.0          # A  not measured by 1.9
+  bias_yaw: 0.0        # A
+
+sweep:
+  k: [0.0, 2.2, 0.05]  # start, stop, step of K (the loop gain is a = g K)
+  k_fine: [0.0, 0.2, 0.01]   # finer below 0.2, where the best gain sits
+  show: [0.3, 1.0, 1.6, 2.1]   # step responses drawn: monotone, deadbeat, oscillating, diverging
+
+terminal_height:
+  sigma_process: 0.04  # A  1 sigma of adjacent-terminal height difference from the cells and pads themselves
+  guard_sigmas: [0, 1, 2, 3]   # guard bands tried, in units of the measurement sigma

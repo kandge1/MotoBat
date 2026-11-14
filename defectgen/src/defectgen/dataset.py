@@ -241,6 +241,20 @@ def judge(recipe: Recipe) -> str:
     return "must_find" if value > tol else "in_spec"
 
 
+def expected_truth(recipe: Recipe) -> str:
+    """`judge` before the case runs: what it will be labelled, from the recipe
+    alone. Tolerance families judge their drawn parameters, whose size is the
+    recipe's magnitude (a cell shift's direction is drawn, its length is not).
+    Used to pick cases (`--truth`), never to score them."""
+    if recipe.truth:
+        return recipe.truth
+    if recipe.kind == "binary":
+        return "must_find"
+    if recipe.kind == "presence":
+        return "must_find" if recipe.magnitude >= recipe.params.get("D", np.inf) else "dont_care"
+    return "must_find" if abs(recipe.magnitude) > recipe.tol else "in_spec"
+
+
 def pod_cases(q: dict, detect_params: dict, families: list[str] | None = None) -> list[Recipe]:
     out = []
     for name, fam in q["families"].items():
@@ -672,6 +686,9 @@ def main() -> None:
     ap.add_argument("--summary", action="store_true", help="tabulate what this tier has so far, and exit")
     ap.add_argument("--rescore", action="store_true",
                     help="score the finished cases again from their stored reports (no detection), and exit")
+    ap.add_argument("--truth", nargs="+", default=None, choices=["must_find", "in_spec", "dont_care", "clean"],
+                    help="only cases that will be labelled this (e.g. in_spec dont_care clean: every case where "
+                         "any finding is a false alarm or a false reject)")
     ap.add_argument("--shard", default=None, metavar="I/N",
                     help="run only every N-th case starting at I (0 <= I < N), so N workers split a tier "
                          "with no case run twice (cloud/run_remote.sh)")
@@ -709,6 +726,8 @@ def main() -> None:
                 seen.add(key)
                 pick.append(max((x for x in cases if x.family == key), key=lambda x: (x.magnitude, -len(x.name))))
         cases = pick
+    if args.truth is not None:
+        cases = [c for c in cases if expected_truth(c) in args.truth]
     if shard is not None:
         # Two workers on one case would share its scan scratch folder (SIGBUS, 11 Nov 2026).
         cases = cases[shard[0]::shard[1]]

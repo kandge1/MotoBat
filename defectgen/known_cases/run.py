@@ -12,6 +12,7 @@ resumes, reusing finished cases. A full run: fixed ~30 min, arm ~3 h.
 import argparse
 import gc
 import hashlib
+import os
 import json
 import sys
 import time
@@ -41,13 +42,66 @@ RANK = {"must_find": {"hit": 3, "partial": 2, "miss": 1, "not_covered": 1},
         "in_spec": {"pass": 2, "false_reject": 1}}
 
 
+def slug(name: str) -> str:
+    """A case name as a folder name (regress tags have spaces, '+', '>')."""
+    return "".join(ch if ch.isalnum() or ch in "._-" else "_" for ch in name)
+
+
+class RegressCase:
+    """A case of a defectgen.regress group, run through one dataset setup and
+    scored by its TP / FN / FP counts (evaluate.py), stored like a dataset case."""
+    tier = "regress"
+
+    def __init__(self, group, tag, stage, defects, kw):
+        self.family, self.name, self.stage, self.defects, self.kw = group, tag, stage, defects, kw
+
+    def run(self, setup: str, out: Path) -> dict:
+        from defectgen import regress as R
+        rep, ev, td = R.run(self.stage, self.defects, ["line_scan"], setup=setup, **self.kw)
+        tot = ev["total"]
+        got = {"outcome": "regress", "tp": tot["tp"], "fn": tot["fn"], "false_alarms": tot["fp"],
+               "other": tot["other"], "measured": None, "seconds": round(td, 1),
+               "findings": [{"verdict": v, "cls": f.cls, "magnitude": f.magnitude, "location": list(f.location),
+                             "capture": f.capture, "feature": f.feature}
+                            for f, v in zip(rep.findings, ev["finding_verdicts"])]}
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(got, indent=1, default=float))
+        return got
+
+
+def memory_capped() -> bool:
+    """Is this process inside a cgroup with a memory limit (systemd-run -p
+    MemoryMax=...)? Computing a case uncapped can take the laptop down."""
+    try:
+        path = next(l.split("::", 1)[1].strip() for l in Path("/proc/self/cgroup").read_text().splitlines()
+                    if l.startswith("0::"))
+    except (OSError, StopIteration):
+        return False
+    d = Path("/sys/fs/cgroup") / path.lstrip("/")
+    while d != Path("/sys/fs/cgroup") and d != d.parent:
+        f = d / "memory.max"
+        if f.is_file() and f.read_text().strip() != "max":
+            return True
+        d = d.parent
+    return False
+
+
 def judge(want: dict, got: dict, meas_tol: float) -> tuple[str, list[str]]:
     """PASS / BETTER / FAIL, and the reasons. The scale comes from the accepted
     outcome itself: a recipe's truth is only filled in while it runs, so a
     reused result has none (a first version ranked by it and passed a miss
     against an accepted partial)."""
     why, better = [], False
-    rank = next((t for t in RANK.values() if want["outcome"] in t), None)
+    if "tp_max" in want:                # under tolerance: finding it is a false reject
+        if got["tp"] > want["tp_max"]:
+            why.append(f"flagged an in-spec part: TP {got['tp']} > {want['tp_max']}")
+    elif "tp" in want:                  # a regress case: counts, not an outcome
+        if got["tp"] < want["tp"]:
+            why.append(f"found {got['tp']} < accepted {want['tp']}")
+        if got["fn"] > want["fn"]:
+            why.append(f"missed {got['fn']} > accepted {want['fn']}")
+        better |= got["tp"] > want["tp"] or got["fn"] < want["fn"]
+    rank = next((t for t in RANK.values() if want.get("outcome") in t), None)
     if rank is not None:
         if got["outcome"] not in rank:
             why.append(f"outcome {got['outcome']} is not on the scale of accepted {want['outcome']}")
@@ -73,6 +127,10 @@ def main() -> int:
     ap.add_argument("--src", nargs="+", default=None, help="only cases tagged with one of these (F7, targeted, ...)")
     ap.add_argument("--root", default=None, help="results folder (default data/known_cases_runs/<now>); reuse to resume")
     ap.add_argument("--list", action="store_true", help="print the selected cases and exit")
+    ap.add_argument("--judge-only", action="store_true",
+                    help="judge the results already in --root; never compute (a missing case is MISSING)")
+    ap.add_argument("--uncapped", action="store_true",
+                    help="allow computing without a memory cap (not on the laptop: one case can take 14 GB)")
     ap.add_argument("--check", action="store_true",
                     help="exit 0 only if a full pass is recorded for the code as it is now (no run)")
     args = ap.parse_args()
@@ -92,7 +150,8 @@ def main() -> int:
             and (args.src is None or set(c["src"]) & set(args.src))]
     if args.list:
         for c in want:
-            print(c["setup"], c["tier"], c["family"], c["name"], c["outcome"], "fa<=", c["fa"], c["src"])
+            print(c["setup"], c["tier"], c["family"], c["name"], c.get("outcome", f"TP>={c.get('tp')} FN<={c.get('fn')}"),
+                  "fa<=", c["fa"], c["src"])
         print(len(want), "cases")
         return 0
 
@@ -100,6 +159,10 @@ def main() -> int:
     q, dp = load_dataset_params(), load_detect_params()
     recipes = {"pod": pod_cases(q, dp), "grr": grr_cases(q, dp), "clean": clean_cases(q)}
     index = {(t, r.family, r.name): r for t, rs in recipes.items() for r in rs}
+    from defectgen import regress as R
+    for group in {c["family"] for c in want if c["tier"] == "regress"}:
+        for tag, st, d, kw in R.group_cases(group):
+            index[("regress", group, tag)] = RegressCase(group, tag, st, d, kw)
     missing = [c for c in want if (c["tier"], c["family"], c["name"]) not in index]
     if missing:
         sys.exit(f"cases.yaml names cases the dataset no longer has: {missing}")
@@ -112,33 +175,52 @@ def main() -> int:
     if stamp.is_file() and stamp.read_text().strip() != code_at_start:
         sys.exit(f"{root} holds results from other code ({stamp.read_text().strip()} vs {code_at_start}); "
                  f"use a new --root")
-    stamp.write_text(code_at_start + "\n")
-    print(f"{len(want)} known cases -> {root}", flush=True)
-    tally = {"PASS": 0, "BETTER": 0, "FAIL": 0}
+    if not args.judge_only:
+        stamp.write_text(code_at_start + "\n")
+    print(f"{len(want)} known cases -> {root}" + ("  (judge only)" if args.judge_only else ""), flush=True)
+    tally = {"PASS": 0, "BETTER": 0, "FAIL": 0, "MISSING": 0}
     fails = []
-    with open(root / "results.jsonl", "a") as log:
+    with open(os.devnull if args.judge_only else root / "results.jsonl", "a") as log:
         for setup in ("fixed", "arm"):
             mine = [c for c in want if c["setup"] == setup]
             if not mine:
                 continue
             run = None                  # built on the first case that needs computing
-            # One stage's reference held at a time: three at once OOM-killed a 7 GB cap (13 Nov 2026).
-            mine.sort(key=lambda c: STAGES.index(index[(c["tier"], c["family"], c["name"])].stage))
+            # Dataset cases, then regress cases (each harness holds its own
+            # references: never both at once), each one stage's reference at a
+            # time: three at once OOM-killed a 7 GB cap (13 Nov 2026).
+            mine.sort(key=lambda c: (c["tier"] == "regress",
+                                     STAGES.index(index[(c["tier"], c["family"], c["name"])].stage)))
             for c in mine:
                 r = index[(c["tier"], c["family"], c["name"])]
                 t = time.time()
-                f = root / r.tier / r.family / r.name / f"{setup}.score.json"
+                f = root / r.tier / r.family / slug(r.name) / f"{setup}.score.json"
                 if f.is_file():
                     got = json.loads(f.read_text())
+                elif args.judge_only:
+                    tally["MISSING"] += 1
+                    print(f"MISSING {setup:5s} {r.tier:5s} {r.family:16s} {r.name:24s}", flush=True)
+                    continue
                 else:
-                    run = run or Runner(q, [setup], root)
-                    if r.stage not in run._refs:
-                        run._refs.clear()
-                        gc.collect()
-                    got = run.run(r)["setups"][setup]
+                    if run is None and not args.uncapped and not memory_capped():
+                        sys.exit("refusing to compute a case without a memory cap: run under\n"
+                                 "  systemd-run --user --scope -q -p MemoryMax=14G -p MemorySwapMax=0 ...\n"
+                                 "or pass --judge-only to judge existing results")
+                    if r.tier == "regress":
+                        if run is not None:
+                            run = None
+                            gc.collect()
+                        got = r.run(setup, f)
+                    else:
+                        run = run or Runner(q, [setup], root)
+                        if r.stage not in run._refs:
+                            run._refs.clear()
+                            gc.collect()
+                        got = run.run(r)["setups"][setup]
                 verdict, why = judge(c, got, spec["meas_tol"])
                 tally[verdict] += 1
-                line = (f"{verdict:6s} {setup:5s} {r.tier:5s} {r.family:16s} {r.name:24s} {got['outcome']:12s} "
+                shown = got["outcome"] if r.tier != "regress" else f"TP {got['tp']} FN {got['fn']}"
+                line = (f"{verdict:6s} {setup:5s} {r.tier:7s} {r.family:16s} {r.name[:44]:44s} {shown:12s} "
                         f"fa {got['false_alarms']}  [{','.join(c['src'])}]  ({time.time() - t:.0f} s)")
                 if why:
                     line += "  " + "; ".join(why)
@@ -149,10 +231,15 @@ def main() -> int:
                                       "verdict": verdict, "why": why, "outcome": got["outcome"],
                                       "false_alarms": got["false_alarms"], "measured": got.get("measured")}) + "\n")
                 log.flush()
-    print(f"\n{tally['PASS']} pass, {tally['BETTER']} better, {tally['FAIL']} FAIL of {len(want)}")
+    print(f"\n{tally['PASS']} pass, {tally['BETTER']} better, {tally['FAIL']} FAIL"
+          + (f", {tally['MISSING']} MISSING" if tally["MISSING"] else "") + f" of {len(want)}")
     for line in fails:
         print("  " + line)
-    if not fails and args.setup is None and args.src is None:
+    trusted = stamp.is_file() and stamp.read_text().strip() == code_at_start
+    if not fails and not tally["MISSING"] and args.setup is None and args.src is None:
+        if not trusted:
+            print(f"{root} is not stamped with this code (computed elsewhere): no pass recorded")
+            return 1
         if code_hash() != code_at_start:
             print("the code changed during this run: no pass recorded; run again")
             return 1

@@ -956,6 +956,10 @@ class Region:
     scan_idx: np.ndarray = field(repr=False, default=None)
     gold_pts: np.ndarray = field(repr=False, default=None)
     on_step: float = 0.0     # fraction of its rays near a discontinuity of the golden capture
+    # A completed region (fixlist F8): the strict core it grew from, which
+    # classification's fraction tests also judge.
+    core_scan_idx: np.ndarray = field(repr=False, default=None)
+    core_gold_pts: np.ndarray = field(repr=False, default=None)
 
 
 def step_band(gold: Golden, grid: tuple, misreg: float, q: dict):
@@ -1208,28 +1212,59 @@ def residuals(cap: Capture, gold: Golden, p: dict, regions: bool = True,
     grown = 0
     for kind, mask, mask_w in (("raised", raised, raised_w), ("missing", missing, missing_w)):
         taken = np.zeros(rows * cols, bool)
+        shaped = np.zeros(rows * cols, bool)     # strict pieces rejected for their shape, not their size
         for group in components(mask):
             reg = region(kind, group)
             if reg is not None:
                 regions.append(reg)
                 taken[group] = True
-        # Evidence spread over a region (fixlist F8). A small particle on a dim
-        # return can put five rays over 5 sigma and its sixth at 3.4: one ray
-        # short of min_points, though six rays all over 3 sigma beside one over
-        # 5 is ~1e-10 per capture from noise. So: a connected group of rays over
-        # the weak threshold (k_grow sigma, and every misregistration allowance)
-        # that holds at least one ray over the full threshold, and overlaps no
-        # region already kept, is judged as a region by the same filters. Every
-        # region the strict pass keeps is unchanged.
+            elif len(group) >= q["min_points"]:
+                shaped[group] = True
+        # Evidence over a small compact region (fixlist F8). A spatter drop on a
+        # dim return spreads its evidence: 0.2 mm drops on copper put 2-3 rays
+        # over 5 sigma and 6-8 over 3 sigma, in 3 x 3 to 2 x 5 blobs, and were
+        # lost ray by ray (F7's honest noise threshold). Six rays over 3 sigma
+        # among nine neighbours is ~1e-9 per capture from noise alone. So a
+        # connected group of rays over the weak threshold (k_grow sigma, and
+        # every misregistration allowance: those are bounds, not noise) is a
+        # region if it is
+        #   - small: at most grow_max_points rays (big weak areas are where a
+        #     systematic offset under threshold would hide; the strict pass
+        #     keeps big things),
+        #   - compact: two or more rays across both ways, its box no longer than
+        #     grow_aspect x its width and at least grow_fill full (a first form
+        #     grew over any weak area and chained single strong rays along a
+        #     foam pad's top into one-ray-wide "fod" lines: 2 false alarms in
+        #     the arm regression, 13 Nov 2026),
+        #   - backed by at least grow_strong_min rays over the full threshold,
+        #   - off every edge (none in the step band) and fully returned,
+        #   - clear of any region kept, and of any strict piece rejected for its
+        #     shape (min_points or more rays), which growth must not overturn,
+        # and it then passes the same filters. Regions the strict pass keeps are
+        # unchanged.
         for group in components(mask_w):
-            if taken[group].any() or not mask[group].any():
+            if taken[group].any() or shaped[group].any() or len(group) > q["grow_max_points"]:
                 continue
-            if kind == "missing" and not (np.isfinite(r_at[group]) & mask[group]).any():
-                continue            # seeded only by rays that returned nothing: as before
+            strong = group[mask[group]]
+            if len(strong) < q["grow_strong_min"]:
+                continue
+            rr, cc = group // cols, group % cols
+            h, w = int(rr.max() - rr.min()) + 1, int(cc.max() - cc.min()) + 1
+            if min(h, w) < 2 or max(h, w) > q["grow_aspect"] * min(h, w) or len(group) < q["grow_fill"] * h * w:
+                continue
+            if not np.isfinite(r_at[group]).all() or (band is not None and band[group].any()):
+                continue
             reg = region(kind, group)
-            if reg is not None:
-                regions.append(reg)
-                grown += 1
+            if reg is None:
+                continue
+            # What classification judges by fraction (near an edge, near an
+            # outline, explained) it judges on the strong rays too, so weak
+            # ones cannot dilute it.
+            reg.core_scan_idx = scan_at[strong]
+            reg.core_gold_pts = gold.points[gold_at[strong]]
+            regions.append(reg)
+            taken[group] = True
+            grown += 1
     stats = {"rays_compared": int(len(r)), "noise_mm": noise,
              "sigma_by_material_mm": sigma, "missing_rays": int(len(lost)),
              "regions": len(regions), "regions_grown": grown}
@@ -1495,7 +1530,9 @@ class Detector:
                 findings.append(Finding("terminal_height", d, loc, box, e["capture"],
                                         f"terminal pin {e['pin']}", {"dz_vs_row": d}))
 
-        # Cells: pose from the terminal outlines seen in one capture.
+        # Cells: pose from the terminal outlines seen in one capture, or in two
+        # that each registered X, Y and yaw.
+        registered = {cap.name: set(info.get("icp", {}).get("registered_axes", [])) for cap, _, _, info in per}
         cells = {}
         for k in range(cfg.n_cells):
             keys = [(k, "pos"), (k, "neg")]
@@ -1524,6 +1561,17 @@ class Detector:
             for key in placeable:
                 by_cap.setdefault(term[key]["capture"], []).append(key)
             cap_name, keys_here = max(by_cap.items(), key=lambda kv: len(kv[1]))
+            # Both terminals, from two captures, when each registered X, Y and yaw
+            # (to the housing, so both are in the module's frame to half a
+            # sample). One pad alone gives yaw only to a sample step over its
+            # length -- 0.025 mm / 17.5 mm = 0.08 deg on the arm's sweeps -- and
+            # that yaw, pivoted about a pad 57.5 mm from the cell's centre, moved
+            # unmoved cells 0.1 mm in the module as measured: a 3.9 mm2 false
+            # "dent" on a cell wrap (fixlist F9, 14 Nov 2026). Two pads 115 mm
+            # apart give yaw to ~0.01 deg and no lever arm.
+            if len(keys_here) == 1 and len(placeable) == 2 and \
+                    all({"x", "y", "yaw"} <= registered.get(term[key]["capture"], set()) for key in placeable):
+                keys_here = list(placeable)
             src = np.array([term[key]["gold_xy"] for key in keys_here])
             dst = np.array([term[key]["xy"] for key in keys_here])
             if len(keys_here) == 2:
@@ -1538,15 +1586,17 @@ class Detector:
             dx, dy = (r @ c0 + tr) - c0
             # Only a shift the capture resolves moves the cell in the module
             # as measured; moving it by sampling noise would leave a residual.
-            gold_k = next(m.gold for c, m, _, _ in per if c.name == cap_name)
-            resolved = np.hypot(dx, dy) + np.radians(abs(dth)) * cfg.cell_w / 2 > gold_k.spacing / 2
+            spacing = max(m.gold.spacing for c, m, _, _ in per
+                          if c.name in {term[key]["capture"] for key in keys_here})
+            resolved = np.hypot(dx, dy) + np.radians(abs(dth)) * cfg.cell_w / 2 > spacing / 2
             inplane = _planar(r, tr) if resolved else np.eye(4)
             self._motions[("cell", k)] = inplane
             for pol in ("pos", "neg"):
                 ref_t = ("terminal", k, pol)
                 self._motions[ref_t] = inplane @ self._motions.get(ref_t, np.eye(4))
             cells[k] = {"capture": cap_name, "dx": float(dx), "dy": float(dy), "dyaw_deg": dth,
-                        "terminals": len(keys_here)}
+                        "terminals": len(keys_here),
+                        "captures": sorted({term[key]["capture"] for key in keys_here})}
             if np.hypot(dx, dy) > cq["pos_tol"] or abs(dth) > cq["yaw_tol"]:
                 findings.append(Finding("cell_placement", float(np.hypot(dx, dy)),
                                         (cx, 0.0, cfg.z_cell_bottom), box, cap_name, f"cell {k}",
@@ -1841,11 +1891,16 @@ class Detector:
             for reg in regions:
                 if self._absorbed(reg, absorbing):
                     continue
-                pts = np.vstack([x for x in (cap.points[reg.scan_idx], reg.gold_pts) if len(x)])
-                near_edge = _near_outline(pts[:, :2], outlines)
-                for rect in bare + judged:
-                    near_edge |= _in_rect(pts[:, :2], rect, q["edge_band"])
-                frac = (explained[reg.scan_idx].sum() + near_edge.sum()) / max(len(pts), 1)
+                def edge_fraction(scan_idx, gold_pts):
+                    pts = np.vstack([x for x in (cap.points[scan_idx], gold_pts) if len(x)])
+                    near_edge = _near_outline(pts[:, :2], outlines)
+                    for rect in bare + judged:
+                        near_edge |= _in_rect(pts[:, :2], rect, q["edge_band"])
+                    return (explained[scan_idx].sum() + near_edge.sum()) / max(len(pts), 1)
+
+                frac = edge_fraction(reg.scan_idx, reg.gold_pts)
+                if reg.core_scan_idx is not None:
+                    frac = max(frac, edge_fraction(reg.core_scan_idx, reg.core_gold_pts))
                 if frac > 0.5 or reg.on_step > 0.5:
                     continue
                 cls = self._region_class(reg)
