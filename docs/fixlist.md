@@ -318,6 +318,7 @@ CAD, not the detector. Write-up: `project_plan.md` §4B.6, "A strip that moves w
 | F7 | The v2 arm rerun raised 1,126 false-alarm regions in 9 of its first 128 modules, plus 7 single ones — **fixed 13 Nov 2026**, rerun v2 stopped | detector | a false-alarm rate that means something; the v2 run was spending 30 h on it |
 | F8 | F7's honest dim-ray threshold lost fixed spatter drops: evidence spread over a region — **fixed 14 Nov 2026** (a small compact group is a region on its summed evidence; first form withdrawn: it drew foam-edge lines) | detector | spatter detection rate on both setups (1.8) |
 | F9 | Arm cells placed from one terminal: a 0.08° yaw step on a 57.5 mm lever moved unmoved cells 0.1 mm in the module as measured — **fixed 14 Nov 2026** (both terminals) | detector | arm false-alarm rate; arm cell yaw / position (1.8, 1.9) |
+| F10 | v3 (dataset 1): FOD 0.4 mm escapes, a false FOD on foam, two wrong-class calls, spatter partly found, in-spec over-reads, and a wrong-class false alarm the scorer does not count. **Open** (fixed column added 16 Nov: d is both setups) | detector + scorer | arm POD (1.10); an honest false-alarm rate (1.8); v4 (realism) must start from the fixed detector |
 
 ### F1 — Carrier seating vs busbar gap
 
@@ -576,3 +577,43 @@ so it is unchanged. The arm's cell yaw and position measurements improve as a si
 **Done when.** `handling_damage L1_0.05_s0` on the arm has no false alarm (known case, now accepted at
 0), and the proof run passes. The arm cell cases (cell_shift, cell_yaw, the F7 modules) in the stress
 known cases must not get worse.
+
+### F10 — What dataset 1 (v3) showed, 15–16 Nov 2026
+
+v3 is dataset 1: what Phases 2 and 3 use. These are left **unfixed in it on purpose**: changing the
+detector mid-run breaks the code fingerprint. They are fixed after v3, re-checked on the affected
+families only, and the cases below become known cases, so v4 (realism, cloud) starts from a detector
+that has already passed them. Numbers are hits / modules; a module still rejected for the wrong reason
+is called out, because for the line it is a catch but for POD it is a miss. Paths are under
+`data/dataset/`.
+
+**Ideal-world caveat for v4.** Every number here is on noise-free robot poses and the assumed sensor
+model. v4 adds realism one factor at a time; each item below should be rechecked after each factor,
+because realism usually makes these worse, not better.
+
+| # | What | Where | Effect | Suspected cause (unconfirmed) |
+|---|---|---|---|---|
+| a | **FOD 0.4 mm escapes**: 2/5, while 0.25 mm and 0.6 mm are 5/5. s2, s3, s4 found *nothing*; module passed | `pod/fod/L4_0.4_s{2,3,4}` (particles at x 70.3, 90.2, −44.9; z 95.4, 93.4) | **real escapes** (worst item) | not size: the bigger particle is found. Placement: where those particles sit (cell-top foam, between pads) relative to the arm views, or the raised-region filters (`max_aspect`, `edge_band`, `blob_max_area`) |
+| b | **False FOD on foam**: 6 points, 0.56 mm², 0.26 mm high at [27.2, −46.4, 95.1] | `pod/handling_damage/L2_0.1_s4` (the injected dent was found) | 1 false alarm in ~970 arm modules (incl. the 400-module null sweep) | exactly at `residual.min_points: 6`. Raise the floor for raised regions on foam, or require an area/evidence margin over it |
+| c | **Cap dent called `anomaly`**: handling damage 0.4 mm on the cell cap | `pod/handling_damage/L4_0.4_s{2,3}` | NOK, wrong class (3/5 counted) | the cap's classification rule; 0.2 and 0.8 mm are classed right |
+| d | **Reinforcement 0.3 mm called `missing_weld`** (twice per module), **on both setups, same seeds** | `pod/reinforcement/L6_0.3_s{2,3}` | NOK, wrong class (3/5 each) | not the views: the same two generated beads fail on the line scan too. A tall crown on those stitches fails the seam fit and reads as no bead, or the generator makes an odd bead there; check the generated mesh first. 0.13–0.2 mm are right |
+| e | **Spatter partly found**: L3 1/5, L4 3/5, L5 0/5 complete; every module still NOK | `pod/spatter/L{3,4,5}_*` | rejected, but drop count low | F8's region rule on arm geometry; check which drops are lost (shadowed by the bead? outside the weld sweep?) |
+| f | **In-spec weld arc over-read**: 0.08 read 0.107 / 0.114 against 0.1 | `pod/weld_arc/L1_0.08_s{3,4}` | 2 false rejects | ~+0.03 bias on arm arc measure; compare with `validate pr` |
+| g | **In-spec cell X over-read on GRR**: true 0.167 read 0.2003 | `grr/.../cell_position_p7_l0_t{0,1}` | 2 false rejects | ~+0.034 at that part; the 1.9 %GRR result on v3 says whether this is bias or spread |
+| i | **Fixed: weld arc under-read at 0.13**: read −0.077 / −0.096 against 0.1, 3/5 (0.11 was 4/5) | `pod/weld_arc/L3_0.13_s{0,3}` | 2 escapes; also an in-spec 0.08 read 0.119 (s2): spread both ways | arc measure noise on the line scan's sampling, σ ≈ 28 (`pr` reading error); arm σ 19 |
+| j | **Fixed: 2 spatter modules with no drop found**, 0.15 mm | `pod/spatter/L3_0.15_s{1,2}` | real escapes (complete recall 7 %; the rest partial) | the bead band (§4B.4): drops on or beside the bead are not looked at; arm finds every module |
+| — | Fixed, known: cell shift 0.22 read 0.18–0.19 (3/5 missed), cell yaw reads in 0.025° steps, an in-spec 0.16 read 0.2001 | `pod/cell_shift/L2_*`, `pod/cell_yaw/*` | 1.9: cell X %GRR 50 % | the line scan's 0.1 mm pitch (§4B.4, 1.9); not a detector bug, a sensor-class result |
+| h | **Wrong-class false alarm, not counted**: `handling_damage` 0.98 mm "missing region on aluminium_cap" on a cell-position GRR part | `grr/.../cell_position_p2_l{0,1}_t{0,1}` (all 4: repeatable) | module NOK; **scorer reports `pass`, `false_alarms` 0** | detector: a shifted cell exposes/hides part of the cap as missing data. Scorer: a finding of a class other than the case's is not counted as a false alarm (same for F1/F2 below). Fix the scorer first, then recount every tier |
+| — | Known, not new: carrier 0.16 lifts busbars (5/5 in-spec NOK), busbar 0 lifts on an in-spec 0.1 shift | `pod/carrier_seating/L1_0.16_*`, `pod/busbar_shift/L0_0.1_s0` | as F1, F2 | spec / CAD, not detector |
+| — | Expected: the smallest level (L2) of short_weld 0/5, reinforcement 1/5, weld_arc 2/5, weld_path_drift 2/5, cell_yaw 4/5, handling_damage 4/5 | `pod/*/L2_*` | where the POD curve starts | not a defect: these set a90/95 (1.10) |
+
+Clean: busbar liftoff/shift, carrier, cell shift, seams, width, terminal height/tilt, missing
+parts and reversed polarity are all 5/5 at every level on the arm.
+
+**Order.** h (scorer) first: until it counts wrong-class findings in `grr`, the false-alarm rate is
+understated (`validate pr` already counts them in `pod` as "other"). Then a, d, b, c, j, e, f/g/i.
+
+**Done when.** Each item's cases above are known cases with the fixed result accepted, the null sweep
+still has 0 false alarms, and the affected families' POD rows are rerun. For v4: the v4 plan lists
+F10 and rechecks a, b, e and h after each realism factor.
+
