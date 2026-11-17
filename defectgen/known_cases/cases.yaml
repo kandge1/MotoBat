@@ -14,7 +14,8 @@
 #
 # Adding a failure: put its reproducing cases here with the outcome they SHOULD have and the
 # fixlist item, before fixing it. A fix is done when this whole file passes.
-# Accepted values come from the v3 gates (13 Nov 2026, detector F7 + F8). An improvement
+# Accepted values come from the v3 gates (13 Nov 2026, detector F7 + F8); F9 gains raised and F10
+# cases added from dataset 1 (16 Nov 2026). An improvement
 # prints BETTER: review it, then raise the accepted value here by hand.
 
 meas_tol: 0.01
@@ -82,10 +83,10 @@ cases:
   - {setup: "fixed", tier: "pod", family: "missing_weld", name: "L0_1_s0", outcome: "hit", fa: 0, meas: null, src: [targeted]}
   - {setup: "arm", tier: "pod", family: "cell_shift", name: "L0_0.1_s0", outcome: "pass", fa: 0, meas: 0.1025, src: [F7]}
   - {setup: "arm", tier: "pod", family: "cell_shift", name: "L1_0.16_s0", outcome: "pass", fa: 0, meas: 0.1604, src: [F7]}
-  - {setup: "arm", tier: "pod", family: "cell_shift", name: "L2_0.22_s0", outcome: "miss", fa: 0, meas: 0.181, src: [F7]}
-  - {setup: "arm", tier: "pod", family: "cell_yaw", name: "L0_0.05_s0", outcome: "pass", fa: 0, meas: -0.0001, src: [targeted]}
-  - {setup: "arm", tier: "pod", family: "cell_yaw", name: "L1_0.08_s0", outcome: "pass", fa: 0, meas: 0.0133, src: [targeted]}
-  - {setup: "arm", tier: "pod", family: "cell_yaw", name: "L2_0.11_s0", outcome: "miss", fa: 0, meas: 0.0969, src: [targeted]}
+  - {setup: "arm", tier: "pod", family: "cell_shift", name: "L2_0.22_s0", outcome: "hit", fa: 0, meas: 0.2019, src: [F7, F9]}
+  - {setup: "arm", tier: "pod", family: "cell_yaw", name: "L0_0.05_s0", outcome: "pass", fa: 0, meas: 0.0498, src: [targeted, F9]}
+  - {setup: "arm", tier: "pod", family: "cell_yaw", name: "L1_0.08_s0", outcome: "pass", fa: 0, meas: 0.0755, src: [targeted, F9]}
+  - {setup: "arm", tier: "pod", family: "cell_yaw", name: "L2_0.11_s0", outcome: "hit", fa: 0, meas: 0.1078, src: [targeted, F9]}
   - {setup: "arm", tier: "pod", family: "terminal_height", name: "L0_0.05_s0", outcome: "pass", fa: 0, meas: 0.05, src: [targeted]}
   - {setup: "arm", tier: "pod", family: "terminal_height", name: "L1_0.08_s0", outcome: "pass", fa: 0, meas: 0.08, src: [targeted]}
   - {setup: "arm", tier: "pod", family: "terminal_height", name: "L2_0.11_s0", outcome: "hit", fa: 0, meas: 0.11, src: [targeted]}
@@ -104,6 +105,15 @@ cases:
   - {setup: "arm", tier: "pod", family: "handling_damage", name: "L3_0.2_s0", outcome: "hit", fa: 0, meas: null, src: [F6]}
   - {setup: "arm", tier: "pod", family: "handling_damage", name: "L4_0.4_s0", outcome: "hit", fa: 0, meas: null, src: [F6]}
   - {setup: "arm", tier: "pod", family: "handling_damage", name: "L5_0.8_s0", outcome: "hit", fa: 0, meas: null, src: [F6]}
+  # F10 (dataset 1, 16 Nov 2026): the outcome each SHOULD have. a: round particles on the arm's
+  # sparse-profile sweep read as edge grazes; c: dents in polished cap aluminium, mostly unreturned,
+  # were called anomaly. b is not fixed: its accepted false alarm is held, not raised.
+  - {setup: "arm", tier: "pod", family: "fod", name: "L4_0.4_s2", outcome: "hit", fa: 0, meas: null, src: [F10]}
+  - {setup: "arm", tier: "pod", family: "fod", name: "L4_0.4_s3", outcome: "hit", fa: 0, meas: null, src: [F10]}
+  - {setup: "arm", tier: "pod", family: "fod", name: "L4_0.4_s4", outcome: "hit", fa: 0, meas: null, src: [F10]}
+  - {setup: "arm", tier: "pod", family: "handling_damage", name: "L4_0.4_s2", outcome: "hit", fa: 0, meas: null, src: [F10]}
+  - {setup: "arm", tier: "pod", family: "handling_damage", name: "L4_0.4_s3", outcome: "hit", fa: 0, meas: null, src: [F10]}
+  - {setup: "arm", tier: "pod", family: "handling_damage", name: "L2_0.1_s4", outcome: "hit", fa: 1, meas: null, src: [F10], note: "b: a 6-point false fod on foam, not fixed"}
   - {setup: "arm", tier: "pod", family: "missing_cell", name: "L0_1_s0", outcome: "hit", fa: 0, meas: null, src: [targeted]}
   - {setup: "arm", tier: "pod", family: "reversed_polarity", name: "L0_1_s0", outcome: "hit", fa: 0, meas: null, src: [targeted]}
   - {setup: "arm", tier: "pod", family: "missing_pad", name: "L0_1_s0", outcome: "hit", fa: 0, meas: null, src: [targeted]}

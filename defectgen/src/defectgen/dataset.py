@@ -692,6 +692,9 @@ def main() -> None:
     ap.add_argument("--shard", default=None, metavar="I/N",
                     help="run only every N-th case starting at I (0 <= I < N), so N workers split a tier "
                          "with no case run twice (cloud/run_remote.sh)")
+    ap.add_argument("--root", default=None,
+                    help="results folder (default: dataset.yaml out). A check run on a changed detector "
+                         "goes to its own folder, so the dataset it is checked against stays as built")
     args = ap.parse_args()
     shard = None
     if args.shard is not None:
@@ -707,6 +710,8 @@ def main() -> None:
         logging.getLogger(noisy).setLevel(logging.WARNING)
 
     q = load_dataset_params()
+    if args.root:
+        q["out"] = args.root
     dp = load_detect_params()
     if args.summary:
         print(summary(Path(q["out"]), args.tier))

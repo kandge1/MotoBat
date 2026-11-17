@@ -203,6 +203,8 @@ def pr(root: Path, setup: str = "fixed") -> dict:
     readings: dict = defaultdict(list)     # family -> (true size, |reading|)
     modules = Counter()
     false_alarms = Counter()
+    grr_other: dict = defaultdict(list)       # family -> GRR parts with a finding of another class
+    grr_in_spec: dict = defaultdict(Counter)  # family -> module decision on in-spec GRR parts
     missing = []
     for tier in ("pod", "clean", "grr"):
         for r in rows(root, tier):
@@ -211,6 +213,14 @@ def pr(root: Path, setup: str = "fixed") -> dict:
                 continue
             modules[tier] += 1
             false_alarms[tier] += s.get("false_alarms", 0)
+            if tier == "grr":
+                # A finding of another class on a GRR part is no false alarm (it sits on a label) and
+                # no knock-on the design expects: the part only moved. Counted here, or nowhere
+                # (fixlist F10h). The module decision on in-spec GRR parts goes with it.
+                if s.get("other", 0):
+                    grr_other[r["family"]].append(r["name"])
+                if r["truth"] == "in_spec":
+                    grr_in_spec[r["family"]][s.get("result")] += 1
             if tier == "clean":
                 fam[f"clean {r['family']}"][s["outcome"]] += 1
                 continue
@@ -270,6 +280,8 @@ def pr(root: Path, setup: str = "fixed") -> dict:
     out["false_alarms"] = {"modules": dict(modules), "count": dict(false_alarms), "total_modules": total_modules,
                            "total": total_fa, "per_module": total_fa / total_modules if total_modules else None,
                            "per_module_upper95": poisson_upper(total_fa, total_modules) if total_modules else None}
+    out["grr_other"] = {f: sorted(v) for f, v in sorted(grr_other.items())}
+    out["grr_in_spec"] = {f: dict(c) for f, c in sorted(grr_in_spec.items())}
     return out
 
 
@@ -354,6 +366,12 @@ def format_pr(res: dict) -> str:
     out += ["", f"False alarms (findings on no label): {fa['total']} in {fa['total_modules']} modules "
                 f"({', '.join(f'{k} {v}' for k, v in fa['modules'].items())}); "
                 f"rate ≤ {fa['per_module_upper95']:.4f} per module (95% upper bound)."]
+    if res.get("grr_in_spec"):
+        out.append("GRR parts in spec, module decision: " + ", ".join(
+            f"{f} {c.get('NOK', 0)}/{sum(c.values())} rejected" for f, c in res["grr_in_spec"].items()) + ".")
+    if res.get("grr_other"):
+        out.append("GRR parts with a finding of another class (not false alarms: they sit on a label): " + "; ".join(
+            f"{f} {len(v)} ({', '.join(v)})" for f, v in res["grr_other"].items()) + ".")
     if res["clean"]:
         out.append("Clean modules with any finding: " + ", ".join(
             f"{k} {v['with_findings']}/{v['modules']}" for k, v in res["clean"].items()) + ".")

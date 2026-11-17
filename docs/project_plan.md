@@ -2620,6 +2620,115 @@ AIAG's guide is < 10% acceptable, 10–30% conditional, > 30% not acceptable.
   views. Before the strip datum (prestrips run) the same study gave 50%,
   with the same structure.
 
+#### Dataset 1 — results, 16 Nov 2026 (1.8–1.11)
+
+**What dataset 1 is.** The third build of the 1.7 dataset (`data/dataset/`, finished 16 Nov 00:22),
+on the detector after fixlist F7–F9, both setups, `pod` 565 + `clean` 30 + `grr` 180 cases each. The
+first two builds are kept for their failures (`data/dataset_plan_v1/`, `data/dataset_plan_v2/`,
+fixlist F6–F9). It is ideal-world by design: exact robot poses, the frozen sensor models, assumed
+tolerances (**A**). Realism comes as later datasets, one factor at a time. Every number below is
+conditional on that, and on the dev set (1.13 checks them on fresh seeds).
+
+**1.8: precision, recall, false alarms** (`validate pr`, `data/dataset/validation/pr.*.txt`).
+
+| | fixed | arm |
+|---|---|---|
+| false alarms (findings on no label) | 0 in 775 modules (≤ 0.0039 / module, 95 %) | 1 in 775 (≤ 0.0061) |
+| clean modules with any finding | 0 / 30 | 0 / 30 |
+| classes at 100 % recall | 11 of 19 | 13 of 19 |
+| lowest recall (complete) | spatter 7 % (87 % of modules rejected) | spatter 27 % (100 % rejected) |
+| precision per finding class | 95–100 % | 92–100 % |
+
+In-spec rejects that are the spec or the CAD, not the detector: the 0.16 mm carrier lifts busbars past
+the gap tolerance (F1), busbar 0 rests high after an in-spec shift (F2).
+
+**1.9: %GRR to tolerance** (AIAG ANOVA, 10 parts × 3 loads × 2 trials, `validate grr`).
+
+| characteristic | fixed | arm |
+|---|---|---|
+| terminal height | 1.6 % | 0.0 % |
+| busbar gap | 0.5 % | 0.2 % |
+| cell position X | **50 %** (bias −25 µm) | **27 %** (bias −1.4 µm) |
+
+The fixed line's cell X is its 0.1 mm profile pitch, landing at a different phase on each pallet
+load (AV 33 µm against EV 6.5 µm): not acceptable by AIAG (> 30 %). The arm, placing each cell from
+both terminals (F9), is conditional (10–30 %). The arm's zeros are the ideal world's exact poses.
+
+**1.11: POD** (`analysis/pod.py`, `data/analysis/pod.{md,png}`). Hit/miss logistic in log size per
+MIL-HDBK-1823A, fitted with Firth's penalty because most families are completely separated (every
+miss smaller than every find, so the maximum-likelihood estimate does not exist); a90/95 from the
+one-sided Wald bound, never extrapolated past the largest size; the n-of-n binomial bound beside it.
+
+- Tolerance classes sit on their tolerance, both setups: terminal height a50 0.094 (t 0.1), tilt 0.29°
+  (t 0.31°), busbar lift-off 0.141 (t 0.15), seam offset 0.234 (t 0.25). That is the gauge's
+  operating characteristic: unbiased at the threshold, and steep.
+- Sampling shows as spread: cell shift a90 0.28 mm fixed against 0.22 arm, yaw 0.15° against 0.12°.
+- Five seeds per size cap what can be claimed: 25 of 25 found gives POD ≥ 89 % with 95 % confidence,
+  not 90. Demonstrating a90/95 directly needs ≥ 29 cases per size (1.13).
+- Not monotone, so the per-size counts are the result: arm FOD 0.4 mm and cap dents 0.4 mm (detector
+  faults, F10a and c), reinforcement 0.3 mm on both setups (a −0.3 mm crown is a flush weld; height
+  cannot tell it from no weld, F10d).
+
+**1.10: fixed vs arm** (`analysis/compare.py`, `data/analysis/compare.md`). The arm's case is coverage
+and position: wall dents 25 → 92 % coverage, spatter 80 → 93 %, FOD 94 → 100 %; cell placement recall
+86 → 98 %; cell X %GRR halved. Its cost: 13–15 captures against 1, ~46–63 s of scanning against ~4 s
+(1.5's estimates; Phase 2 measures cycle time), ~130–175 s of detection against 12–17 s on the
+laptop, and a detector its oblique views stress harder (F10). Neither alone: the line for the
+up-facing features at line speed, the arm for what the line cannot see and for cell position.
+
+**1.12 on dataset 1's gauges** (`data/correction/{fixed,arm}/`): best I gain 0.07 fixed (0.35 % of
+cells out of tolerance) and 0.11 arm (0.26 %); the arm's small bias takes the placement offset from
++27 µm to +2 µm.
+
+**What dataset 1 found in the detector** (fixlist F10). Left unfixed *in* dataset 1, so its numbers
+describe one detector. Fixed after it and checked on a separate folder (`data/check_f10.sh` →
+`data/dataset_f10/`): every known case, the null sweep and the affected families, both setups.
+- *Round particles read as edge grazes on the arm's sparse-profile sweeps* (a). A profilometer grid is
+  anisotropic: 0.025 mm along the line, 0.2 mm between fast profiles. A 0.8 mm particle spans 23 × 2.3
+  grid cells and failed the "a ray or two wide" graze test; over the cap's recess its residual
+  (height + recess depth, 2.7 mm) failed the depth/width test. Grazes are lines in mm (length/width
+  150+, all in the step band), particles are round (1.1–2.0). Both tests now apply only to lines or
+  to regions on an edge. The three escapes are found at 0.78–0.79 mm (0.8 injected).
+- *Dents in polished cap aluminium lose most of their returns* (c): 51 % and 89 % of rays lost, so
+  they were called `anomaly`. A small region whose returned rays read a depth is now a dent.
+- *Reporting* (h): a finding of another class on a GRR part is counted nowhere by the false-alarm
+  rate; `validate pr` now lists them (4 arm parts, all one cell-position part: a shifted cell exposes
+  part of the cap as missing data).
+- Stated, not fixed: one false FOD on foam at the 6-point floor (b), spatter partly found (e), weld
+  arc and cell X read noise near tolerance (f, g, i), drops on or beside a bead not looked at (j).
+
+**Sensitivity (1.11, cut-down)**: `analysis/sensitivity.py`, the fixed line with one factor changed
+at a time (noise ×0.5–4, profile pitch 0.05/0.2 mm, 1280 points per line, the same camera at 700 and
+1000 mm), 72 cases per setting from dataset 1's recipes, done 16 Nov. Table:
+`data/sensitivity/summary.md`. Found out of 3 at 0.8, 1.1 and 1.3 × tolerance (the first is in spec),
+or at three sizes around D for FOD and spatter.
+
+- **Noise.**
+  - Halving it gains one spatter case, nothing else.
+  - Cell pose, terminal height and busbar lift-off are unchanged even at 4×: plane and outline fits
+    average hundreds of points.
+  - The welded stage breaks first. At 2× (20 µm): 136 false alarms, every one on a welded-stage case,
+    and spatter at 0.15 and 0.2 mm drops from 4/6 to 1/6.
+  - At 4×: short weld 0/6, reinforcement false-rejects 2 of 3 in-spec parts, 2842 false alarms.
+- **Sampling.**
+  - At 0.05 mm pitch, cell shift and yaw at 1.1 × tol are 3/3 (baseline 1/3). Spatter at 0.15 mm is
+    3/3 (1/3) and FOD at 0.15 mm is 3/3 (1/3). The pitch is what limits the fixed line's cell
+    position: dataset 1's 50 % %GRR (1.9), from 0.05 mm reading steps.
+  - At 0.2 mm the housing strips are not resolved, so the fixture pose is kept. Cell pose, short weld,
+    reinforcement and spatter are all 0; terminal height and lift-off are unchanged.
+  - 1280 points per line (0.14 mm across): yaw, FOD and spatter worse, 35 false alarms.
+- **Standoff.**
+  - At 700 mm (noise ≈ 2×) it behaves like noise × 2: 196 false alarms, spatter mostly lost.
+  - At 1000 mm (noise 4×, 0.14 mm across) seams and busbar positions are reported uncovered, but the
+    residual pass also finds no region at all. That gives 0 false alarms and FOD 2/9: blind, not
+    clean (fixlist F10k).
+- **Sensor class (1.11's answer).** About 10 µm height repeatability, set by the welded stage, not
+  placement. About 0.05 mm along travel, for cell pose at ±0.2 mm and 0.15 mm spatter. About 0.07 mm
+  across. That is dataset 1's sensor at 500 mm with half the conveyor travel per profile.
+- **Limits.** 3 seeds per size and one factor at a time, so it is a screen: interactions (pitch ×
+  noise) are not estimable. Dataset 2 runs it as a designed experiment
+  ([detector_review.md](detector_review.md) G2).
+
 #### Later: a held-out validation set (added 10 Nov 2026)
 
 **Why.** The 1.7 dataset is not a clean test set any more. Three detector

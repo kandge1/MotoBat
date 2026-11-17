@@ -29,6 +29,13 @@ residual:                    # per-ray residual against the golden capture (§4B
   missing_min_area: 1.0      # A  mm^2; missing data alone is weaker evidence than a height change
   max_aspect: 3.0            # A  a region whose peak |r| exceeds this x sqrt(area) is a ray that
                              #    crossed a step edge: no dent is far deeper than it is wide
+  line_aspect: 3.0           # A  ... but only a region that is a line in mm (length / width over this)
+                             #    or mostly in the step band is judged by the two tests above. A
+                             #    profilometer grid is anisotropic (dense along the line, sparse across
+                             #    profiles), so a round 0.8 mm particle spans 23 x 2.3 grid cells and
+                             #    read as a graze; over a recess its residual (height + recess depth)
+                             #    read as too deep. Grazes measured: aspect 150+, all in the band;
+                             #    particles 1.1-2.0 (fixlist F10a, 16 Nov 2026)
   step_min: 0.05             # A  mm: a depth step between neighbouring rays larger than this (plus
   step_slope: 3.0            # A  ... this x the sample spacing, i.e. steeper than ~72 deg) is an edge;
                              #    regions mostly within misregistration reach of one are not defects

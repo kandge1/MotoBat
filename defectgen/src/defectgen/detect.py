@@ -552,8 +552,13 @@ def align(cap: Capture, gold: Golden | None, ref: "Reference", p: dict,
             f"housing tops + strip outlines fixing only {', '.join(own[1])}; fixture pose kept on the rest"
         info["registered_axes"] = own[1]
     else:
-        info["datum"] = "housing tops only: fixture pose kept in X, Y, yaw" if strips or \
-            capable(gold, min(p["cell"]["pos_tol"], p["busbar"]["pos_tol"]), p) else \
+        # The detector passes gold=None (it fits first, then aligns); only the
+        # message needs the sampling then, and info carries it. A coarse sensor
+        # (1.11's far standoff) found no strip and crashed here (16 Nov 2026).
+        tol = min(p["cell"]["pos_tol"], p["busbar"]["pos_tol"])
+        spacing = gold.spacing if gold is not None else info.get("spacing_mm", 0.0)
+        coarse = spacing > p["capability"]["spacing_per_tol"] * tol + 1e-9
+        info["datum"] = "housing tops only: fixture pose kept in X, Y, yaw" if strips or not coarse else \
             f"housing tops only: {info['spacing_mm']:.2f} mm sampling is too coarse for the strip outlines, " \
             "fixture pose kept in X, Y, yaw"
         info["registered_axes"] = []
@@ -1182,9 +1187,20 @@ def residuals(cap: Capture, gold: Golden, p: dict, regions: bool = True,
         if npts < q["min_points"]:
             return None
         # A ray or two wide along its whole length: a ray that grazed an
-        # edge onto the other side of it, not something on the part.
+        # edge onto the other side of it, not something on the part. Judged in
+        # grid cells, but only for a region that is a line in mm or lies on an
+        # edge: the grid is not square (fixlist F10a), and a round particle on a
+        # sparse-profile sweep is a few profiles wide by many points long.
+        gxy = gold.points[g[g >= 0], :2]
+        if len(gxy) >= 3:
+            ev = np.linalg.eigvalsh(np.cov(gxy.T))
+            line = ev[1] > q["line_aspect"] ** 2 * max(ev[0], 1e-12)
+        else:
+            line = True
+        edge = band is not None and band[group].mean() > 0.5
+        graze_shaped = line or edge
         span = max(len(np.unique(group // cols)), len(np.unique(group % cols)))
-        if span >= 3 * q["min_thickness"] and npts / span < q["min_thickness"]:
+        if graze_shaped and span >= 3 * q["min_thickness"] and npts / span < q["min_thickness"]:
             return None
         gone = float((sidx < 0).mean())
         if area < (q["missing_min_area"] if kind == "missing" and gone > 0.5 else q["min_area"]):
@@ -1200,7 +1216,9 @@ def residuals(cap: Capture, gold: Golden, p: dict, regions: bool = True,
         peak = float(np.nanmax(np.abs(rr))) if np.isfinite(rr).any() else float("nan")
         # Far deeper (or taller) than it is wide: a ray that crossed a
         # step edge onto the surface beside it, not a dent or a particle.
-        if np.isfinite(peak) and peak > q["max_aspect"] * np.sqrt(max(area, 1e-12)):
+        # (A round region off every edge can be deeper than it is wide: a
+        # particle bridging a recess reads its height plus the recess depth.)
+        if graze_shaped and np.isfinite(peak) and peak > q["max_aspect"] * np.sqrt(max(area, 1e-12)):
             return None
         return Region(kind, npts, area, peak, material, gone,
                       tuple(map(float, here.mean(axis=0))),
@@ -1926,7 +1944,11 @@ class Detector:
             return "anomaly"
         if reg.material == "foam":
             return "missing_pad"
-        if reg.area <= q["dent_max_area"] and reg.missing_fraction < 0.5:
+        # Mostly lost rays alone could be a missing part; but if the rays that did
+        # return read a depth, it is a dent. A dent in polished aluminium tilts the
+        # surface off the sensor and loses most of its returns: 0.4 mm cap dents
+        # with 51 % and 89 % lost were called `anomaly` (fixlist F10c, 16 Nov 2026).
+        if reg.area <= q["dent_max_area"] and (reg.missing_fraction < 0.5 or np.isfinite(reg.peak)):
             return "handling_damage"
         return "anomaly"
 
