@@ -2696,6 +2696,12 @@ describe one detector. Fixed after it and checked on a separate folder (`data/ch
   part of the cap as missing data).
 - Stated, not fixed: one false FOD on foam at the 6-point floor (b), spatter partly found (e), weld
   arc and cell X read noise near tolerance (f, g, i), drops on or beside a bead not looked at (j).
+- *Check run, done 17 Nov 2026* (`data/dataset_f10/validation/pr.{fixed,arm}.txt`): known cases
+  249 pass, 0 better, 0 FAIL. False alarms: fixed 0 in 267 modules (≤ 0.011 / module, 95 %), arm 1
+  in 273 (≤ 0.017): the foam FOD (b), unchanged. Arm FOD 15/15 (was 12/15), arm handling damage
+  19/20 (the miss is the smallest level, as before), both cap dents now `handling_damage`. Nothing
+  else changed: spatter, weld arc and the in-spec rejects read as in dataset 1. The fixes hold;
+  dataset 1's arm FOD row (80 %) is the pre-fix detector.
 
 **Sensitivity (1.11, cut-down)**: `analysis/sensitivity.py`, the fixed line with one factor changed
 at a time (noise ×0.5–4, profile pitch 0.05/0.2 mm, 1280 points per line, the same camera at 700 and

@@ -57,7 +57,9 @@ no saved card) so it can never take more than you put in.
 ## What the scripts rely on
 
 - The server mirrors the laptop's paths (`~/projects/MotoBat`, `~/motobat/venv`), so
-  `data/tripwire.py` and `data/pause.sh` work unchanged there.
+  `data/tripwire.py` and `data/pause.sh` work unchanged there. To pause or resume by hand on the
+  server: `ssh` in, `bash tools/pause.sh`, then `bash tools/resume.sh` (`tools/README.md`). A
+  paused server still bills.
 - Those two are gitignored under `data/`, and `push.sh` copies them.
 - `python -m defectgen.dataset --shard i/N` gives worker *i* every N-th case, so no two workers
   ever share a case. Two jobs on one case shared scratch files and crashed (SIGBUS, 11 Nov 2026).
