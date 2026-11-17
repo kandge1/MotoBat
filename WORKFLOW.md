@@ -414,6 +414,73 @@ python -m defectgen.probe_arm --stage post_weld --fixture
 # test plugins and dies before running anything.
 
 
+## Arm view plan in RViz (task 2.5) ##
+# The HC10DT flying one stage's inspection views (the 1.5 view plan) from a
+# chosen base, in RViz. Everything you see was checked by MoveIt: each view's
+# pose, each sweep's straight line, and every move between views (planned by
+# OMPL). None of it may enter the red keep-out box (module + 5 cm), the pallet,
+# the support under it, the floor or the robot's own mount.
+# Runs from the MotoBat-arm folder (the arm lane), not ~/projects/MotoBat.
+# One terminal does it all. Ctrl-C closes RViz, the module and the arm together.
+# Light: under 2.5 GB in all, no Gazebo, fine beside a dataset run.
+
+# Terminal 1
+cd ~/projects/MotoBat-arm && source motobat_env.sh
+ros2 run motobat_hc10dt_moveit_config view_plan.py --base A --scan weld
+
+# --base    a named robot placement, from
+#           src/motobat_hc10dt_moveit_config/config/view_bases.yaml
+#             A  hung from an overhead frame above the conveyor (no turntable)
+#             B  on a floor pedestal beside the conveyor (no turntable)
+#           Add your own there: a name, mount (floor | ceiling), bx (along the
+#           module), d (out from its centreline), bz (above the pallet top; below
+#           is negative), pad (keep-out, m). The first run of a new or changed base
+#           computes its plan (about a minute) into data/reach/base_<name>/.
+# --scan    which inspection station to fly
+#             busbar  = pre_busbar   cells, terminals, pads, before the busbars
+#             preweld = pre_weld     busbars placed, not welded
+#             weld    = post_weld    the welds (default)
+#             all     = the three in turn, the module changing with each
+# --view    only one view: its number on screen (e.g. --view 3) or its name
+# --sensor  only the Zivid snapshots (snapshot) or only the Keyence sweeps (profilometer)
+#           With --view or --sensor the arm goes home between views.
+# --rate    playback speed: 0.3 = a third of real speed (default 1 = real time)
+# --step    stop at every view until you press Enter in this terminal
+# --once    fly once, then leave RViz open until Ctrl-C
+# --no-rviz RViz is already open from an earlier run (reuse it)
+# --recompute  recompute the base's plan (after changing the plan or the scene)
+
+# what each base reaches and how long each station takes, without RViz:
+ros2 run motobat_hc10dt_moveit_config view_plan.py --list
+
+# Examples:
+ros2 run motobat_hc10dt_moveit_config view_plan.py --base A --scan all --rate 0.5
+ros2 run motobat_hc10dt_moveit_config view_plan.py --base B --scan busbar --step
+ros2 run motobat_hc10dt_moveit_config view_plan.py --base A --scan weld --view 4 --rate 0.3
+ros2 run motobat_hc10dt_moveit_config view_plan.py --base A --scan preweld --sensor snapshot
+
+# What you are looking at:
+#   top left   station | view number of how many | view name
+#              what the sensor does (snapshot, or sweep length and speed)
+#              what the arm is doing now, and t = robot seconds into the station's cycle
+#   numbers    every view of the station, where it looks (white); the current one is
+#              big and yellow; red "Nx" = this base cannot reach that view
+#   green      the Zivid's field of view, bright while it captures
+#   purple     the Keyence laser fan and its measuring band, bright while it sweeps;
+#              the yellow line is the strip being measured
+#   red box    the keep-out volume, module + 5 cm
+# Times are real robot time at full joint speed (accelerations assumed): the
+# snapshot is 0.1 s but held on screen longer so you can see it.
+# Tick "Collision Enabled" under HC10DT in RViz's left panel to see the shapes
+# MoveIt checked instead of the robot's skin.
+# The camera centres on the module; drag to orbit, scroll to zoom.
+
+# Find better bases (heavy-ish, minutes; writes data/reach/<out>/reach.json and
+# prints the best placements; put the one you like in view_bases.yaml):
+/usr/bin/python3 src/motobat_hc10dt_moveit_config/scripts/view_reach.py --mount ceiling \
+    --out data/reach/my_search --bx 0 0.1 --d 0.2 0.3 --bz 1.0 1.2
+
+
 ## If RViz shows old markers or an old point cloud ##
 # Something from an earlier run is still publishing. Find it and stop it.
 pgrep -af "show_module.py|show_scan.py"

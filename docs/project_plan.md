@@ -1295,6 +1295,14 @@ ros2 run motobat_hc10dt_moveit_config compare_ik.py
 recipes here and in §4A.3; `project_structure.md` marks `motobat_hc10dt_moveit_config` and
 `motobat_bringup` as existing and lists the new `motobat_description` files
 (`line_layout.xacro`, `inspector_station*.xacro`, `hc10dt_macro.xacro`).
+For Phase 3: the GP25's station pose goes in `line_layout.xacro`, not inline in the line file
+(task 3.0), and the other MoveIt configs (3.1, 3.3, 3.3b) copy this package's pattern: a
+`<station>.urdf.xacro` per station, `regen_collision_matrix.sh` and `compare_ik.py` (with OPW in
+the comparison on the GP arms).
+2.5 (14 Nov): the WORKFLOW.md section "Arm view plan in RViz (task 2.5)" was written in this lane
+at the user's request (appended before the last section; take it as is). `module_spec.md` §8/§9
+should say the HC10DT at each inspection station hangs from an overhead frame (no turntable), and
+`line_layout.xacro`'s s3 pose follows base A in `view_bases.yaml` once the conveyor is placed.
  
 ### 4A.3 — Gazebo with ros2_control
  
