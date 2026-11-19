@@ -134,6 +134,12 @@ def run(setting: str) -> None:
 DETECTED = {"hit", "partial", "false_reject", "found"}
 
 
+def cell_text(c: list) -> str:
+    """found/n, or n.m. when the capture could measure none of them (all `not_covered`)."""
+    found, n, unmeasured = c
+    return "n.m." if n and unmeasured == n else f"{found}/{n}"
+
+
 def report() -> str:
     from defectgen.validate import rows
 
@@ -151,9 +157,10 @@ def report() -> str:
                 continue
             lv = r["name"].split("_")[0]
             sizes[(r["family"], lv)] = r["magnitude"]
-            cell = table[r["family"]].setdefault(setting, {}).setdefault(lv, [0, 0])
+            cell = table[r["family"]].setdefault(setting, {}).setdefault(lv, [0, 0, 0])
             cell[0] += v["outcome"] in DETECTED
             cell[1] += 1
+            cell[2] += v["outcome"] == "not_covered"
             fa[setting] += v.get("false_alarms") or 0
     done = [s for s in SETTINGS if s in fa]
     head = "| Family | sizes | " + " | ".join(done) + " |\n|---|---|" + "---|" * len(done) + "\n"
@@ -163,7 +170,7 @@ def report() -> str:
         cells = []
         for s in done:
             c = table[fam].get(s, {})
-            cells.append(" ".join(f"{c[l][0]}/{c[l][1]}" if l in c else "–" for l in lvs))
+            cells.append(" ".join(cell_text(c[l]) if l in c else "–" for l in lvs))
         lines.append(f"| {fam} | {sz} | " + " | ".join(cells) + " |")
     fa_line = "| false alarms | | " + " | ".join(str(fa[s]) for s in done) + " |"
     over = {s: json.loads((OUT / s / "setting.json").read_text())["line_scan"] for s in done}
@@ -171,7 +178,9 @@ def report() -> str:
     return ("# 1.11 sensitivity, fixed line (cut-down)\n\n"
             "Found / n per size (seeds 0–2), one factor changed at a time. Found counts any finding "
             "of the class on it, so at the in-spec size (first) it is a false reject. Method: "
-            "`analysis/sensitivity.py`.\n\n" + settings + "\n\n" + head + "\n".join(lines) + "\n" + fa_line + "\n")
+            "`analysis/sensitivity.py`. n.m. = not measured: every case at that size scored "
+            "`not_covered`, because the capture reported the item unmeasurable (e.g. sampling coarser "
+            "than tolerance / 2) rather than measuring it and missing.\n\n" + settings + "\n\n" + head + "\n".join(lines) + "\n" + fa_line + "\n")
 
 
 def main() -> None:

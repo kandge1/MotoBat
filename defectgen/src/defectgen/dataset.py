@@ -430,15 +430,45 @@ def _field(report, key: str):
     return report[key] if isinstance(report, dict) else getattr(report, key)
 
 
+# A tolerance class is measured per item; the report lists the items its captures could not
+# measure (e.g. sampling coarser than tolerance / 2, §3.7.3). A target on one of them was not
+# looked at by this capture, whatever the station's design coverage says (fixlist F10k).
+UNCOVERED_KEY = {"cell_placement": ("cell position", "cells"), "busbar_pose": ("busbar position", "busbars"),
+                 **{c: ("seam", "seams") for c in ("short_weld", "seam_deviation", "width_deviation",
+                                                   "reinforcement", "weld_path_drift", "weld_arc")}}
+
+
+def _item_centre(item: dict) -> np.ndarray:
+    if "start" in item:
+        return (np.asarray(item["start"], float) + np.asarray(item["end"], float)) / 2
+    return np.asarray(item["centre"], float)
+
+
+def unmeasured(report, labels: dict, d: dict) -> bool:
+    """Whether label `d` sits on an item (cell, busbar, seam) the report says it could not
+    measure. The item is the one whose centre is nearest the label's location, in plan."""
+    key = UNCOVERED_KEY.get(d["cls"])
+    if key is None:
+        return False
+    listed = set(_field(report, "uncovered").get(key[0], []))
+    items = labels.get(key[1]) or []
+    if not listed or not items:
+        return False
+    xy = np.asarray(d["location"], float)[:2]
+    k = int(np.argmin([np.linalg.norm(_item_centre(it)[:2] - xy) for it in items]))
+    return int(items[k].get("index", k)) in listed
+
+
 def score(report, labels: dict, recipe: Recipe, seen=None) -> dict:
     """The case's outcome for one setup, under the out-of-spec rule. `report`
     is a DefectReport or its JSON. `seen(label) -> bool | None` says whether the
     setup looks at a label's place by design (SetupCoverage); a must-find target
-    missed where the setup does not look is `not_covered`, not a miss."""
+    missed where the setup does not look is `not_covered`, not a miss. So is one on an item
+    the report itself lists as not measured (`unmeasured`)."""
     ev = evaluate(report, labels)
     targets = [d for d in ev["labels"] if d["cls"] == recipe.cls]
     found = [d["verdict"] == "tp" for d in targets]
-    looked = [seen(d) if seen else None for d in targets]
+    looked = [False if unmeasured(report, labels, d) else (seen(d) if seen else None) for d in targets]
     out = {"result": _field(report, "result"),
            "false_alarms": int(sum(v == "fp" for v in ev["finding_verdicts"])),
            "other": int(sum(v == "other" for v in ev["finding_verdicts"])),

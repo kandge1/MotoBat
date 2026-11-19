@@ -53,6 +53,8 @@ changes the fingerprint, so the known cases must pass again.
   - in_spec: pass > false_reject.
   - dont_care and clean cases: only false alarms are judged.
 - **`fa` is the most false alarms allowed.** Any rise fails.
+- **`other`, where a case sets it, is the most wrong-class findings allowed** (a finding of another
+  class than the case's: not a false alarm, but it still rejects the module). Any rise fails.
 - **`meas` moving by more than `meas_tol` (0.01) warns.** It does not fail: a fix may legitimately
   move a reading.
 - **`BETTER` raises nothing by itself.** Review the improvement, then raise the accepted value in

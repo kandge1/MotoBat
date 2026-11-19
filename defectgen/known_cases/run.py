@@ -30,11 +30,16 @@ MARK = Path("data/known_cases_runs/LAST_PASS.json")
 
 def code_hash() -> str:
     """Fingerprint of everything that decides a result: the package's code and
-    configs, and this list. Any edit means the known cases must pass again."""
+    configs, the module meshes, and this list. Any edit, a Fusion re-export
+    included, means the known cases must pass again."""
+    from defectgen.parts import mesh_dir
     h = hashlib.sha256()
     files = sorted(p for p in CODE.rglob("*") if p.suffix in (".py", ".yaml") and "__pycache__" not in p.parts)
     for f in files + [HERE / "cases.yaml"]:
         h.update(str(f.relative_to(HERE.parent)).encode())
+        h.update(f.read_bytes())
+    for f in sorted(mesh_dir().glob("*.stl")):   # by name: the mesh folder is outside the package
+        h.update(f"meshes/{f.name}".encode())
         h.update(f.read_bytes())
     return h.hexdigest()[:16]
 STAGES = ["pre_busbar", "pre_weld", "post_weld"]
@@ -114,6 +119,11 @@ def judge(want: dict, got: dict, meas_tol: float) -> tuple[str, list[str]]:
     if fa > want["fa"]:
         why.append(f"false alarms {fa} > accepted {want['fa']}")
     better |= fa < want["fa"]
+    if "other" in want:                 # wrong-class findings, where a case pins them (F10h)
+        oth = got.get("other") or 0
+        if oth > want["other"]:
+            why.append(f"wrong-class findings {oth} > accepted {want['other']}")
+        better |= oth < want["other"]
     warn = []
     m, wm = got.get("measured"), want.get("meas")
     if m is not None and wm is not None and abs(m - wm) > meas_tol:

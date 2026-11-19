@@ -2694,8 +2694,20 @@ describe one detector. Fixed after it and checked on a separate folder (`data/ch
 - *Reporting* (h): a finding of another class on a GRR part is counted nowhere by the false-alarm
   rate; `validate pr` now lists them (4 arm parts, all one cell-position part: a shifted cell exposes
   part of the cap as missing data).
-- Stated, not fixed: one false FOD on foam at the 6-point floor (b), spatter partly found (e), weld
-  arc and cell X read noise near tolerance (f, g, i), drops on or beside a bead not looked at (j).
+- *Edges the step band cannot see* (b, h; fixed 18 Nov, branch `fixlist/1_X`). A cell's cap and
+  the foam pad beside it sit at the same height, so no depth step marks the shoulder and gap
+  between them, which are narrower than a snapshot's 0.49 mm ray spacing. Under misregistration a
+  row of rays lands on them and reads deep or high. That gave the one false FOD on foam (b: a line 6
+  rays long, one thick) and a dent on a moved cell's cap edge (h: 7 rays, all 4 trials of one GRR
+  part). Two rules: a line in mm one ray thick is a graze at any length (it had to be 7.5+ rays), and
+  a cell detection moved gets an outline band of its own motion, as terminals and busbars had.
+  Checked 19 Nov (`data/check_fixlist.sh` → `data/dataset_fx1/`): 253/253 known cases, false alarms
+  fixed 0 in 267 and arm **0 in 277** (≤ 0.011 / module, 95 %), recall unchanged on both setups.
+- *Scoring* (k, fixed 18 Nov): a target on a seam, cell or busbar the report itself lists as
+  unmeasured is `not_covered`, not a miss. Dataset 1 is unchanged by it; the sensitivity sweep's
+  1000 mm and pitch 0.2 settings are (`summary.md` shows them as "n.m.").
+- Stated, not fixed: spatter partly found (e), weld arc and cell X read noise near tolerance
+  (f, g, i), drops on or beside a bead not looked at (j).
 - *Check run, done 17 Nov 2026* (`data/dataset_f10/validation/pr.{fixed,arm}.txt`): known cases
   249 pass, 0 better, 0 FAIL. False alarms: fixed 0 in 267 modules (≤ 0.011 / module, 95 %), arm 1
   in 273 (≤ 0.017): the foam FOD (b), unchanged. Arm FOD 15/15 (was 12/15), arm handling damage
@@ -2725,9 +2737,14 @@ or at three sizes around D for FOD and spatter.
   - 1280 points per line (0.14 mm across): yaw, FOD and spatter worse, 35 false alarms.
 - **Standoff.**
   - At 700 mm (noise ≈ 2×) it behaves like noise × 2: 196 false alarms, spatter mostly lost.
-  - At 1000 mm (noise 4×, 0.14 mm across) seams and busbar positions are reported uncovered, but the
-    residual pass also finds no region at all. That gives 0 false alarms and FOD 2/9: blind, not
-    clean (fixlist F10k).
+  - At 1000 mm (noise 4×, 0.14 mm across) the capture says what it cannot do. 0.14 mm sampling is
+    coarser than tolerance / 2 for seams and cell and busbar positions, so it reports them
+    unmeasured ("n.m." in the summary). Every module is `NOK` or `INCOMPLETE`; none passes. The strip
+    datum needs finer sampling, so registration falls back to the fixture pose and its 0.1 mm
+    uncertainty (twice the strip datum's). Residuals on slopes within that reach are discounted. At the
+    same noise with the strip datum (noise ×4 at 500 mm) the welded stage had 112 regions and 2828
+    false alarms; here it has none. What it can still measure (terminal height, busbar lift-off) it
+    measures as well as at 500 mm. FOD is 2/9, spatter 0/9: below a 4× noise floor (fixlist F10k).
 - **Sensor class (1.11's answer).** About 10 µm height repeatability, set by the welded stage, not
   placement. About 0.05 mm along travel, for cell pose at ±0.2 mm and 0.15 mm spatter. About 0.07 mm
   across. That is dataset 1's sensor at 500 mm with half the conveyor travel per profile.
