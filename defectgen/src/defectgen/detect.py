@@ -1200,7 +1200,12 @@ def residuals(cap: Capture, gold: Golden, p: dict, regions: bool = True,
         edge = band is not None and band[group].mean() > 0.5
         graze_shaped = line or edge
         span = max(len(np.unique(group // cols)), len(np.unique(group % cols)))
-        if graze_shaped and span >= 3 * q["min_thickness"] and npts / span < q["min_thickness"]:
+        # A line in mm a ray thick is a graze however short. The length floor is
+        # for regions judged only by sitting on an edge, where a short compact
+        # blob may be real. Short lines escaped it: 6-7 rays along a cap / foam
+        # boundary (same height, so no step edge) read as a false FOD (F10b) and a
+        # false dent (F10h), 18 Nov 2026.
+        if graze_shaped and (line or span >= 3 * q["min_thickness"]) and npts / span < q["min_thickness"]:
             return None
         gone = float((sidx < 0).mean())
         if area < (q["missing_min_area"] if kind == "missing" and gone > 0.5 else q["min_area"]):
@@ -1873,6 +1878,25 @@ class Detector:
                         np.radians(abs(sc.yaw_deg - g.yaw_deg)) * max(g.ex, g.ey) / 2
                     outlines.append((sc, band))
                 outlines.append((g, band))
+            # Cells that detection moved, the same way. A cell's cap meets the foam
+            # pad beside it at the same height, so the step band cannot see that
+            # edge, yet a shoulder and gap narrower than a snapshot's ray spacing
+            # lie between them. A cell 0.167 mm shifted, measured to 5 um, left a
+            # row of cap rays 0.5-1 mm deep there under a 0.25 mm misregistration:
+            # a "missing region on aluminium_cap" on all 4 trials of one GRR part
+            # (fixlist F10h, 18 Nov 2026). Only moved cells: an unmoved cap edge
+            # keeps its full sensitivity to FOD and dents.
+            for k in range(self.cfg.n_cells):
+                mo = self._motions.get(("cell", k))
+                if mo is None or not _moves(mo, self.p):
+                    continue
+                g = Rect(float(self.cfg.cell_centre_x(k)), 0.0, 0.0, float(self.cfg.cell_t), float(self.cfg.cell_w))
+                c = mo @ np.array([g.cx, g.cy, 0.0, 1.0])
+                dyaw = float(np.degrees(np.arctan2(mo[1, 0], mo[0, 0])))
+                band = max(q["edge_band"], m.gold.spacing) + np.hypot(c[0] - g.cx, c[1] - g.cy) + \
+                    np.radians(abs(dyaw)) * max(g.ex, g.ey) / 2
+                outlines.append((g, band))
+                outlines.append((Rect(float(c[0]), float(c[1]), dyaw, g.ex, g.ey), band))
             # Weld beads too: alignment leaves up to half a profile pitch, and a
             # bead's ends and toes then leave slivers just like a part's edges.
             for pair in m.seams.values():

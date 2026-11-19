@@ -309,16 +309,16 @@ CAD, not the detector. Write-up: `project_plan.md` §4B.6, "A strip that moves w
 
 | # | Item | Kind | Blocks |
 |---|---|---|---|
-| F1 | Carrier 0.16 high lifts busbars past the 0.15 gap tolerance | tolerance contradiction | in-spec false-reject rate of `carrier_seating` (1.8) |
-| F2 | Busbar 0 rests 0.5 mm high after an in-spec 0.1 mm Y shift | CAD check | in-spec false-reject rate of `busbar_shift` (1.8) |
-| F3 | Narrow beads over-read in width | detector limitation | in-spec width false rejects (1.8) |
-| F4 | Weld bow measure has ~no margin to its tolerance | detector limitation | false-alarm rate (1.8) |
+| F1 | Carrier 0.16 high lifts busbars past the 0.15 gap tolerance — **decided 18 Nov 2026**: carrier tolerance ≤ gap tolerance (0.15), applied at dataset 2 | tolerance contradiction | in-spec false-reject rate of `carrier_seating` (1.8) |
+| F2 | Busbar 0 rests 0.5 mm high after an in-spec 0.1 mm Y shift — **found 18 Nov 2026**: one carrier tab at 0.05 mm clearance, fix in Fusion | CAD check | in-spec false-reject rate of `busbar_shift` (1.8) |
+| F3 | Narrow beads over-read in width — **accepted 18 Nov 2026**, revisit with the welding follow-up | detector limitation | in-spec width false rejects (1.8) |
+| F4 | Weld bow measure has ~no margin to its tolerance — **accepted 18 Nov 2026**: ~1 per 1000 modules until a seam limit is sourced | detector limitation | false-alarm rate (1.8) |
 | ~~F5~~ | ~~Arm cases run on one core: ~270 s per welded module~~ — **first pass done 12 Nov 2026**: 1.6–2× faster, results unchanged | speed | cheap reruns: 1.13 held-out set, any detector change |
 | F6 | The arm column measured a flawed arm plan: FOD 60 %, in-spec welds rejected, wall dents 12/20 — **fixed 12 Nov 2026**, arm column to be rerun | coverage + detector | a fair fixed-vs-arm verdict (1.10) |
 | F7 | The v2 arm rerun raised 1,126 false-alarm regions in 9 of its first 128 modules, plus 7 single ones — **fixed 13 Nov 2026**, rerun v2 stopped | detector | a false-alarm rate that means something; the v2 run was spending 30 h on it |
 | F8 | F7's honest dim-ray threshold lost fixed spatter drops: evidence spread over a region — **fixed 14 Nov 2026** (a small compact group is a region on its summed evidence; first form withdrawn: it drew foam-edge lines) | detector | spatter detection rate on both setups (1.8) |
 | F9 | Arm cells placed from one terminal: a 0.08° yaw step on a 57.5 mm lever moved unmoved cells 0.1 mm in the module as measured — **fixed 14 Nov 2026** (both terminals) | detector | arm false-alarm rate; arm cell yaw / position (1.8, 1.9) |
-| F10 | v3 (dataset 1): FOD 0.4 mm escapes, a false FOD on foam, two wrong-class calls, spatter partly found, in-spec over-reads, and a wrong-class false alarm the scorer does not count. a, c, h **fixed 16 Nov 2026, confirmed 17 Nov** (check run `data/check_f10.sh`: 249/249 known cases, null sweep 0 false alarms fixed, 1 arm = b); d is the generated flush weld, not the detector; the rest stated | detector + scorer | arm POD (1.10); an honest false-alarm rate (1.8); v4 (realism) must start from the fixed detector |
+| F10 | v3 (dataset 1): FOD 0.4 mm escapes, a false FOD on foam, two wrong-class calls, spatter partly found, in-spec over-reads, and a wrong-class false alarm the scorer does not count. a, c, h **fixed 16 Nov 2026, confirmed 17 Nov** (check run `data/check_f10.sh`: 249/249 known cases, null sweep 0 false alarms fixed, 1 arm = b). **b, h (detector side) and k fixed 18 Nov, confirmed 19 Nov** (branch `fixlist/1_X`, check `data/check_fixlist.sh` → `data/dataset_fx1/`: 253/253 known cases; false alarms fixed 0 / 267, arm 0 / 277; recall unchanged on both setups). d is the generated flush weld, not the detector; e, f, g, i, j stated (sensor class or design) | detector + scorer | arm POD (1.10); an honest false-alarm rate (1.8); v4 (realism) must start from the fixed detector |
 
 ### F1 — Carrier seating vs busbar gap
 
@@ -330,6 +330,13 @@ gap.
 **To close.** Source both tolerances (D1, §3.7.9). If both hold, the carrier tolerance must be
 tighter than the gap's; if not, one of them changes. It is a spec decision, not a fix.
 
+**Decided 18 Nov 2026.** A carrier may not sit higher than the busbar gap it creates, so the carrier
+tolerance is at most the gap tolerance: `carrier.dz_tol` 0.20 → 0.15 (still assumed, A; D1 can
+change both). **Applied at the start of dataset 2, not now:** dataset levels are multiples of the
+tolerance, so the change renames every `carrier_seating` case (0.16 → 0.12) and breaks dataset 1's
+labels and its known cases. Dataset 2 re-keys the carrier known cases when it changes the config.
+Until then, dataset 1's 5/10 in-spec carrier rejects are this contradiction, not the detector.
+
 ### F2 — Busbar 0 lifts on an in-spec shift
 
 **What it is.** `pod/busbar_shift/L0_0.1_s0`: busbar 0 shifted dy −0.10 mm (pose tolerance ±0.2)
@@ -339,6 +346,20 @@ The detector reads `busbar_liftoff` 0.50, which is right for the generated part.
 
 **To close.** In Fusion, check what is within 0.1–0.2 mm of busbar 0's −Y edge (carrier rib,
 terminal window, wall). Then either add clearance or record the real limit.
+
+**Found 18 Nov 2026 (in the exported meshes, not yet in Fusion).** It rests on the **carrier**: one
+tab on the outer (−Y) wall of busbar 0's slot, 7.5 mm long, top at the carrier top (z 102.0, 1 mm
+above the terminal tops). Every other slot wall of all five busbars clears its busbar by 1.50–1.55 mm
+(E7's relief); this one by **0.05 mm**. A 0.1 mm −Y shift puts the busbar's edge on it.
+- Module frame: x −31.75 to −24.25, y −66.0 to −63.55. That is between cells 4 and 5 (the 5th and
+  6th from −X), under the 6-terminal series busbar, on the side-plate side of its slot.
+- `busbar_carrier.stl` as exported (before `parts.py` turns it 90° about Z and centres it): x −66.0
+  to −63.55, y +24.25 to +31.75, measured from the body's bounding-box centre, at its top face.
+- Looks like the E7 relief cut missed one rib. **Fix in Fusion:** extend the relief past this tab,
+  re-export `busbar_carrier.stl`. Expected effect: `pod/busbar_shift/L0_0.1_s0` false reject → pass
+  (a BETTER in the known cases), nothing else, since no other busbar comes near it.
+- The known-cases fingerprint now includes the module meshes (`known_cases/run.py`), so a re-export
+  needs a known-cases pass like any code change.
 
 ### F3 — Narrow beads read about 1.4× in width change
 
@@ -350,6 +371,9 @@ was tried (`width_change_area`, kept in the reports): it reads narrow beads bett
 **To close.** A decision: accept and state it, or revisit with the welding follow-up
 (`welding_followup.md`), which judges beads against their expected shape.
 
+**Accepted 18 Nov 2026.** Stated as a sensor-model limit: about 2 in 10 in-spec ×0.84 beads are
+rejected for width. Revisited only with the welding follow-up.
+
 ### F4 — Weld bow noise reaches its tolerance
 
 **What it is.** On untouched seams the bow (sagitta) reading has p99.9 ≈ 0.098–0.106 mm against
@@ -357,6 +381,10 @@ was tried (`width_change_area`, kept in the reports): it reads narrow beads bett
 
 **To close.** A decision: accept about 1 per 1000 modules, smooth the bow measure, or source a
 real seam limit (ISO 13919-2, §3.7.9).
+
+**Accepted 18 Nov 2026.** About 1 false alarm per 1000 modules from the bow measure, stated with the
+false-alarm rate. Reopen when a real seam limit is sourced (ISO 13919-2) or if dataset 2's realism
+raises it.
 
 ### F5 — The arm column runs on one core
 
@@ -594,7 +622,7 @@ because realism usually makes these worse, not better.
 | # | What | Where | Effect | Suspected cause (unconfirmed) |
 |---|---|---|---|---|
 | a | **FOD 0.4 mm escapes**: 2/5, while 0.25 mm and 0.6 mm are 5/5. s2, s3, s4 found *nothing*; module passed | `pod/fod/L4_0.4_s{2,3,4}` (particles at x 70.3, 90.2, −44.9; z 95.4, 93.4) | **real escapes** (worst item) | not size: the bigger particle is found. Placement: where those particles sit (cell-top foam, between pads) relative to the arm views, or the raised-region filters (`max_aspect`, `edge_band`, `blob_max_area`) **Fixed 16 Nov, confirmed 17 Nov** (`data/check_f10.sh`: arm FOD 15/15). Cause: the graze tests counted grid cells on an anisotropic sweep grid, and the particle bridged the cap recess; both now apply only to lines in mm or regions on an edge. Found at 0.78–0.79 mm. |
-| b | **False FOD on foam**: 6 points, 0.56 mm², 0.26 mm high at [27.2, −46.4, 95.1] | `pod/handling_damage/L2_0.1_s4` (the injected dent was found) | 1 false alarm in ~970 arm modules (incl. the 400-module null sweep) | exactly at `residual.min_points: 6`. Raise the floor for raised regions on foam, or require an area/evidence margin over it **Stated, not fixed**: 1 in ~970 arm modules; held as a known case at fa 1. |
+| b | **False FOD on foam**: 6 points, 0.56 mm², 0.26 mm high at [27.2, −46.4, 95.1] | `pod/handling_damage/L2_0.1_s4` (the injected dent was found) | 1 false alarm in ~970 arm modules (incl. the 400-module null sweep) | exactly at `residual.min_points: 6`. Raise the floor for raised regions on foam, or require an area/evidence margin over it **Fixed 18 Nov, confirmed 19 Nov** (`data/check_fixlist.sh`: arm 0 false alarms in 277). Not foam as such: a line 6 rays long and one ray thick (0.08 × 1.45 mm), on cell 6's cap / foam boundary, which sits level, so no step edge marks it. The graze test only judged lines ≥ 7.5 rays long; a line in mm one ray thick is now a graze at any length. Rerun: fa 0, the dent still found, FOD 0.25 / 0.4 still hit. Known case lowered to fa 0. |
 | c | **Cap dent called `anomaly`**: handling damage 0.4 mm on the cell cap | `pod/handling_damage/L4_0.4_s{2,3}` | NOK, wrong class (3/5 counted) | the cap's classification rule; 0.2 and 0.8 mm are classed right **Fixed 16 Nov, confirmed 17 Nov** (arm handling damage 19/20, the miss is the L2 one below): a small region whose returned rays read a depth is a dent. Only these two findings in all of dataset 1 change. |
 | d | **Reinforcement 0.3 mm called `missing_weld`** (twice per module), **on both setups, same seeds** | `pod/reinforcement/L6_0.3_s{2,3}` | NOK, wrong class (3/5 each) | not the views: the same two generated beads fail on the line scan too. A tall crown on those stitches fails the seam fit and reads as no bead, or the generator makes an odd bead there; check the generated mesh first. 0.13–0.2 mm are right **Not a detector fault, stated**: the two seeds draw −0.3 mm on a 0.3 mm crown, a flush weld. Height cannot tell flush from no weld (§4B.6 already says so; heat tint can, `welding_followup.md`). |
 | e | **Spatter partly found**: L3 1/5, L4 3/5, L5 0/5 complete; every module still NOK | `pod/spatter/L{3,4,5}_*` | rejected, but drop count low | F8's region rule on arm geometry; check which drops are lost (shadowed by the bead? outside the weld sweep?) **Stated**: module decision 100 % (arm) / 87 % (fixed); complete recall is what the bead band costs. |
@@ -603,8 +631,8 @@ because realism usually makes these worse, not better.
 | i | **Fixed: weld arc under-read at 0.13**: read −0.077 / −0.096 against 0.1, 3/5 (0.11 was 4/5) | `pod/weld_arc/L3_0.13_s{0,3}` | 2 escapes; also an in-spec 0.08 read 0.119 (s2): spread both ways | arc measure noise on the line scan's sampling, σ ≈ 28 (`pr` reading error); arm σ 19 **Stated**: as f, fixed. |
 | j | **Fixed: 2 spatter modules with no drop found**, 0.15 mm | `pod/spatter/L3_0.15_s{1,2}` | real escapes (complete recall 7 %; the rest partial) | the bead band (§4B.4): drops on or beside the bead are not looked at; arm finds every module **Stated**: the bead band (§4B.4), a design choice. |
 | — | Fixed, known: cell shift 0.22 read 0.18–0.19 (3/5 missed), cell yaw reads in 0.025° steps, an in-spec 0.16 read 0.2001 | `pod/cell_shift/L2_*`, `pod/cell_yaw/*` | 1.9: cell X %GRR 50 % | the line scan's 0.1 mm pitch (§4B.4, 1.9); not a detector bug, a sensor-class result |
-| h | **Wrong-class false alarm, not counted**: `handling_damage` 0.98 mm "missing region on aluminium_cap" on a cell-position GRR part | `grr/.../cell_position_p2_l{0,1}_t{0,1}` (all 4: repeatable) | module NOK; **scorer reports `pass`, `false_alarms` 0** | detector: a shifted cell exposes/hides part of the cap as missing data. Scorer: a finding of a class other than the case's is not counted as a false alarm (same for F1/F2 below). Fix the scorer first, then recount every tier **Fixed 16 Nov**: `validate pr` lists GRR parts with a wrong-class finding and the in-spec GRR decision. The detector side (a shifted cell exposes cap as missing data) is open. |
-| k | **1000 mm standoff finds nothing at all** (1.11 sweep): 0 residual regions per capture although noise is 4× (noise ×4 at 500 mm gives 2842 false alarms); FOD 0.4 mm 2/3. Seams and busbar positions are reported uncovered, yet spatter and weld cases score `miss`, not `not_covered` | `data/sensitivity/standoff_1000/pod/*` (`residual.regions: 0`, `misregistration_mm: 0.1`, datum "housing tops only") | a sensor that is blind looks clean: 0 false alarms | the residual pass when the datum falls back to the fixture pose (misregistration 0.1 widens the step band?), and the scorer not passing the report's `uncovered` through for region classes. **Stated 16 Nov**, not looked at: no detector edits while check_f10 runs |
+| h | **Wrong-class false alarm, not counted**: `handling_damage` 0.98 mm "missing region on aluminium_cap" on a cell-position GRR part | `grr/.../cell_position_p2_l{0,1}_t{0,1}` (all 4: repeatable) | module NOK; **scorer reports `pass`, `false_alarms` 0** | detector: a shifted cell exposes/hides part of the cap as missing data. Scorer: a finding of a class other than the case's is not counted as a false alarm (same for F1/F2 below). Fix the scorer first, then recount every tier **Fixed 16 Nov**: `validate pr` lists GRR parts with a wrong-class finding and the in-spec GRR decision. **Detector side fixed 18 Nov, confirmed 19 Nov** (all 4 trials pass with no finding; arm GRR cell parts 0/5 rejected). The cell is measured to 5 µm (−0.162 vs −0.167), and noise-free the module as measured matches the real one ray for ray. The finding is one grid row of a snapshot (0.49 mm spacing), the last cap row before the foam, 0.45–0.98 mm deep and dim (signal 0.13 against 0.85). The cap and the foam beside it are both at z 95, so the step band does not see the shoulder and gap between them, and under that capture's 0.25 mm misregistration the row lands on the shoulder. Measured terminals and busbars had outline bands; measured cells had none. Now a cell detection moved gets one: edge band + its own motion. Unmoved cells get none, so cap-edge FOD keeps its sensitivity. The short-line graze rule (b) also catches it. Rerun: 2 of the 4 trials OK with no finding. Known cases added for all 4, with a new `other: 0` limit on wrong-class findings. |
+| k | **1000 mm standoff finds nothing at all** (1.11 sweep): 0 residual regions per capture although noise is 4× (noise ×4 at 500 mm gives 2842 false alarms); FOD 0.4 mm 2/3. Seams and busbar positions are reported uncovered, yet spatter and weld cases score `miss`, not `not_covered` | `data/sensitivity/standoff_1000/pod/*` (`residual.regions: 0`, `misregistration_mm: 0.1`, datum "housing tops only") | a sensor that is blind looks clean: 0 false alarms | the residual pass when the datum falls back to the fixture pose (misregistration 0.1 widens the step band?), and the scorer not passing the report's `uncovered` through for region classes. **Fixed 18 Nov (scorer); detector right.** Not blind: every 1000 mm module is `NOK` or `INCOMPLETE`, none `OK`. The datum falls back to the fixture pose (strip outlines need finer than 0.14 mm), so misregistration is 0.1 mm, not 0.05, and slope residuals within that reach are discounted. At the same σ (0.067) with the strip datum, the welded stage had 112 regions; here none. That is the allowance doing its job, not a lost pass. The scorer read only the station's design coverage; it now also reads the report's own `uncovered` (`dataset.unmeasured`), so a target on an unmeasured seam, cell or busbar is `not_covered`. Dataset 1 rescored in memory: no outcome changes. Sensitivity folders rescored: 24 cases at 1000 mm and the pitch 0.2 setting's cell pose and welds become `not_covered` ("n.m." in `summary.md`). Spatter and FOD stay misses: below a 4× noise floor |
 | — | Known, not new: carrier 0.16 lifts busbars (5/5 in-spec NOK), busbar 0 lifts on an in-spec 0.1 shift | `pod/carrier_seating/L1_0.16_*`, `pod/busbar_shift/L0_0.1_s0` | as F1, F2 | spec / CAD, not detector |
 | — | Expected: the smallest level (L2) of short_weld 0/5, reinforcement 1/5, weld_arc 2/5, weld_path_drift 2/5, cell_yaw 4/5, handling_damage 4/5 | `pod/*/L2_*` | where the POD curve starts | not a defect: these set a90/95 (1.10) |
 

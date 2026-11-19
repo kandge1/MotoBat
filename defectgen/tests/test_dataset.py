@@ -121,6 +121,23 @@ def test_a_miss_where_the_setup_does_not_look_is_not_covered():
     assert sc["outcome"] == "miss" and sc["not_looked_at"] == 1
 
 
+def test_a_target_on_an_item_the_report_could_not_measure_is_not_covered():
+    """F10k: a capture too coarse to measure a seam says so in `uncovered`; a short weld on
+    that seam was not looked at, so it is `not_covered`, not a miss. A seam it did measure
+    still scores a miss."""
+    r = Recipe("pod", "short_weld", "short_weld", "post_weld", "tolerance", 0.3, 1, "x", truth="must_find")
+    seams = [{"index": 0, "start": [-157.5, -60.0, 102.5], "end": [-145.5, -60.0, 102.5]},
+             {"index": 1, "start": [-157.5, -55.0, 102.5], "end": [-145.5, -55.0, 102.5]}]
+    on = lambda y: {"cls": "short_weld", "magnitude": 0.3, "location": [-151.5, y, 102.5],  # noqa: E731
+                    "bounds": [[-157.5, y - 1, 102], [-145.5, y + 1, 103]], "stage": "post_weld"}
+    rep = {"stage": "post_weld", "result": "INCOMPLETE", "uncovered": {"seam": [0]}, "findings": []}
+    assert score(rep, {"defects": [on(-60.0)], "seams": seams}, r)["outcome"] == "not_covered"
+    assert score(rep, {"defects": [on(-55.0)], "seams": seams}, r)["outcome"] == "miss"
+    assert score(rep, {"defects": [on(-60.0), on(-55.0)], "seams": seams}, r)["outcome"] == "miss"
+    rep["uncovered"] = {}
+    assert score(rep, {"defects": [on(-60.0)], "seams": seams}, r)["outcome"] == "miss"
+
+
 def test_setup_coverage_reads_the_patches_task_1_5_saved(tmp_path):
     """Two handling-damage patches: a top face both setups cover and a side
     face only the arm covers. A dent's box is looked up against them."""
