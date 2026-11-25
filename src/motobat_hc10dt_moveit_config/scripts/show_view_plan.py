@@ -3,7 +3,8 @@
 Fly the HC10DT through one stage of the 1.5 view plan in RViz (task 2.5).
 
 Plays what `view_reach.py --plan` computed for one base: the views in their
-planned order, every move between them planned by OMPL and collision-checked
+planned order, every move between them planned (a joint move, or OMPL where that
+collides) and collision-checked
 against the keep-out box (module + pad), the pallet, the support, the floor and
 the pedestal, timed at the robot's joint limits. Nothing here is interpolated
 or invented: if a move failed to plan, it says so on screen.
@@ -37,7 +38,7 @@ from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile
 from rviz_2d_overlay_msgs.msg import OverlayText
 from scipy.spatial.transform import Rotation
-from sensor_msgs.msg import JointState
+from sensor_msgs.msg import JointState, PointCloud2, PointField
 from std_msgs.msg import ColorRGBA, Header
 from tf2_ros import TransformBroadcaster
 from visualization_msgs.msg import Marker, MarkerArray
@@ -55,7 +56,8 @@ LJX_NEAR, LJX_FAR, LJX_W_NEAR, LJX_W_FAR = 0.241, 0.309, 0.064, 0.080
 STAGE_NAME = {'pre_busbar': 'PRE-BUSBAR', 'pre_weld': 'PRE-WELD', 'post_weld': 'POST-WELD'}
 SCENE_COLOUR = {'keepout': (0.9, 0.15, 0.1, 0.18), 'pallet': (0.35, 0.45, 0.6, 0.9),
                 'support': (0.35, 0.45, 0.6, 0.35), 'floor': (0.5, 0.5, 0.5, 0.4),
-                'pedestal': (0.45, 0.45, 0.4, 0.9), 'mount_plate': (0.45, 0.45, 0.4, 0.9)}
+                'pedestal': (0.45, 0.45, 0.4, 0.9), 'mount_plate': (0.45, 0.45, 0.4, 0.9),
+                'conveyor': (0.25, 0.55, 0.3, 0.8)}
 
 
 def rgba(r, g, b, a=1.0):
@@ -64,6 +66,46 @@ def rgba(r, g, b, a=1.0):
 
 def pt(v):
     return Point(x=float(v[0]), y=float(v[1]), z=float(v[2]))
+
+
+def rainbow_rgb(s):
+    """Packed RGB for 0..1: blue, cyan, green, yellow, red."""
+    s = np.clip(s, 0.0, 1.0)
+    r, g, b = (np.clip(1.5 - np.abs(4 * s - c), 0, 1) for c in (3, 2, 1))
+    return (((r * 255).astype(np.uint32) << 16) | ((g * 255).astype(np.uint32) << 8)
+            | (b * 255).astype(np.uint32))
+
+
+def cloud_msg(pts, rgb, stamp):
+    m = PointCloud2()
+    m.header.frame_id = 'module'
+    m.header.stamp = stamp
+    m.height, m.width = 1, len(pts)
+    m.fields = [PointField(name=n, offset=4 * i, datatype=PointField.FLOAT32, count=1)
+                for i, n in enumerate(('x', 'y', 'z', 'rgb'))]
+    m.point_step, m.row_step = 16, 16 * len(pts)
+    m.is_dense, m.is_bigendian = True, False
+    buf = np.empty((len(pts), 4), np.float32)
+    buf[:, :3] = pts
+    buf[:, 3] = rgb.view(np.float32)
+    m.data = buf.tobytes()
+    return m
+
+
+def load_scans(folder, views):
+    """scan_view_plan.py's clouds.npz: per view, display points (m, module frame) and when in
+    the capture each was measured (0..1 along a sweep; 0 for a snapshot). Coloured by how
+    far each point stands out toward that view's sensor, over the view's own 2-98 % range,
+    as a profilometer height map reads: red = nearest (raised), blue = farthest (sunk)."""
+    z = np.load(Path(folder) / 'clouds.npz')
+    out = {}
+    for k, vid in enumerate(z['ids']):
+        p, t = z[f'p{k}'], z[f't{k}']
+        T = np.array(views[str(vid)]['T_plan'])
+        d = -(p - T[:3, 3]) @ T[:3, 2]          # toward the sensor = larger
+        lo, hi = np.percentile(d, [2, 98]) if len(d) else (0.0, 1.0)
+        out[str(vid)] = (p, t, rainbow_rgb((d - lo) / max(hi - lo, 1e-6)))
+    return out
 
 
 def describe(v):
@@ -89,7 +131,7 @@ def tag_point(v):
 
 
 class Player(Node):
-    def __init__(self, result, floor, pad, rate, step):
+    def __init__(self, result, floor, pad, rate, step, scans=None):
         super().__init__('show_view_plan')
         self.res = result
         self.base = result['base']
@@ -101,6 +143,11 @@ class Player(Node):
         self.mk = self.create_publisher(MarkerArray, '/view_plan/markers', qos)
         self.cap = self.create_publisher(OverlayText, '/view_plan/caption', qos)
         self.tf = TransformBroadcaster(self)
+        # simulated scans: what every finished view measured, and the sweep under way
+        self.scans = scans or {}
+        self.scan_done = self.create_publisher(PointCloud2, '/view_plan/scan', qos)
+        self.scan_live = self.create_publisher(PointCloud2, '/view_plan/scan_live', qos)
+        self.done = []
         self.q = list(result.get('home', vr.READY))
         self.tags = []          # (number, view, reachable)
         self.current = None     # view id
@@ -215,6 +262,26 @@ class Player(Node):
             ms.append(Marker(action=Marker.DELETE, ns='plan/where', id=k))
         return MarkerArray(markers=ms)
 
+    def show_scans(self, live=None, frac=1.0):
+        """Publish the finished views' points; with `live`, that view's points measured so far."""
+        if not self.scans:
+            return
+        now = self.get_clock().now().to_msg()
+        if live is None:
+            have = [self.scans[v] for v in self.done if v in self.scans]
+            pts = np.concatenate([h[0] for h in have]) if have else np.zeros((0, 3), np.float32)
+            rgb = np.concatenate([h[2] for h in have]) if have else np.zeros(0, np.uint32)
+            self.scan_done.publish(cloud_msg(pts, rgb, now))
+            self.scan_live.publish(cloud_msg(np.zeros((0, 3), np.float32), np.zeros(0, np.uint32), now))
+        elif live in self.scans:
+            p, t, rgb = self.scans[live]
+            on = t <= frac
+            self.scan_live.publish(cloud_msg(p[on], rgb[on], now))
+
+    def captured(self, vid):
+        self.done.append(vid)
+        self.show_scans()
+
     # -- motion ----------------------------------------------------------------------
     def wait(self, seconds, lines, count=0.0, **kw):
         """Show for `seconds` of screen time (scaled by --rate); the cycle clock advances
@@ -242,7 +309,7 @@ class Player(Node):
             time.sleep(1.0 / HZ)
         self.q = list(Q[-1])
 
-    def capture(self, v, lines):
+    def capture(self, v, lines, path=None):
         if self.step:
             self.publish(lines + ['paused: press Enter in the terminal'], active=v['sensor'],
                          strip=strip_of(v) if v['sensor'] == 'profilometer' else None)
@@ -251,18 +318,27 @@ class Player(Node):
             self.wait(ARRIVE_SHOW, lines[:2] + ['arrived'])
             self.wait(SNAP_SHOW, lines[:2] + ['capturing (0.1 s, held on screen)'],
                       count=v['capture_s'], active='snapshot')
+            self.captured(v['id'])
             return
         self.wait(ARRIVE_SHOW, lines[:2] + ['at run-in'], strip=strip_of(v))
-        path = v['path']
+        # the path's points are evenly spaced along the line and the sweep runs at constant
+        # speed, so point index is linear in time: interpolate between points, don't snap
+        Q = np.array(path if path is not None else v['path'])   # the branch this flight chose
+        u = np.linspace(0.0, 1.0, len(Q))
         dur = v['capture_s']
         n = max(1, int(dur / self.rate * HZ))
         c0 = self.clock
         for i in range(1, n + 1):
-            self.q = path[min(len(path) - 1, round(i / n * (len(path) - 1)))]
+            self.q = [float(np.interp(i / n, u, Q[:, j])) for j in range(6)]
             self.clock = c0 + dur * i / n
             self.publish(lines[:2] + [f"sweeping at {v['speed_mm_s']:.0f} mm/s"],
                          active='profilometer', strip=strip_of(v))
+            if i % 4 == 0:
+                # the run-up is RUN_UP of the path at each end; the profiles span the rest
+                L = v['length'] + 2 * vr.RUN_UP
+                self.show_scans(v['id'], (i / n * L - vr.RUN_UP) / v['length'])
             time.sleep(1.0 / HZ)
+        self.captured(v['id'])
 
     # -- a stage ---------------------------------------------------------------------
     def fly(self, stage, only=None, sensor=None):
@@ -282,6 +358,8 @@ class Player(Node):
         missing = (f"not reachable from this base: {', '.join(seq['missing'])}"
                    if seq['missing'] else 'every view of this stage is reachable')
         self.current = None
+        self.done = []
+        self.show_scans()
         self.wait(2.0, [head + f' | {len(order)} views, cycle {seq["cycle_s"]:.1f} s '
                         f'(moves {seq["move_s"]:.1f} + captures {seq["capture_s"]:.1f})',
                         missing, 'home'])
@@ -297,8 +375,9 @@ class Player(Node):
             lines = [top, describe(v)]
             print(f'  {k + 1:2d}. {i_d:28s} {describe(v)}', flush=True)
             leg = self.res['solo'][i_d]['in'] if subset else seq['legs'][k]
-            self.play_leg(leg, lines + ['moving (OMPL-planned, collision-checked)'])
-            self.capture(v, lines)
+            self.play_leg(leg, lines + ['moving (collision-checked)'])
+            self.capture(v, lines, self.res['solo'][i_d].get('path') if subset
+                         else seq.get('paths', {}).get(i_d))
             if subset:
                 self.play_leg(self.res['solo'][i_d]['out'], lines + ['back home'])
         if not subset:
@@ -323,9 +402,13 @@ def main():
     ap.add_argument('--step', action='store_true', help='stop at every view until Enter')
     ap.add_argument('--once', action='store_true')
     ap.add_argument('--name', default='', help='base name for the caption')
+    ap.add_argument('--scans', type=Path, default=None,
+                    help='a scan_view_plan.py output folder (data/arm_scans/<name>/base_<B>/<stage>): '
+                         'show each view\'s simulated points as it is captured')
     a = ap.parse_args()
 
     data = json.load(open(a.reach))
+    vr.CONVEYOR_LIFT = data.get('conveyor_lift')      # draw the conveyor the plan was checked with
     res = data['results'][0]
     if 'sequences' not in res:
         sys.exit(f'{a.reach} has no planned sequences: rerun view_reach.py with --plan')
@@ -342,7 +425,11 @@ def main():
                  f"{res['sequences'][stage]['order']}")
 
     rclpy.init()
-    p = Player(res, data['floor'], data.get('pad', vr.PAD), a.rate, a.step)
+    scans = load_scans(a.scans, {v['id']: v for v in res['views']}) if a.scans else None
+    if scans:
+        print(f'simulated scans from {a.scans}: {len(scans)} views, '
+              f'{sum(len(c[0]) for c in scans.values()):,} display points', flush=True)
+    p = Player(res, data['floor'], data.get('pad', vr.PAD), a.rate, a.step, scans)
     try:
         while rclpy.ok():
             p.fly(stage, only, a.sensor)

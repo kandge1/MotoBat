@@ -12,9 +12,9 @@
   Each is mounted to a world frame at its station position.
 
   Layout is a straight line along +X at 1.2 m pitch, matching the process
-  order stack -> weld -> inspect -> seal. The Inspector sits back on -Y and
-  higher, reflecting the HC10's larger reach envelope and its role of
-  scanning across stations rather than working one tight cell.
+  order stack -> weld -> inspect -> seal. The Inspector hangs upside down
+  from an overhead frame above its pallet stop (task 2.5, base A); its pose,
+  the floor and the pallet height are in line_layout.xacro.
 -->
 <robot name="motobat_line" xmlns:xacro="http://ros.org/wiki/xacro">
 
@@ -37,9 +37,8 @@
   <xacro:motoman_gp4 prefix="s2_"/>
   <xacro:station_mount prefix="s2_" x="${pitch}"    y="0" z="${table_height}" yaw="0"/>
 
-  <!-- Station 3 — Inspector (HC10DT), with its pose in line_layout.xacro.
-       Set back on -Y and raised: the HC10's 2400 mm vertical reach lets it
-       scan across neighbouring stations from a central position. -->
+  <!-- Station 3 — Inspector (HC10DT), with its pose in line_layout.xacro:
+       hung from an overhead frame above the pallet stop (task 2.5, base A). -->
   <xacro:motobat_inspector_station prefix="s3_"/>
 
   <!-- Station 4 — Can Sealer (GP7) -->

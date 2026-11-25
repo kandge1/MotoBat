@@ -21,7 +21,7 @@
 
   <xacro:macro name="motobat_inspector_station" params="prefix">
     <xacro:motobat_hc10dt prefix="${prefix}"/>
-    <xacro:station_mount prefix="${prefix}" x="${s3_x}" y="${s3_y}" z="${s3_z}" yaw="${s3_yaw}"/>
+    <xacro:station_mount prefix="${prefix}" x="${s3_x}" y="${s3_y}" z="${s3_z}" yaw="${s3_yaw}" roll="${s3_roll}"/>
     <xacro:inspector_flange prefix="${prefix}" parent="${prefix}tool0"/>
   </xacro:macro>
 

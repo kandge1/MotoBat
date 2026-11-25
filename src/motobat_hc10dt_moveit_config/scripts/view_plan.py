@@ -35,7 +35,9 @@ STAGES = ['pre_busbar', 'pre_weld', 'post_weld']
 SCAN = {'all': STAGES, 'busbar': ['pre_busbar'], 'pre_busbar': ['pre_busbar'],
         'preweld': ['pre_weld'], 'pre_weld': ['pre_weld'], 'weld': ['post_weld'],
         'postweld': ['post_weld'], 'post_weld': ['post_weld']}
-CAPS = {'compute': '1G', 'rviz': '1200M', 'module': '500M', 'player': '300M'}
+# RViz holds every displayed point (~1.9 M with --scans): 1.2 GB was too little and the cap killed
+# it (CONSTRAINT_MEMCG, 18 Nov). Watching takes ~4 GB in all: don't run scan_view_plan.py alongside.
+CAPS = {'compute': '1G', 'rviz': '2500M', 'module': '400M', 'player': '500M', 'detections': '300M'}
 COMPUTE_DOMAIN = '43'   # its own move_group, kept off the viewer's domain
 
 
@@ -89,10 +91,15 @@ def up_to_date(name, b):
         return False
     d = json.load(open(p))
     r = d['results'][0]
-    have = (r['base']['bx'], r['base']['d'], r['base']['bz'], r['base'].get('mount'), d.get('pad'))
-    want = (b['bx'], b['d'], b['bz'], b['mount'], b['pad'])
-    return 'sequences' in r and all(abs(x - y) < 1e-9 if isinstance(x, float) else x == y
-                                    for x, y in zip(have, want))
+    have = (r['base']['bx'], r['base']['d'], r['base']['bz'], r['base'].get('mount'), d.get('pad'),
+            d.get('conveyor_lift'))
+    want = (b['bx'], b['d'], b['bz'], b['mount'], b['pad'], b.get('conveyor_lift'))
+    # plans from before 18 Nov have no transit floor and sparse sweeps: recompute those
+    same = lambda x, y: x == y or (isinstance(x, (int, float)) and isinstance(y, (int, float))
+                                   and abs(x - y) < 1e-9)
+    # planner 3 (18 Nov): IK branches chosen per sequence; joint moves, raised waypoints, then OMPL
+    return ('sequences' in r and 'transit_floor' in r and r.get('planner', 1) >= 3
+            and all(same(x, y) for x, y in zip(have, want)))
 
 
 def compute(name, b):
@@ -103,7 +110,9 @@ def compute(name, b):
     cmd = capped(['/usr/bin/python3', str(HERE / 'view_reach.py'), '--coverage',
                   str(REPO / 'data' / 'coverage'), '--out', str(out), '--plan',
                   '--base', str(b['bx']), str(b['d']), str(b['bz']),
-                  '--mount', b['mount'], '--pad', str(b['pad'])], CAPS['compute'])
+                  '--mount', b['mount'], '--pad', str(b['pad'])]
+                 + (['--conveyor-lift', str(b['conveyor_lift'])] if b.get('conveyor_lift') is not None else []),
+                 CAPS['compute'])
     if subprocess.run(cmd, env=env, cwd=REPO).returncode != 0:
         sys.exit(f'computing base {name} failed; see {out}/move_group.log')
 
@@ -124,6 +133,16 @@ def summary(name, b):
               + (f"  NOT REACHABLE: {', '.join(q['missing'])}" if q['missing'] else ''))
 
 
+DEFAULT_MODULE = REPO.parent / 'MotoBat' / 'data' / 'preview_clean'
+
+
+def scan_cmd(name, base, stage):
+    st = {'weld': 'post_weld', 'busbar': 'pre_busbar', 'preweld': 'pre_weld', 'postweld': 'post_weld'}.get(stage, stage)
+    mod = '' if name == 'weld_walls' else f' --module <defectgen run> --name {name}'
+    return (f'mb-venv && PYTHONPATH=$PWD/defectgen/src python src/{PKG}/scripts/scan_view_plan.py'
+            f' --stage {st} --base {base}{mod}')
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--base', default='A', help='a name from config/view_bases.yaml (default A)')
@@ -136,8 +155,11 @@ def main():
     ap.add_argument('--step', action='store_true', help='stop at every view until Enter')
     ap.add_argument('--once', action='store_true', help='fly once, then leave RViz open until Ctrl-C')
     ap.add_argument('--no-rviz', action='store_true', help='RViz is already open (from an earlier run)')
-    ap.add_argument('--module', type=Path, default=REPO.parent / 'MotoBat' / 'data' / 'preview_clean',
+    ap.add_argument('--module', type=Path, default=DEFAULT_MODULE,
                     help='defectgen run to show as the module (default ../MotoBat/data/preview_clean)')
+    ap.add_argument('--scans', default=None, metavar='NAME',
+                    help='show simulated scans and detections from data/arm_scans/NAME '
+                         '(made by scan_view_plan.py; e.g. weld_walls)')
     ap.add_argument('--recompute', action='store_true', help='recompute the base\'s plan')
     ap.add_argument('--list', action='store_true', help='list the bases and their cycle times')
     a = ap.parse_args()
@@ -157,6 +179,12 @@ def main():
     if a.recompute or not up_to_date(a.base, b):
         compute(a.base, b)
     summary(a.base, b)
+    scans = REPO / 'data' / 'arm_scans' / a.scans if a.scans else None
+    if scans is not None:
+        if not scans.is_dir():
+            sys.exit(f'--scans {a.scans}: no {scans}. Make it (venv):\n  {scan_cmd(a.scans, a.base, a.scan)}')
+        if (scans / 'module').is_dir() and a.module == DEFAULT_MODULE:
+            a.module = scans / 'module'
 
     procs = {}
     try:
@@ -180,6 +208,19 @@ def main():
                     print(f'  (no module mesh at {a.module / stage}: showing its envelope only)')
                 cmd = ['/usr/bin/python3', str(HERE / 'show_view_plan.py'), str(result_path(a.base)),
                        '--stage', stage, '--rate', str(a.rate), '--name', a.base]
+                stop(procs.pop('detections', None), 'detections')
+                if scans is not None:
+                    here = scans / f'base_{a.base}' / stage
+                    if (here / 'clouds.npz').is_file():
+                        cmd += ['--scans', str(here)]
+                        procs['detections'] = subprocess.Popen(
+                            capped(['/usr/bin/python3', str(REPO / 'src' / 'motobat_description' /
+                                                            'scripts' / 'show_detections.py'),
+                                    str(here), '--stage', stage], CAPS['detections']),
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+                    else:
+                        print(f'  (no scans of {stage} from base {a.base} in {scans}; make them with\n'
+                              f'   {scan_cmd(a.scans, a.base, stage)})')
                 if a.view:
                     cmd += ['--view', a.view]
                 if a.sensor:
@@ -198,8 +239,9 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
+        signal.signal(signal.SIGINT, signal.SIG_IGN)   # a second Ctrl-C must not cut the cleanup short
         print('\nstopping...')
-        for n in ('player', 'module', 'rviz'):
+        for n in ('player', 'detections', 'module', 'rviz'):
             stop(procs.get(n), n)
 
 

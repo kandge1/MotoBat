@@ -422,7 +422,7 @@ python -m defectgen.probe_arm --stage post_weld --fixture
 # the support under it, the floor or the robot's own mount.
 # Runs from the MotoBat-arm folder (the arm lane), not ~/projects/MotoBat.
 # One terminal does it all. Ctrl-C closes RViz, the module and the arm together.
-# Light: under 2.5 GB in all, no Gazebo, fine beside a dataset run.
+# About 4 GB in all with --scans (RViz alone up to 2.5 GB); no Gazebo.
 
 # Terminal 1
 cd ~/projects/MotoBat-arm && source motobat_env.sh
@@ -468,7 +468,9 @@ ros2 run motobat_hc10dt_moveit_config view_plan.py --base A --scan preweld --sen
 #   green      the Zivid's field of view, bright while it captures
 #   purple     the Keyence laser fan and its measuring band, bright while it sweeps;
 #              the yellow line is the strip being measured
-#   red box    the keep-out volume, module + 5 cm
+#   red box    the keep-out volume, module + 10 cm
+#   green      the placeholder conveyor (base A): the pallet is lifted 50 mm off its belt
+#              at the station, so the sensor head clears the belt past the module ends
 # Times are real robot time at full joint speed (accelerations assumed): the
 # snapshot is 0.1 s but held on screen longer so you can see it.
 # Tick "Collision Enabled" under HC10DT in RViz's left panel to see the shapes
@@ -480,6 +482,66 @@ ros2 run motobat_hc10dt_moveit_config view_plan.py --base A --scan preweld --sen
 /usr/bin/python3 src/motobat_hc10dt_moveit_config/scripts/view_reach.py --mount ceiling \
     --out data/reach/my_search --bx 0 0.1 --d 0.2 0.3 --bz 1.0 1.2
 
+
+## Simulated scans along the flight (what each view actually measures) ##
+# Two different commands, in two different terminals:
+#   WATCH (Terminal 1, system python, NO venv): RViz, the arm flying, each view's
+#         points appearing as it is captured, and the detection boxes.
+#   MAKE  (Terminal 2, venv): computes those scans. No RViz. Only needed for a new
+#         module or after changing the plan; the weld_walls scans already exist
+#         (all three stations, bases A and B, 18 Nov), so skip straight to WATCH.
+
+# Terminal 1 #WATCH -- this is the one with the visuals
+cd ~/projects/MotoBat-arm && source motobat_env.sh
+ros2 run motobat_hc10dt_moveit_config view_plan.py --base A --scan all --scans weld_walls --rate 0.5
+ros2 run motobat_hc10dt_moveit_config view_plan.py --base B --scan all --scans weld_walls --rate 0.5
+#   --scan weld (one station) or busbar / preweld / all, --view 4, --step, as above.
+# What you see: each view's points appear as the arm captures it -- a sweep fills in
+# line by line -- coloured by how far each point stands out toward that sensor
+# (red raised, blue sunk, over that view's own range). The detection boxes from
+# show_detections.py sit on the module: green found, magenta MISSED, red false alarm.
+# The module shown is the scanned one, with its truth boxes. In RViz's left panel:
+#   "Arm scans (captured views)"  every finished view so far
+#   "Arm scan (sweep under way)"  the current sweep, as far as it has got
+#   "Detections"                  untick to see the points alone
+# Display points are a sample: 60,000 per view, 240,000 per slow seam sweep, out of
+# 0.4-25 million each. Detection used every point.
+# If it says "no scans of <stage> from base <B>", run MAKE for that stage and base.
+
+# Terminal 2 #MAKE -- only for new scans (venv; ~1 min of scanning + a few minutes of
+# detection per base and station; up to ~8 GB, so nothing else heavy alongside).
+# With no --module it writes and uses a test module, data/arm_scans/weld_walls/module:
+# the weld-defect demo set plus a 0.4 mm dent on each long side wall.
+cd ~/projects/MotoBat-arm && source motobat_env.sh && mb-venv
+PYTHONPATH=$PWD/defectgen/src systemd-run --user --scope -p MemoryMax=8G -p MemorySwapMax=0 \
+    python src/motobat_hc10dt_moveit_config/scripts/scan_view_plan.py --stage all --base A B
+#   --stage pre_busbar|pre_weld|post_weld|all    --base A B (each base's reachable views)
+#   --module <defectgen run> --name <folder>      scan your own module instead
+#   --seam-speed 25    fly the 50 mm/s seam sweeps at 25 mm/s (twice as dense along the
+#                      travel). Too heavy for 16 GB: 21-25 M points per sweep.
+# It prints, in the terminal only, each base's score table (TP / FN / FP per class)
+# and then every defect label side by side: found or missed from A, from B, and which
+# differ. The same tables are kept in data/arm_scans/weld_walls_<stage>.log only if
+# you redirect: ... scan_view_plan.py --stage all > data/arm_scans/my_run.log 2>&1
+# PYTHONPATH=... makes it use this folder's defectgen, i.e. main; without it the venv
+# uses ../MotoBat's working copy, which may have uncommitted changes.
+# 7 GB was too little for pre_weld (killed during detection, 18 Nov); 8 GB works.
+# Output: data/arm_scans/<name>/base_<B>/<stage>/ (clouds.npz for RViz, detections/,
+# summary.json). WATCH reads these.
+
+## Does the robot block its own sensors? (occlusion check, ~5 min, light) ##
+# The scans above put only the module in the sensors' way. This checks the arm too:
+# every measured point's laser and camera paths, at the robot pose of that moment,
+# against the HC10DT's links, the bracket and the other sensor. Needs the scans (MAKE).
+# Step 1, system python (no venv): the robot's link poses during every capture
+cd ~/projects/MotoBat-arm && source motobat_env.sh
+ROS_DOMAIN_ID=45 systemd-run --user --scope -q -p MemoryMax=1G -p MemorySwapMax=0 \
+    /usr/bin/python3 src/motobat_hc10dt_moveit_config/scripts/occlusion_poses.py data/reach/base_A/reach.json
+# Step 2, venv: cast the rays (prints a table per station; writes data/reach/base_A/occlusion.json)
+mb-venv && OMP_NUM_THREADS=2 systemd-run --user --scope -q -p MemoryMax=2G -p MemorySwapMax=0 \
+    --setenv=OMP_NUM_THREADS=2 python src/motobat_hc10dt_moveit_config/scripts/occlusion_check.py \
+    data/reach/base_A/occlusion_poses.json --scans data/arm_scans/weld_walls/base_A
+# 18 Nov, base A: 0 of 430,434 tested points blocked at any station.
 
 ## If RViz shows old markers or an old point cloud ##
 # Something from an earlier run is still publishing. Find it and stop it.

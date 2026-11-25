@@ -2,6 +2,7 @@
 #   bx  along the module from its centre     d   out from its centreline (robot on the -y side)
 #   bz  above the pallet top (below = -)     pad keep-out around the module, every side but the bottom
 #   mount floor (pedestal) | ceiling (hung upside down from an overhead frame)
+# conveyor_lift (optional): add the placeholder conveyor, with the pallet lifted this far off its belt.
 # Picked from base searches on 14 Nov 2026 (data/reach/*_pad5*/reach.json), no turntable.
 # Floor 0.9 m below the pallet top (A). Add your own; view_plan.py computes a new or
 # changed entry on first use.
@@ -12,11 +13,12 @@ bases:
     d: 0.30
     bz: 1.10
     pad: 0.10
-    note: best of 222 placements searched; all 21 views at all three stations with a 10 cm keep-out, no turntable; base ~2.0 m above the floor
+    conveyor_lift: 0.05   # placeholder conveyor along the module, pallet lifted 50 mm at the station (A)
+    note: best of 222 placements searched; all 21 views at all three stations with a 10 cm keep-out and the transit floor, no turntable; base ~2.0 m above the floor
   B:
     mount: floor
     bx: 0.30
     d: 0.35
     bz: -0.30
     pad: 0.10
-    note: best floor placement (searched at 5 cm, 19/21); at 10 cm 17/21 - never the near-side wall sweep, the arm cannot fold under itself to it
+    note: best floor placement (searched at 5 cm, 19/21); with the 10 cm keep-out and the transit floor 16/21 - no side walls, no near end wall

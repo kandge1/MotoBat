@@ -24,7 +24,21 @@ export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 
 # Isolate this project's DDS traffic from anything else on the LAN.
 export ROS_DOMAIN_ID=42
-export ROS_LOCALHOST_ONLY=0
+
+# Which network DDS uses (18 Nov 2026). By default everything stays on this machine's
+# loopback interface (127.0.0.1): Cyclone otherwise binds to the Wi-Fi address it finds
+# when a node starts, and when that network drops or changes, every running node floods
+# "ddsi_udp_conn_write ... failed" and stops talking (seen 18 Nov). Nothing in the
+# project needs the LAN yet. Set MOTOBAT_DDS_LAN=1 before sourcing to let other machines
+# (a real controller, a second PC) see these nodes: then the Wi-Fi caveat is back.
+# Loopback has no multicast, so discovery goes by unicast to 127.0.0.1, with a
+# participant index per process (up to 120 ROS processes at once).
+unset ROS_LOCALHOST_ONLY            # deprecated in Jazzy; the setting below replaces it
+if [ "${MOTOBAT_DDS_LAN:-0}" = "1" ]; then
+    unset CYCLONEDDS_URI
+else
+    export CYCLONEDDS_URI='<CycloneDDS><Domain><General><Interfaces><NetworkInterface name="lo"/></Interfaces><AllowMulticast>false</AllowMulticast></General><Discovery><ParticipantIndex>auto</ParticipantIndex><MaxAutoParticipantIndex>120</MaxAutoParticipantIndex><Peers><Peer address="127.0.0.1"/></Peers></Discovery></Domain></CycloneDDS>'
+fi
 
 # Colourised, timestamped node output.
 export RCUTILS_COLORIZED_OUTPUT=1

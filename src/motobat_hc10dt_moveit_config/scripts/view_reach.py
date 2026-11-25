@@ -48,6 +48,7 @@ Starts its own move_group (launch/ik_compare.launch.py, no RViz, no controllers)
 Run it under a memory cap. Uses system Python 3.12 (rclpy), never the project venv.
 """
 import argparse
+import functools
 import itertools
 import json
 import math
@@ -61,10 +62,11 @@ from pathlib import Path
 import numpy as np
 import rclpy
 from geometry_msgs.msg import Pose, PoseStamped
-from moveit_msgs.msg import (CollisionObject, Constraints, JointConstraint, MoveItErrorCodes,
-                             PlanningScene, RobotState)
-from moveit_msgs.srv import (ApplyPlanningScene, GetCartesianPath, GetMotionPlan, GetPositionFK,
-                             GetPositionIK, GetStateValidity)
+from moveit_msgs.msg import (AllowedCollisionEntry, CollisionObject, Constraints, JointConstraint,
+                             MoveItErrorCodes, PlanningScene, PlanningSceneComponents, RobotState)
+from moveit_msgs.srv import (ApplyPlanningScene, GetCartesianPath, GetMotionPlan, GetPlanningScene,
+                             GetPositionFK, GetPositionIK, GetStateValidity)
+from scipy.spatial.transform import Slerp
 from rclpy.node import Node
 from scipy.spatial.transform import Rotation
 from sensor_msgs.msg import JointState
@@ -89,14 +91,38 @@ PALLET_MARGIN = 0.025      # A
 PALLET_T = 0.020           # A
 PEDESTAL = 0.30            # m square under the robot base (A)
 PAD = 0.05                 # m keep-out around the module, every side but the bottom (user, 14 Nov)
+# Placeholder conveyor (18 Nov, sized to base A's envelope: the robot never goes more than
+# 40 mm below the pallet top, but past the module ends it does so on the centreline, where
+# the belt runs). The conveyor runs along the module's length; at the station a
+# lift-and-locate raises the pallet CONVEYOR_LIFT off the belt (A). None = no conveyor.
+CONVEYOR_LIFT = None       # m, set by --conveyor-lift
+CONVEYOR_LEN = 3.0         # m of line drawn and checked, centred on the station (A)
+CONVEYOR_RAIL = 0.04       # m of frame each side of the pallet (A)
+CONVEYOR_H = 0.10          # m, belt + frame profile depth (A)
 ASSUMED_MOVE = 1.5         # s per capture that 1.5's plan 'seconds' includes for the move (A there)
 READY = [0.0, 0.0, math.pi / 2, 0.0, -math.pi / 2, 0.0]
 HOMES = [READY, [0.0, -0.6, 1.2, 0.0, -1.2, 0.0], [0.0, 0.6, 1.2, 0.0, -1.2, 0.0],
          [0.0, -1.0, 0.6, 0.0, -1.0, 0.0], [0.0, 1.0, 0.6, 0.0, -1.0, 0.0]]
 
+# Moves between views keep the wrist, flange and sensors above the module top (user, 18 Nov:
+# "not below ground + height of the battery module"). A view lower than that is entered by a
+# straight vertical approach from above it and left the same way, like an INFORM approach point.
+TRANSIT_FLOOR = MODULE[2]  # m above the pallet top
+EFFECTOR_LINKS = ['s3_link_4_r', 's3_link_5_b', 's3_link_6_t', 's3_flange']
+APPROACH_SPEED = 0.25      # m/s, straight approach and depart (A)
+LIFT_MAX = 0.5             # m, highest approach point tried
+SLAB = 'transit_floor'
+
+MAX_BRANCHES = 4           # distinct IK branches kept per view for the sequence to choose from
+MOVJ_STEP = 0.01           # rad: largest joint step between collision checks on a joint move
+LEG_KIND = {'joint': 0, 'via': 0, 'ompl': 0, 'failed': 0}   # how the moves were planned (for the record)
+VIA_HEIGHTS = (0.15, 0.30, 0.45)  # m: raised waypoints tried when a straight joint move collides
+VIA_BRANCH = 1.5           # rad: a raised waypoint further than this from its source is another branch
+
 IK_TIMEOUT = 0.05
 CART_STEP = 0.005
 JUMP = 0.3                 # rad per 5 mm step: anything bigger is a branch flip
+DENSE_JUMP = 0.1           # rad per <=5 mm step when rebuilding a checked line point by point
 
 
 # ---- transforms ------------------------------------------------------------------
@@ -197,6 +223,10 @@ def scene_boxes(T_mb, floor, pad=PAD, mount='floor'):
         ('support', (pl, pw, col_h), (0, 0, -PALLET_T - col_h / 2)),
         ('floor', (6.0, 6.0, 0.02), (0, 0, -floor - 0.01)),
     ]
+    if CONVEYOR_LIFT is not None:
+        top = -PALLET_T - CONVEYOR_LIFT
+        out.append(('conveyor', (CONVEYOR_LEN, pw + 2 * CONVEYOR_RAIL, CONVEYOR_H),
+                    (0, 0, top - CONVEYOR_H / 2)))
     if mount == 'ceiling':
         out.append(('mount_plate', (PEDESTAL, PEDESTAL, 0.2), (bx, by, bz + 0.105)))
     elif bz + floor - 0.005 > 0.01:
@@ -221,7 +251,8 @@ class Client(Node):
         self.scene = self.create_client(ApplyPlanningScene, '/apply_planning_scene')
         self.planner = self.create_client(GetMotionPlan, '/plan_kinematic_path')
         self.valid = self.create_client(GetStateValidity, '/check_state_validity')
-        for c in (self.ik, self.fk, self.cart, self.scene, self.planner, self.valid):
+        self.get_scene = self.create_client(GetPlanningScene, '/get_planning_scene')
+        for c in (self.ik, self.fk, self.cart, self.scene, self.planner, self.valid, self.get_scene):
             if not c.wait_for_service(timeout_sec=60.0):
                 raise RuntimeError(f'{c.srv_name} not available')
 
@@ -268,20 +299,91 @@ class Client(Node):
         names = list(res.solution.joint_state.name)
         return [res.solution.joint_state.position[names.index(j)] for j in JOINTS]
 
-    def line(self, q0, T_end):
+    def line(self, q0, T_end, dense=False):
+        """Straight tool line from q0 to T_end: (fraction reached, joint path).
+        move_group checks the line every CART_STEP, but returns it re-timed and resampled at
+        ~0.1 s, i.e. a point every 25-40 mm. With `dense`, the reached part is rebuilt at
+        CART_STEP spacing by IK seeded from that path (see dense_line)."""
+        T0 = self.fk_links(q0, [TOOL])[TOOL]
+        n = max(1, int(math.ceil(np.linalg.norm(T_end[:3, 3] - T0[:3, 3]) / CART_STEP)))
+        rot = Slerp([0, 1], Rotation.from_matrix([T0[:3, :3], T_end[:3, :3]]))
+        wps = []
+        for k in range(1, n + 1):
+            f = k / n
+            wps.append(to_pose(tf(rot(f).as_matrix(), T0[:3, 3] + f * (T_end[:3, 3] - T0[:3, 3]))))
         req = GetCartesianPath.Request()
         req.header.frame_id = FRAME
         req.start_state = self.state(q0)
         req.group_name = GROUP
         req.link_name = TOOL
-        req.waypoints = [to_pose(T_end)]
+        req.waypoints = wps
         req.max_step = CART_STEP
         req.jump_threshold = 0.0
         req.revolute_jump_threshold = JUMP
         req.avoid_collisions = True
         res = self.call(self.cart, req)
         pts = [list(p.positions) for p in res.solution.joint_trajectory.points]
+        if dense and len(pts) > 1:
+            d = self.dense_line(T0, T_end, res.fraction, pts)
+            if d is None:
+                self.get_logger().warn('could not densify a line; keeping move_group\'s points')
+            else:
+                pts = d
         return res.fraction, pts
+
+    def dense_line(self, T0, T_end, frac, sparse):
+        """The line from T0 to `frac` of the way to T_end, one collision-free IK solution
+        every <= CART_STEP, each seeded from move_group's path at the same fraction; None if
+        any point fails or any joint steps more than 0.05 rad (a branch change)."""
+        L = np.linalg.norm(T_end[:3, 3] - T0[:3, 3]) * frac
+        n = max(1, int(math.ceil(L / CART_STEP)))
+        rot = Slerp([0, 1], Rotation.from_matrix([T0[:3, :3], T_end[:3, :3]]))
+        S = np.array(sparse)
+        u = np.linspace(0.0, 1.0, len(S))
+        out = [list(sparse[0])]
+        for k in range(1, n + 1):
+            f = k / n * frac
+            T = tf(rot(f).as_matrix(), T0[:3, 3] + f * (T_end[:3, 3] - T0[:3, 3]))
+            q = None
+            for seed in (out[-1], [float(np.interp(k / n, u, S[:, j])) for j in range(6)]):
+                q = self.solve(T, seed)
+                if q is not None and max(abs(a - b) for a, b in zip(q, out[-1])) <= DENSE_JUMP:
+                    break
+                q = None
+            if q is None:
+                self.get_logger().warn(f'dense line stops at {k}/{n}')
+                return None
+            out.append(q)
+        return out
+
+    def allow_slab_except_effector(self):
+        """The transit floor may touch every robot link except the wrist, flange and sensors.
+        A diff's ACM replaces the whole matrix, so read it, extend it, send it back."""
+        req = GetPlanningScene.Request()
+        req.components.components = PlanningSceneComponents.ALLOWED_COLLISION_MATRIX
+        acm = self.call(self.get_scene, req).scene.allowed_collision_matrix
+        if SLAB in acm.entry_names:
+            return
+        names = list(acm.entry_names)
+        for name, row in zip(names, acm.entry_values):
+            row.enabled = list(row.enabled) + [name not in EFFECTOR_LINKS]
+        acm.entry_names = names + [SLAB]
+        acm.entry_values = list(acm.entry_values) + [AllowedCollisionEntry(
+            enabled=[n not in EFFECTOR_LINKS for n in names] + [True])]
+        ps = PlanningScene(is_diff=True)
+        ps.allowed_collision_matrix = acm
+        if not self.call(self.scene, ApplyPlanningScene.Request(scene=ps)).success:
+            raise RuntimeError('apply_planning_scene (ACM) failed')
+
+    def slab(self, T_mb, floor, on):
+        """Add or remove the transit floor: everything from the real floor up to TRANSIT_FLOOR."""
+        if on:
+            h = TRANSIT_FLOOR + floor
+            co = box(SLAB, (6.0, 6.0, h), (0, 0, TRANSIT_FLOOR - h / 2), np.linalg.inv(T_mb))
+        else:
+            co = CollisionObject(id=SLAB, operation=CollisionObject.REMOVE)
+            co.header.frame_id = FRAME
+        self.set_scene([co])
 
     def is_valid(self, q):
         req = GetStateValidity.Request(robot_state=self.state(q), group_name=GROUP)
@@ -319,6 +421,21 @@ def seeds(T_tool):
     return [[aim, l, u, r, b, 0.0] for (l, u), (r, b) in itertools.product(arms, wrists)]
 
 
+EXTRA_SEEDS = 40
+
+
+def extra_seeds(T_tool, found):
+    """Up to EXTRA_SEEDS more seeds, uniform over the joint ranges (S near the target),
+    from a fixed random stream so a run is repeatable; stops as soon as found() is non-empty."""
+    rng = np.random.default_rng(7)
+    aim = math.atan2(T_tool[1, 3], T_tool[0, 3])
+    for _ in range(EXTRA_SEEDS):
+        if found():
+            return
+        yield [aim + rng.uniform(-0.8, 0.8), rng.uniform(-2.5, 2.5), rng.uniform(0.1, 6.0),
+               rng.uniform(-math.pi, math.pi), rng.uniform(-2.5, 2.5), rng.uniform(-math.pi, math.pi)]
+
+
 def distinct(sols, tol=0.3):
     out = []
     for s in sols:
@@ -352,24 +469,34 @@ def check_base(cli, views, T_mb, T_tool_sensor, flange_boxes, floor, keep_paths=
                    for T in sensor_targets(v)]
         # Every seed, every distinct IK branch: a sweep that fails from one branch often
         # works from another, and KDL's random restarts make a short search hit or miss.
+        # With keep_paths (--plan), keep up to MAX_BRANCHES distinct working branches: which
+        # one to fly is chosen with the view's neighbours (order_views), not here. Taking the
+        # first that works made consecutive views elbow-up then elbow-down (18 Nov).
         r = {'id': v['id'], 'sensor': v['sensor'], 'stages': v['stages'], 'ok': False}
-        sols, tried, best = [], [], 0.0
-        for s in seeds(targets[0]):
+        sols, tried, best, branches = [], [], 0.0, []
+        # the fixed seeds first; only if none works, EXTRA_SEEDS more spread over the joint
+        # ranges (seen 18 Nov: a one-branch view found on one run and missed on the next)
+        for s in itertools.chain(seeds(targets[0]), extra_seeds(targets[0], lambda: branches)):
             q = cli.solve(targets[0], s)
             if q is None:
                 continue
             sols.append(q)
-            if v['sensor'] == 'snapshot':
-                r.update(ok=True, q=q, path=[q])
-                break
             if not all(max(abs(a - b) for a, b in zip(q, o)) > 0.3 for o in tried):
                 continue
             tried.append(q)
-            frac, pts = cli.line(q, targets[1])
-            best = max(best, frac)
-            if frac > 0.999:
-                r.update(ok=True, q=q, path=pts)
+            if v['sensor'] == 'snapshot':
+                branches.append([q])
+            else:
+                frac, pts = cli.line(q, targets[1], dense=keep_paths)
+                best = max(best, frac)
+                if frac > 0.999:
+                    branches.append(pts)
+            if branches and (not keep_paths or len(branches) >= MAX_BRANCHES):
                 break
+        if branches:
+            r.update(ok=True, q=branches[0][0], path=branches[0])
+            if keep_paths:
+                r['branches'] = branches
         if sols:
             # Proof the frame chain is right: FK the sensor frame back into the module frame.
             link = SENSOR_LINK[v['sensor']]
@@ -388,7 +515,8 @@ def check_base(cli, views, T_mb, T_tool_sensor, flange_boxes, floor, keep_paths=
             path = r.pop('path')
             if keep_paths:
                 r['path'] = path
-            sample = path[::max(1, len(path) // 6)] + [path[-1]]
+            # the envelope over every kept branch: any of them may be the one flown
+            sample = [q for p in branches for q in p[::max(1, len(p) // 6)] + [p[-1]]]
             pts = np.vstack([envelope_points(cli, q, T_mb, flange_boxes) for q in sample])
             below = pts[pts[:, 2] < 0.0]
             r['min_z'] = float(pts[:, 2].min())
@@ -400,6 +528,7 @@ def check_base(cli, views, T_mb, T_tool_sensor, flange_boxes, floor, keep_paths=
 
 # ---- order and transits (--plan) ---------------------------------------------------
 
+@functools.lru_cache(maxsize=1)
 def joint_limits():
     import yaml
     from ament_index_python.packages import get_package_share_directory
@@ -417,30 +546,49 @@ def move_estimate(q0, q1, vmax, amax):
     return t
 
 
-def order_views(views, home, vmax, amax):
-    """Order to fly a stage's views, home to home, shortest estimated move time.
-    Nearest neighbour, then relocate / segment-reverse local search until nothing helps.
-    Sweeps keep the plan's direction, so a view is entered at path[0] and left at path[-1]."""
-    n = len(views)
-    if n < 2:
-        return list(range(n))
-    ent = [v['path'][0] for v in views]
-    ext = [v['path'][-1] for v in views]
+def order_views(options, home, vmax, amax):
+    """Order to fly a stage's views, and the IK branch to fly each in, home to home, for the
+    shortest estimated move time. options[i] = [(entry q, exit q), ...], one per branch.
+    For a given order the best branches are a shortest path through a layered graph (one
+    layer per view, one node per branch), solved exactly by dynamic programming. The order:
+    nearest neighbour, then relocate / segment-reverse local search until nothing helps.
+    Sweeps keep the plan's direction. Returns (order, branch index per position)."""
+    n = len(options)
+    nodes = [(i, b) for i in range(n) for b in range(len(options[i]))]
+    at = {nb: k for k, nb in enumerate(nodes)}
+    ent = [options[i][b][0] for i, b in nodes]
+    ext = [options[i][b][1] for i, b in nodes]
+    M = np.array([[move_estimate(x, e, vmax, amax) for e in ent] for x in ext])
+    H0 = np.array([move_estimate(home, e, vmax, amax) for e in ent])
+    H1 = np.array([move_estimate(x, home, vmax, amax) for x in ext])
+    ks = [[at[(i, b)] for b in range(len(options[i]))] for i in range(n)]
 
-    def cost(order):
-        t, q = 0.0, home
-        for i in order:
-            t += move_estimate(q, ent[i], vmax, amax)
-            q = ext[i]
-        return t + move_estimate(q, home, vmax, amax)
+    def solve(order):
+        cost = H0[ks[order[0]]].copy()
+        back = []
+        for a, b in zip(order, order[1:]):
+            step = cost[:, None] + M[np.ix_(ks[a], ks[b])]
+            back.append(step.argmin(0))
+            cost = step.min(0)
+        cost = cost + H1[ks[order[-1]]]
+        pick = [int(cost.argmin())]
+        for bk in reversed(back):
+            pick.append(int(bk[pick[-1]]))
+        return float(cost.min()), pick[::-1]
 
-    order, q, left = [], home, set(range(n))
+    if n == 0:
+        return [], []
+    order, left = [], set(range(n))
+    prev = None
     while left:
-        i = min(left, key=lambda k: move_estimate(q, ent[k], vmax, amax))
+        def near(k):
+            row = H0 if prev is None else M[ks[prev]].min(0)
+            return row[ks[k]].min()
+        i = min(left, key=near)
         order.append(i)
         left.remove(i)
-        q = ext[i]
-    best = cost(order)
+        prev = i
+    best, pick = solve(order)
     improved = True
     while improved:
         improved = False
@@ -452,42 +600,233 @@ def order_views(views, home, vmax, amax):
                 cand.insert(j, order[i])
                 for c in (cand, order[:min(i, j)] + order[min(i, j):max(i, j) + 1][::-1]
                           + order[max(i, j) + 1:]):
-                    cc = cost(c)
+                    cc, pc = solve(c)
                     if cc < best - 1e-9:
-                        order, best, improved = c, cc, True
-    return order
+                        order, best, pick, improved = c, cc, pc, True
+    return order, pick
 
 
-def plan_leg(cli, q0, q1):
-    for seconds, attempts in ((2.0, 3), (5.0, 3), (10.0, 6)):
-        leg = cli.motion(q0, q1, seconds, attempts)
-        if leg is not None:
-            return leg
+def joint_move(cli, q0, q1, vmax, amax):
+    """A synchronised joint-interpolated move (Yaskawa MOVJ): straight in joint space, every
+    joint on the same normalised trapezoid so they start and stop together, at the slowest
+    joint's limits. Checked for collisions every MOVJ_STEP rad of the joint that moves most.
+    {'q', 't'}, or None if any checked state collides."""
+    q0, q1 = np.array(q0, float), np.array(q1, float)
+    d = q1 - q0
+    D = np.abs(d).max()
+    if D < 1e-9:
+        return {'q': [list(q0)], 't': [0.0]}
+    n = max(2, int(math.ceil(D / MOVJ_STEP)))
+    for k in range(1, n):
+        if not cli.is_valid(q0 + d * k / n):
+            return None
+    big = np.abs(d) > 1e-9
+    v = min(np.array(vmax)[big] / np.abs(d[big]))      # path parameter s: 0 -> 1
+    a = min(np.array(amax)[big] / np.abs(d[big]))
+    if v * v / a >= 1.0:                                 # never reaches cruise: triangle
+        v = math.sqrt(a)
+    ta, sa = v / a, v * v / (2 * a)
+    T = 2 * ta + (1 - 2 * sa) / v
+
+    def time_at(s):
+        if s <= sa:
+            return math.sqrt(2 * s / a)
+        if s >= 1 - sa:
+            return T - math.sqrt(max(0.0, 2 * (1 - s) / a))
+        return ta + (s - sa) / v
+
+    return {'q': [list(q0 + d * k / n) for k in range(n + 1)], 't': [time_at(k / n) for k in range(n + 1)]}
+
+
+def raised(cli, q, h):
+    """q with the tool moved h straight up (module +z), same branch; None if no such state."""
+    T = cli.fk_links(q, [TOOL])[TOOL]
+    T[:3, 3] += h * cli.up
+    q2 = cli.solve(T, q)
+    if q2 is None or max(abs(a - b) for a, b in zip(q2, q)) > VIA_BRANCH or not cli.is_valid(q2):
+        return None
+    return q2
+
+
+def via_move(cli, q0, q1, vmax, amax):
+    """When the straight joint move collides: joint moves through one or two raised waypoints
+    (above the start, above the end, both, or above the joint-space midpoint; or the home
+    pose), the arm
+    stopping at each, as a teach-pendant program would (MOVJ ... MOVJ). The quickest by
+    estimate that is collision-free, or None."""
+    mid = [(a + b) / 2 for a, b in zip(q0, q1)]
+    cands = []
+    for h in VIA_HEIGHTS:
+        a, b, c = raised(cli, q0, h), raised(cli, q1, h), raised(cli, mid, h)
+        for vias in ([a], [b], [c], [a, b]):
+            if any(v is None for v in vias):
+                continue
+            pts = [q0] + vias + [q1]
+            cands.append((sum(move_estimate(x, y, vmax, amax) for x, y in zip(pts, pts[1:])), pts))
+    home = getattr(cli, 'home', None)
+    if home is not None:                     # last: through the home pose, known clear
+        a = raised(cli, q0, VIA_HEIGHTS[-1])
+        b = raised(cli, q1, VIA_HEIGHTS[-1])
+        for vias in ([home], [a, home, b]):
+            if any(v is None for v in vias):
+                continue
+            pts = [q0] + vias + [q1]
+            cands.append((sum(move_estimate(x, y, vmax, amax) for x, y in zip(pts, pts[1:])), pts))
+    for _, pts in sorted(cands, key=lambda c: c[0]):
+        legs = []
+        for x, y in zip(pts, pts[1:]):
+            legs.append(joint_move(cli, x, y, vmax, amax))
+            if legs[-1] is None:
+                break
+        else:
+            return chain(*legs)
     return None
 
 
-def plan_sequences(cli, res_views, home):
-    """Per stage: the flying order and an OMPL-planned, timed move into every view and
-    back home. Also home -> view -> home for every view, so any single view or any
-    subset can be shown with checked moves (going through home)."""
+def plan_leg(cli, q0, q1):
+    """A joint move if it is collision-free (smooth, predictable, what a teach-pendant program
+    does), else joint moves through raised waypoints, else OMPL (which detours and wiggles:
+    sampled, then only shortcut)."""
+    vmax, amax = joint_limits()
+    leg = joint_move(cli, q0, q1, vmax, amax)
+    if leg is not None:
+        LEG_KIND['joint'] += 1
+        leg['how'] = ['joint']
+        return leg
+    leg = via_move(cli, q0, q1, vmax, amax) if getattr(cli, 'up', None) is not None else None
+    if leg is not None:
+        LEG_KIND['via'] += 1
+        leg['how'] = ['via']
+        return leg
+    for seconds, attempts in ((2.0, 3), (5.0, 3), (10.0, 6)):
+        leg = cli.motion(q0, q1, seconds, attempts)
+        if leg is not None:
+            LEG_KIND['ompl'] += 1
+            leg['how'] = ['ompl']
+            return leg
+    LEG_KIND['failed'] += 1
+    return None
+
+
+def lift_path(cli, q, T_mb):
+    """Straight up (module +z) from q, as far as LIFT_MAX: the candidate depart path.
+    Run with the transit floor removed; trimmed against it by trim_lift."""
+    T = cli.fk_links(q, [TOOL])[TOOL]
+    up = np.linalg.inv(T_mb)[:3, :3] @ np.array([0.0, 0.0, 1.0])
+    _, pts = cli.line(q, tf(T[:3, :3], T[:3, 3] + LIFT_MAX * up), dense=True)
+    return pts or [q]
+
+
+def trim_lift(cli, pts):
+    """With the transit floor in place: the lift up to the first state clear of it, plus
+    2 cm. [q] if q is already clear; None if the lift never clears it."""
+    if cli.is_valid(pts[0]):
+        return pts[:1]
+    for i in range(4, len(pts), 4):
+        if cli.is_valid(pts[i]):
+            j = min(len(pts) - 1, i + 4)
+            return pts[:j + 1] if cli.is_valid(pts[j]) else pts[:i + 1]
+    return None
+
+
+def straight(pts):
+    """A lift path as a timed leg: CART_STEP per point at APPROACH_SPEED."""
+    return {'q': [list(q) for q in pts], 't': [k * CART_STEP / APPROACH_SPEED for k in range(len(pts))]}
+
+
+def chain(*legs):
+    """Join timed legs end to end; None if any is missing."""
+    if any(leg is None for leg in legs):
+        return None
+    q, t, how = [], [], []
+    for leg in legs:
+        how += leg.get('how', [])
+        if len(leg['q']) < 2:
+            continue
+        skip = 1 if q else 0
+        off = t[-1] if t else 0.0
+        q += leg['q'][skip:]
+        t += [off + x - leg['t'][0] for x in leg['t'][skip:]]
+    out = {'q': q, 't': t} if q else {'q': legs[0]['q'][:1], 't': [0.0]}
+    if how:
+        out['how'] = how          # how each planned (non-straight) part was made
+    return out
+
+
+def plan_sequences(cli, res_views, home, T_mb, floor):
+    """Per stage: the flying order, the IK branch each view is flown in, and the timed moves
+    between views, home to home. Each move = straight depart up out of the last view (if it
+    is below the transit floor), a joint move (OMPL if that collides) with the wrist and
+    sensors kept above the transit floor, and a straight approach down into the next view.
+    Also home -> view -> home for every view, in its cheapest branch from home, so any single
+    view or subset can be shown with checked moves (going through home)."""
     vmax, amax = joint_limits()
     flown = [v for v in res_views if v['ok']]
-    solo = {}
+    cli.allow_slab_except_effector()
+    raw = {v['id']: [(lift_path(cli, p[0], T_mb), lift_path(cli, p[-1], T_mb))
+                     for p in v.get('branches', [v['path']])] for v in flown}
+    cli.slab(T_mb, floor, True)
+    cli.up = np.linalg.inv(T_mb)[:3, :3] @ np.array([0.0, 0.0, 1.0])   # module +z, in the base frame
+    if not cli.is_valid(home):
+        home = pick_home(cli)
+    cli.home = home
+    ups = {}                         # id -> [(branch index, approach lift, depart lift)]
     for v in flown:
-        solo[v['id']] = {'in': plan_leg(cli, home, v['path'][0]),
-                         'out': plan_leg(cli, v['path'][-1], home)}
+        opts = []
+        for b, (ra, rd) in enumerate(raw[v['id']]):
+            a, d = trim_lift(cli, ra), trim_lift(cli, rd)
+            if a is not None and d is not None:
+                opts.append((b, a, d))
+        if not opts:
+            print(f"  {v['id']}: no straight approach clears the transit floor: not reachable",
+                  flush=True)
+            v['ok'] = False
+            v['why'] = (f'no straight vertical approach/depart reaches {TRANSIT_FLOOR * 1000:.0f} mm '
+                        'above the pallet top (transit floor)')
+            continue
+        ups[v['id']] = opts
+        v['branches_ok'] = [b for b, _, _ in opts]
+        v['approach_mm'] = 1000 * CART_STEP * (len(opts[0][1]) - 1)
+        if 'branches' in v:
+            v['path'] = v['branches'][opts[0][0]]
+    flown = [v for v in flown if v['ok']]
+
+    def path_of(v, o):
+        return v.get('branches', [v['path']])[ups[v['id']][o][0]]
+
+    def into(q_from, i_d, o):        # joint move to the approach point, then straight down
+        up = ups[i_d][o][1]
+        return chain(plan_leg(cli, q_from, up[-1]), straight(up[::-1]))
+
+    def outof(i_d, o):               # straight up out of a view
+        return straight(ups[i_d][o][2])
+
+    solo = {}
+    for v in flown:                  # each branch in turn, cheapest from home first
+        for o in sorted(range(len(ups[v['id']])),
+                        key=lambda k: move_estimate(home, ups[v['id']][k][1][-1], vmax, amax)
+                        + move_estimate(ups[v['id']][k][2][-1], home, vmax, amax)):
+            solo[v['id']] = {'in': into(home, v['id'], o),
+                             'out': chain(outof(v['id'], o), plan_leg(cli, ups[v['id']][o][2][-1], home)),
+                             'path': path_of(v, o)}
+            if solo[v['id']]['in'] and solo[v['id']]['out']:
+                break
     seqs = {}
     for stage in STAGES:
         vs = [v for v in flown if stage in v['stages']]
-        order = [vs[i] for i in order_views(vs, home, vmax, amax)]
-        legs, q = [], home
-        for v in order:
-            legs.append(plan_leg(cli, q, v['path'][0]))
-            q = v['path'][-1]
-        legs.append(plan_leg(cli, q, home))
+        options = [[(a[-1], d[-1]) for _, a, d in ups[v['id']]] for v in vs]
+        idx, pick = order_views(options, home, vmax, amax)
+        order = [vs[i] for i in idx]
+        legs, q, prev = [], home, None
+        for v, o in zip(order, pick):
+            legs.append(chain(*([outof(*prev)] if prev else []), into(q, v['id'], o)))
+            q, prev = ups[v['id']][o][2][-1], (v['id'], o)
+        legs.append(chain(outof(*prev), plan_leg(cli, q, home)) if prev else None)
         move = sum(leg['t'][-1] for leg in legs if leg)
         capture = sum(v['capture_s'] for v in order)
         seqs[stage] = {'order': [v['id'] for v in order], 'legs': legs,
+                       'branch': {v['id']: ups[v['id']][o][0] for v, o in zip(order, pick)},
+                       'paths': {v['id']: path_of(v, o) for v, o in zip(order, pick)},
                        'unplanned_legs': sum(1 for leg in legs if leg is None),
                        'move_s': move, 'capture_s': capture, 'cycle_s': move + capture,
                        'missing': [v['id'] for v in res_views
@@ -498,7 +837,9 @@ def plan_sequences(cli, res_views, home):
                  if seqs[stage]['unplanned_legs'] else '')
               + (f", not reachable {seqs[stage]['missing']}" if seqs[stage]['missing'] else ''),
               flush=True)
-    return seqs, solo
+    print(f"  moves: {LEG_KIND['joint']} joint moves, {LEG_KIND['via']} via raised waypoints, {LEG_KIND['ompl']} OMPL, "
+          f"{LEG_KIND['failed']} failed", flush=True)
+    return seqs, solo, home
 
 
 def pick_home(cli):
@@ -543,6 +884,9 @@ def main():
                     help='floor: on a pedestal; ceiling: hung upside down (BZ above the datum)')
     ap.add_argument('--pad', type=float, default=PAD,
                     help=f'keep-out margin around the module, m (default {PAD})')
+    ap.add_argument('--conveyor-lift', type=float, default=None, metavar='M',
+                    help='add the placeholder conveyor along the module, the pallet lifted M off '
+                         'its belt at the station (e.g. 0.05); default: no conveyor')
     ap.add_argument('--keep-paths', action='store_true',
                     help='store every view\'s joint path, for show_view_plan.py')
     ap.add_argument('--plan', action='store_true',
@@ -551,6 +895,8 @@ def main():
     ap.add_argument('--no-launch', action='store_true', help='use an already running move_group')
     a = ap.parse_args()
 
+    global CONVEYOR_LIFT
+    CONVEYOR_LIFT = a.conveyor_lift
     if a.plan:
         if not a.base:
             sys.exit('--plan needs --base')
@@ -566,8 +912,21 @@ def main():
     fl = yaml.safe_load(open(Path(get_package_share_directory('motobat_description'))
                              / 'config' / 'inspector_flange.yaml'))['inspector_flange']
 
-    proc = None if a.no_launch else start_move_group(out / 'move_group.log')
     rclpy.init()
+    if not a.no_launch:
+        # A second move_group on this domain answers some of the requests with its own scene
+        # (seen 18 Nov: leftovers from killed runs). Refuse rather than mix them.
+        probe = rclpy.create_node('view_reach_probe')
+        end = time.time() + 3.0
+        while time.time() < end:
+            rclpy.spin_once(probe, timeout_sec=0.2)
+        others = [n for n in probe.get_node_names() if n == 'move_group']
+        probe.destroy_node()
+        if others:
+            rclpy.try_shutdown()
+            sys.exit(f'a move_group is already running on ROS_DOMAIN_ID='
+                     f'{os.environ.get("ROS_DOMAIN_ID", "0")}: stop it first (or use --no-launch)')
+    proc = None if a.no_launch else start_move_group(out / 'move_group.log')
     try:
         cli = Client()
         for attempt in range(20):    # move_group answers before robot_state_publisher's TF lands
@@ -616,8 +975,17 @@ def main():
             if a.plan:
                 home = pick_home(cli)
                 entry['home'] = home
-                entry['sequences'], entry['solo'] = plan_sequences(cli, res, home)
+                entry['sequences'], entry['solo'], entry['home'] = plan_sequences(
+                    cli, res, home, T_mb, a.floor)
+                entry['ok'] = sum(r['ok'] for r in res)      # the approach check may drop views
+                entry['stages'] = {s: (sum(r['ok'] for r in res if s in r['stages']),
+                                       sum(1 for r in res if s in r['stages'])) for s in STAGES}
+                entry['transit_floor'] = TRANSIT_FLOOR
+                entry['approach_speed'] = APPROACH_SPEED
+                entry['planner'] = 3      # 18 Nov: branches chosen per sequence; joint moves, then via raised waypoints, then OMPL
+                entry['legs_by'] = dict(LEG_KIND)
             json.dump({'floor': a.floor, 'run_up': RUN_UP, 'module': MODULE, 'pad': a.pad,
+                       'conveyor_lift': a.conveyor_lift,
                        'mount': a.mount, 'pallet_margin': PALLET_MARGIN, 'results': results},
                       open(out / 'reach.json', 'w'), indent=1)
     finally:
