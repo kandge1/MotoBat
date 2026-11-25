@@ -96,6 +96,7 @@ PAD = 0.05                 # m keep-out around the module, every side but the bo
 # the belt runs). The conveyor runs along the module's length; at the station a
 # lift-and-locate raises the pallet CONVEYOR_LIFT off the belt (A). None = no conveyor.
 CONVEYOR_LIFT = None       # m, set by --conveyor-lift
+ACCEL_SCALE = 1.0          # set by --accel-scale: multiplies the assumed joint accelerations (2.7)
 CONVEYOR_LEN = 3.0         # m of line drawn and checked, centred on the station (A)
 CONVEYOR_RAIL = 0.04       # m of frame each side of the pallet (A)
 CONVEYOR_H = 0.10          # m, belt + frame profile depth (A)
@@ -175,7 +176,9 @@ def load_views(coverage_dir):
         for v in plan['views']:
             T = np.array(v['pose_mm'], dtype=float)
             T[:3, 3] /= 1000.0
-            key = (v['sensor'], tuple(np.round(T, 4).ravel()), round(v['length_mm'], 1))
+            # speed too: 2.9's plans fly one sweep geometry at different speeds in different stages
+            key = (v['sensor'], tuple(np.round(T, 4).ravel()), round(v['length_mm'], 1),
+                   round(v['seconds'] - ASSUMED_MOVE, 3))
             if key not in views:
                 cap = v['seconds'] - ASSUMED_MOVE
                 speed = v['length_mm'] / cap if v['sensor'] == 'profilometer' else None
@@ -403,7 +406,8 @@ class Client(Node):
         m.allowed_planning_time = seconds
         m.num_planning_attempts = attempts
         m.max_velocity_scaling_factor = 1.0
-        m.max_acceleration_scaling_factor = 1.0
+        # MoveIt can only scale its limits down: above 1, OMPL moves keep the configured limits
+        m.max_acceleration_scaling_factor = min(1.0, ACCEL_SCALE)
         res = self.call(self.planner, req)
         if res is None or res.motion_plan_response.error_code.val != MoveItErrorCodes.SUCCESS:
             return None
@@ -534,7 +538,8 @@ def joint_limits():
     from ament_index_python.packages import get_package_share_directory
     jl = yaml.safe_load(open(Path(get_package_share_directory(PKG)) / 'config' / 'joint_limits.yaml'))
     lim = jl['joint_limits']
-    return ([lim[j]['max_velocity'] for j in JOINTS], [lim[j]['max_acceleration'] for j in JOINTS])
+    return ([lim[j]['max_velocity'] for j in JOINTS],
+            [lim[j]['max_acceleration'] * ACCEL_SCALE for j in JOINTS])
 
 
 def move_estimate(q0, q1, vmax, amax):
@@ -892,11 +897,15 @@ def main():
     ap.add_argument('--plan', action='store_true',
                     help='one --base only: also order each stage and plan every move (implies '
                          '--keep-paths, no turntable)')
+    ap.add_argument('--accel-scale', type=float, default=1.0,
+                    help='multiply the assumed joint accelerations (joint_limits.yaml, A) by this, for '
+                         'cycle-time sensitivity (task 2.7); OMPL moves only scale down')
     ap.add_argument('--no-launch', action='store_true', help='use an already running move_group')
     a = ap.parse_args()
 
-    global CONVEYOR_LIFT
+    global CONVEYOR_LIFT, ACCEL_SCALE
     CONVEYOR_LIFT = a.conveyor_lift
+    ACCEL_SCALE = a.accel_scale
     if a.plan:
         if not a.base:
             sys.exit('--plan needs --base')
@@ -984,6 +993,7 @@ def main():
                 entry['approach_speed'] = APPROACH_SPEED
                 entry['planner'] = 3      # 18 Nov: branches chosen per sequence; joint moves, then via raised waypoints, then OMPL
                 entry['legs_by'] = dict(LEG_KIND)
+                entry['accel_scale'] = ACCEL_SCALE
             json.dump({'floor': a.floor, 'run_up': RUN_UP, 'module': MODULE, 'pad': a.pad,
                        'conveyor_lift': a.conveyor_lift,
                        'mount': a.mount, 'pallet_margin': PALLET_MARGIN, 'results': results},

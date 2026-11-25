@@ -1,10 +1,13 @@
-# Where the simulated hardware starts: the SRDF "ready" pose.
-# All-zeros is a poor start: joint_3_u = 0 folds the forearm down beside the
-# upper arm.
+# Where the simulated hardware starts.
+# 25 Nov 2026: the planner's home for the ceiling-hung base A (view_reach.py pick_home,
+# data/reach/base_A/reach.json 'home'), clear of the module, pallet and keep-out. The SRDF
+# "ready" pose (forearm forward, wrist down) was the start for the floor mount; hung from the
+# ceiling it put the wrist into the module in Gazebo (task 2.6), and the mesh contacts slowed
+# the simulation to a real-time factor of 0.07.
 initial_positions:
   s3_joint_1_s: 0.0
-  s3_joint_2_l: 0.0
-  s3_joint_3_u: 1.5708
+  s3_joint_2_l: -1.0
+  s3_joint_3_u: 0.6
   s3_joint_4_r: 0.0
-  s3_joint_5_b: -1.5708
+  s3_joint_5_b: -1.0
   s3_joint_6_t: 0.0

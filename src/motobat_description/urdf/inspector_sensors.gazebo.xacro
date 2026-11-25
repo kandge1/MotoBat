@@ -1,0 +1,100 @@
+<?xml version="1.0"?>
+<!--
+  Gazebo stand-ins for the Inspector's wrist sensors (task 2.6). Included only when sim:=gazebo.
+
+  Gazebo's sensors are geometric: no speckle, no specular dropout on copper, no
+  triangulation shadow. Measurement fidelity lives in defectgen's numpy models (plan
+  §3.7.8); these show the motion, the poses and the data flow in the line.
+
+    Zivid 2+ M60   depth camera on s3_zivid_optical, 52.84 x 45.14 deg (S), 300-1100 mm (S),
+                   612 x 512 (a quarter of the 2448 x 2048 in each direction, for speed, A),
+                   publishing a point cloud on /zivid/points.
+    LJ-X8200       gpu_lidar on s3_ljx_laser, one fan of 800 rays (of 3200, A) as wide as the
+                   72 mm line at the 245 mm reference (S), 211-279 mm (S: 245 +/- 34),
+                   at 250 Hz (A; the real head runs 1-16 kHz), on /ljx/scan.
+
+  Gazebo cameras look along their link's +x (y left, z up) and lidars sweep their fan in
+  the link's xy-plane about +x. The optical frames look along +z, so each sensor sits on a
+  child frame turned to Gazebo's convention:
+    s3_zivid_gz  x = optical z, y = -optical x, z = -optical y          (rpy  pi/2 -pi/2 0)
+    s3_ljx_gz    x = laser z (the beam), y = laser x (the profile line),
+                 z = laser y (travel)                                    (rpy -pi/2 -pi/2 0)
+  (checked numerically: URDF rpy is fixed-axis x, y, z.)
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:macro name="inspector_sensors_gazebo" params="prefix">
+
+    <link name="${prefix}zivid_gz"/>
+    <joint name="${prefix}zivid_optical-zivid_gz" type="fixed">
+      <parent link="${prefix}zivid_optical"/>
+      <child link="${prefix}zivid_gz"/>
+      <origin xyz="0 0 0" rpy="${pi/2} ${-pi/2} 0"/>
+    </joint>
+
+    <link name="${prefix}ljx_gz"/>
+    <joint name="${prefix}ljx_laser-ljx_gz" type="fixed">
+      <parent link="${prefix}ljx_laser"/>
+      <child link="${prefix}ljx_gz"/>
+      <!-- columns x=(0,0,1), y=(1,0,0), z=(0,1,0) in the laser frame -->
+      <origin xyz="0 0 0" rpy="${-pi/2} ${-pi/2} 0"/>
+    </joint>
+
+    <gazebo reference="${prefix}zivid_gz">
+      <sensor name="zivid" type="depth_camera">
+        <gz_frame_id>${prefix}zivid_gz</gz_frame_id>
+        <topic>zivid</topic>
+        <update_rate>5</update_rate>
+        <always_on>true</always_on>
+        <camera>
+          <horizontal_fov>${radians(52.84)}</horizontal_fov>
+          <image>
+            <width>612</width>
+            <height>512</height>
+            <format>R_FLOAT32</format>
+          </image>
+          <clip>
+            <near>0.30</near>
+            <far>1.10</far>
+          </clip>
+          <noise>
+            <type>gaussian</type>
+            <mean>0.0</mean>
+            <stddev>0.00008</stddev>   <!-- 80 um at the 600 mm focus distance (S) -->
+          </noise>
+        </camera>
+      </sensor>
+    </gazebo>
+
+    <gazebo reference="${prefix}ljx_gz">
+      <sensor name="ljx" type="gpu_lidar">
+        <gz_frame_id>${prefix}ljx_gz</gz_frame_id>
+        <topic>ljx/scan</topic>
+        <update_rate>50</update_rate>
+        <always_on>true</always_on>
+        <lidar>
+          <scan>
+            <horizontal>
+              <samples>800</samples>
+              <min_angle>${-atan(36.0 / 245.0)}</min_angle>
+              <max_angle>${atan(36.0 / 245.0)}</max_angle>
+            </horizontal>
+            <vertical>
+              <samples>1</samples>
+            </vertical>
+          </scan>
+          <range>
+            <min>0.211</min>
+            <max>0.279</max>
+            <resolution>0.000025</resolution>
+          </range>
+          <noise>
+            <type>gaussian</type>
+            <mean>0.0</mean>
+            <stddev>0.000001</stddev>   <!-- 1 um Z repeatability (S) -->
+          </noise>
+        </lidar>
+      </sensor>
+    </gazebo>
+
+  </xacro:macro>
+</robot>

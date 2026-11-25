@@ -543,6 +543,53 @@ mb-venv && OMP_NUM_THREADS=2 systemd-run --user --scope -q -p MemoryMax=2G -p Me
     data/reach/base_A/occlusion_poses.json --scans data/arm_scans/weld_walls/base_A
 # 18 Nov, base A: 0 of 430,434 tested points blocked at any station.
 
+## Minimum-time inspection plan (task 2.9, ~15 min, light) ##
+# Re-picks each stage's views from 1.5's candidates: only views base A can fly, sweeps
+# offered at 50 / 100 / 200 mm/s, chosen by an exact integer program instead of greedy.
+# Two variants per stage: the arm alone, and the arm filling only what the fixed pass misses.
+# Runs from the MotoBat-arm folder. Reuses Phase 1's coverage cache (no new ray casting).
+cd ~/projects/MotoBat-arm && source motobat_env.sh
+# Step 1, venv: every candidate as a plan file the reach checker reads
+mb-venv && PYTHONPATH=$PWD/defectgen/src python src/motobat_hc10dt_moveit_config/scripts/inspection_plan.py \
+    candidates --out data/plan29/candidates
+# Step 2, system python: which candidates base A reaches (~1 min)
+ROS_DOMAIN_ID=45 systemd-run --user --scope -q -p MemoryMax=2G /usr/bin/python3 \
+    src/motobat_hc10dt_moveit_config/scripts/view_reach.py --coverage data/plan29/candidates \
+    --base 0 0.30 1.10 --mount ceiling --pad 0.10 --conveyor-lift 0.05 --keep-paths --out data/reach/cand_A
+# Step 3, venv: the cover. --slack 0 keeps every class at v3's coverage; 0.01 gives up one point
+# (the first --slack writes the plans; any more only print the time/coverage trade-off)
+mb-venv && PYTHONPATH=$PWD/defectgen/src OMP_NUM_THREADS=2 systemd-run --user --scope -q -p MemoryMax=5G \
+    --setenv=PYTHONPATH=$PWD/defectgen/src --setenv=OMP_NUM_THREADS=2 \
+    python src/motobat_hc10dt_moveit_config/scripts/inspection_plan.py select \
+    --reach data/reach/cand_A/reach.json --cache ../MotoBat/data/coverage/cache --out data/plan29/s1 --slack 0.01
+# Step 4, system python: real moves and cycle times for a plan (~1 min); add --accel-scale 0.5 or 2
+# to see how much the assumed joint accelerations matter
+ROS_DOMAIN_ID=45 systemd-run --user --scope -q -p MemoryMax=2G /usr/bin/python3 \
+    src/motobat_hc10dt_moveit_config/scripts/view_reach.py --coverage data/plan29/s1/arm_fixed \
+    --base 0 0.30 1.10 --mount ceiling --pad 0.10 --conveyor-lift 0.05 --plan --out data/reach/p29_s1_fixed
+# 25 Nov: arm filling the fixed pass's gaps, one point under v3: 11 / 8 / 12 views,
+# cycles 36.6 / 32.5 / 52.1 s (v3's plan: 61.7 / 56.5 / 76.2 s). Table in status_update 2.7.
+# To watch it: with RViz open from "Arm view plan in RViz" above, in another terminal
+/usr/bin/python3 src/motobat_hc10dt_moveit_config/scripts/show_view_plan.py \
+    data/reach/p29_s1_fixed/reach.json --stage post_weld --name "2.9 gap-filling"
+
+## The line in Gazebo: fixed gate, pallet, arm (task 2.6, ~3 GB, uses the GPU) ##
+# A defectgen module rides a pallet under the fixed line-scan gate, indexes to the Inspector,
+# and the HC10DT flies a stage's plan. Both sensors' clouds build up in the pallet's frame.
+# Gazebo's sensors are geometric stand-ins (shape and timing, not measurement quality).
+cd ~/projects/MotoBat-arm && source motobat_env.sh
+# Once per module (venv): the module as a Gazebo model (decimated meshes, pallet, prismatic joint)
+mb-venv && python src/motobat_bringup/scripts/gazebo_module.py data/arm_scans/weld_walls/module \
+    --stage post_weld --out data/gazebo/models
+# Terminal 1: Gazebo (GUI) + RViz (line_demo.rviz). gui:=false rviz:=false for headless.
+# On the NVIDIA laptop Gazebo renders on the dGPU by itself; MOTOBAT_GZ_NVIDIA=0 to stop that.
+ros2 launch motobat_bringup inspector_gazebo.launch.py world:=line
+# Terminal 2: run the module through (~1.5 min). Any reach.json with --plan works, any stage.
+/usr/bin/python3 src/motobat_bringup/scripts/line_demo.py \
+    --reach data/reach/p29_s1_fixed/reach.json --stage post_weld --save data/gazebo/demo_post_weld
+# 25 Nov, post-weld: fixed pass 4.3 s, index 1.2 s, arm 54.1 s flown = planned; both clouds
+# within 0.13 mm (95 %) of the module mesh. Blue = gate cloud (tops only), orange = arm (walls too).
+
 ## If RViz shows old markers or an old point cloud ##
 # Something from an earlier run is still publishing. Find it and stop it.
 pgrep -af "show_module.py|show_scan.py"
