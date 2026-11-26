@@ -42,10 +42,10 @@ else
 fi
 
 # The fork carries ~30 robot support packages plus a ROS1 'attic'. Building
-# all of them wastes several minutes; ignore everything except the three arms
-# in the proposal and the shared resources package.
+# all of them wastes several minutes; ignore everything except the line's four arms
+# (GP4, GP7, HC10DT, and the GP25 welder from 4 Nov 2026) and the shared resources package.
 info "marking unused vendor packages COLCON_IGNORE"
-KEEP="motoman_gp4_support motoman_gp7_support motoman_hc10_support motoman_resources"
+KEEP="motoman_gp4_support motoman_gp7_support motoman_gp25_support motoman_hc10_support motoman_resources"
 for d in "${VENDOR}/motoman"/*/; do
   name="$(basename "$d")"
   if [[ " ${KEEP} " != *" ${name} "* ]]; then
@@ -61,7 +61,7 @@ done
 for p in micro-ROS-Agent micro_ros_msgs; do
   [[ -d "${VENDOR}/${p}" ]] && touch "${VENDOR}/${p}/COLCON_IGNORE"
 done
-ok "vendor tree trimmed to the three arms"
+ok "vendor tree trimmed to the four arms"
 
 # --- 2. Deps and build ------------------------------------------------------
 # motobat_description is versioned in src/ — nothing to stage. This script

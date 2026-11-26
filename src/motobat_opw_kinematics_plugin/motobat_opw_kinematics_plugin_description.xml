@@ -1,0 +1,7 @@
+<library path="motobat_opw_kinematics_plugin">
+  <class name="motobat_opw_kinematics_plugin/OPWKinematicsPlugin"
+         type="motobat_opw_kinematics_plugin::OPWKinematicsPlugin"
+         base_class_type="kinematics::KinematicsBase">
+    <description>Closed-form OPW IK (opw_kinematics) for ortho-parallel, spherical-wrist arms.</description>
+  </class>
+</library>

@@ -1,0 +1,7 @@
+opw_kinematics, header-only, copied unmodified from
+https://github.com/Jmeyer1292/opw_kinematics
+version 0.5.5, commit 8a32bda (15 Jun 2026)
+files: opw_kinematics.h, opw_kinematics_impl.h, opw_parameters.h, opw_utilities.h
+licence: Apache-2.0 (LICENSE in this folder)
+Why copied: not released for ROS 2 Jazzy on apt (checked 26 Nov 2026), and its CMake needs
+ros_industrial_cmake_boilerplate, also not installed. The headers need only Eigen.

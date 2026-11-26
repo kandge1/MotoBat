@@ -1,0 +1,38 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>motobat_opw_kinematics_plugin</name>
+  <version>0.1.0</version>
+  <description>
+    MoveIt 2 kinematics plugin: closed-form OPW inverse kinematics (all 8 branches) for
+    ortho-parallel, spherical-wrist arms (Yaskawa GP4, GP7, GP25). Wraps opw_kinematics
+    (Jmeyer1292, Apache-2.0, header-only, copied into third_party/). Checks its parameters
+    against the robot model at start-up and refuses to load if they disagree.
+  </description>
+  <maintainer email="noreply@example.com">ewok</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>eigen3_cmake_module</buildtool_depend>
+
+  <depend>class_loader</depend>
+  <depend>eigen</depend>
+  <depend>moveit_core</depend>
+  <depend>pluginlib</depend>
+  <depend>random_numbers</depend>
+  <depend>rclcpp</depend>
+  <depend>tf2_eigen</depend>
+
+  <test_depend>ament_cmake_gtest</test_depend>
+  <test_depend>motoman_gp4_support</test_depend>
+  <test_depend>motoman_gp7_support</test_depend>
+  <test_depend>motoman_gp25_support</test_depend>
+  <test_depend>srdfdom</test_depend>
+  <test_depend>urdf</test_depend>
+  <test_depend>xacro</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+    <moveit_core plugin="${prefix}/motobat_opw_kinematics_plugin_description.xml"/>
+  </export>
+</package>
