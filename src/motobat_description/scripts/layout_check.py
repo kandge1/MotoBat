@@ -9,7 +9,7 @@ whole grid takes seconds and needs no ROS:
   1. Task poses, in the pallet-datum frame (module centre on the pallet top, x along the
      line), from the CAD as exported (module_spec.md §7; bounding boxes of the part STLs):
        GP7   12 cell placements at x = (k - 5.5) * 28.0 mm, top 95 mm; end plates A, B
-             (top centre, x = -/+173.5 mm, 105 mm); each from its magazine pick point
+             (top centre, x = -/+172.375 mm, 105 mm); each from its magazine pick point
        GP4a  busbar carrier, top centre (0, 0, 102 mm)
        GP25  24 weld holds, scanner focus on each terminal centre (x_k, +-57.5 mm, 102.7 mm)
        GP4b  CMC (0, 0, 101.2 mm) then cover (0, 0, 107 mm)
@@ -57,11 +57,15 @@ import line_envelope as L  # noqa: E402
 PALLET_TOP = 0.9             # m above the floor (line_layout.xacro)
 CELL_PITCH = 0.028           # module_spec.md §5 (S, the carrier is built to it)
 CELL_X = [(k - 5.5) * CELL_PITCH for k in range(12)]
+END_PLATE_X = 0.172375      # m, end plate centre (CAD: x 167.25 .. 177.5 mm, 10.25 thick)
 
 ASSUMED = dict(
     approach=0.10,           # m, straight above every pick and place
     gripper_len={'gp7': 0.15, 'gp4': 0.10},          # tool0 -> TCP along tool z
-    gripper_box={'gp7': (0.06, 0.20, 0.15), 'gp4': (0.06, 0.16, 0.10)},  # x y z (z along tool)
+    # x y z (z along tool). GP7 24 mm thick: it places a cell between neighbours of the same
+    # height on a 28 mm pitch (26 Nov: was 60 mm, which would hit them; the layout was spaced
+    # with 60 mm, so its envelopes are conservative by up to 18 mm a side).
+    gripper_box={'gp7': (0.024, 0.20, 0.15), 'gp4': (0.06, 0.16, 0.10)},
     # MOTOPAC-RL2D: 329.5 mm work distance is S (catalogue); flange to the exit window is not
     # published: 0.25 m assumed, so tool0 -> focus = 0.5795 m. Head box 0.20 x 0.25 x 0.25.
     scanner_len=0.25 + 0.3295,
@@ -86,7 +90,7 @@ HC10DT_YZ = ((-1.635, 1.160), (0.821, 2.322))   # same sweep, world y and z
 ORDER = ['S1 gp7', 'S2 gate', 'S3a hc10dt', 'S4a gp4a', 'S3b hc10dt', 'S4b gp25', 'S3c hc10dt', 'S5 gp4b']
 
 PARTS = {  # carried part boxes (m) as placed: x along the line, y across, z up (STL bounds, module frame)
-    'cell': (0.0265, 0.148, 0.091), 'end_plate': (0.020, 0.148, 0.101),
+    'cell': (0.0265, 0.148, 0.091), 'end_plate': (0.01025, 0.148, 0.101),
     'carrier': (0.333, 0.146, 0.007), 'cmc': (0.250, 0.050, 0.003), 'cover': (0.355, 0.151, 0.002),
 }
 
@@ -102,10 +106,10 @@ def tasks(station):
     yaw2 = [0.0, math.pi]
     t = []
     if station == 'gp7':
-        t.append(('end_plate_A', (-0.1735, 0, 0.105), yaw2, 'end_plate', 'place'))
+        t.append(('end_plate_A', (-END_PLATE_X, 0, 0.105), yaw2, 'end_plate', 'place'))
         for k, x in enumerate(CELL_X):
             t.append((f'cell_{k+1}', (x, 0, 0.095), yaw2, 'cell', 'place'))
-        t.append(('end_plate_B', (+0.1735, 0, 0.105), yaw2, 'end_plate', 'place'))
+        t.append(('end_plate_B', (+END_PLATE_X, 0, 0.105), yaw2, 'end_plate', 'place'))
     elif station == 'gp4a':
         t.append(('carrier', (0, 0, 0.102), yaw2, 'carrier', 'place'))
     elif station == 'gp4b':
@@ -122,14 +126,58 @@ def tasks(station):
 ARM = {'gp7': 'gp7', 'gp4a': 'gp4', 'gp4b': 'gp4', 'gp25': 'gp25'}
 
 
+CONTACT = 0.003   # m: two non-adjacent bodies closer than this count as touching (surface sampled at 4 mm)
+CHAIN = ['base_link', 'link_1_s', 'link_2_l', 'link_3_u', 'link_4_r', 'link_5_b', 'link_6_t', 'tool', 'part']
+
+
 class Station:
     def __init__(self, name):
         self.name, self.arm = name, ARM[name]
-        u = D.Urdf(D.VENDOR / D.ARMS[self.arm][0], snap=True)
+        self.macro = D.VENDOR / D.ARMS[self.arm][0]
+        self._surf = None
+        u = D.Urdf(self.macro, snap=True)
+        self.urdf = u
         self.P, _ = D.derive(u)
         self.lo, self.hi = u.limits[:, 0], u.limits[:, 1]
         self.tcp = ASSUMED['scanner_len'] if name == 'gp25' else ASSUMED['gripper_len'][self.arm]
         self.tasks = tasks(name)
+
+    def tool_box(self):
+        """(size, centre) of the end effector in tool0, as in line_tools.xacro."""
+        if self.name == 'gp25':
+            sx, sy, sz = ASSUMED['scanner_box']
+        else:
+            sx, sy, sz = ASSUMED['gripper_box'][self.arm]
+        return (sx, sy, sz), (0, 0, sz / 2)
+
+    def self_collision(self, q, part):
+        """Pairs of non-adjacent bodies (links, tool, carried part) closer than CONTACT at q, as
+        [(a, b, distance)]. Surfaces sampled at 4 mm; MoveIt (FCL, exact) has the last word."""
+        from scipy.spatial import cKDTree
+        if self._surf is None:
+            self._surf = L.link_surfaces(self.macro)
+            size, c = self.tool_box()
+            self._surf['tool'] = L.box_surface(size, c, 0.004)
+            self._part = {k: L.box_surface((v[0] - 2 * 0.0005, v[1] - 2 * 0.0005, v[2] - 0.001),
+                                           (0, 0, self.tcp + (v[2] - 0.001) / 2), 0.004) for k, v in PARTS.items()}
+        fr = L.link_frames(self.urdf, q)
+        p0, R0 = fr['tool0']
+        world = {n: self._surf[n] @ fr[n][1].T + fr[n][0] for n in CHAIN[:7]}
+        world['tool'] = self._surf['tool'] @ R0.T + p0
+        if part is not None:
+            world['part'] = self._part[part] @ R0.T + p0
+        names = [n for n in CHAIN if n in world]
+        hits = []
+        for i, a in enumerate(names):
+            for b in names[i + 2:]:                                   # skip the adjacent body
+                A, B = world[a], world[b]
+                if np.any(A.max(0) + CONTACT < B.min(0)) or np.any(B.max(0) + CONTACT < A.min(0)):
+                    continue
+                dist, _ = cKDTree(B).query(A, k=1, distance_upper_bound=CONTACT)
+                m = dist.min()
+                if m < CONTACT:
+                    hits.append((a, b, float(m)))
+        return hits
 
     def base_T(self, d, h):
         """world pose of base_link: (x = pallet stop = 0 here, y = -d, z = h), yaw +90 deg."""
@@ -176,15 +224,20 @@ class Station:
                 choices = []
                 for yaw in yaws:
                     R = down(yaw)
-                    choices.append((tcp - self.tcp * R[:, 2], R, part if ':pick' not in label or label.endswith(':pick') else None))
+                    held = part if label.endswith((':pick', ':place_above', ':place')) else None
+                    choices.append((tcp - self.tcp * R[:, 2], R, held))
                 seq.append((label, choices))
         return seq
 
-    def solve(self, d, h):
-        """Per pose: every (q) over all yaw choices; None if a pose has none."""
+    def solve(self, d, h, selfcheck=False):
+        """Per pose: every (q) over all yaw choices; None if a pose has none.
+        selfcheck: keep only branches free of self-collision (links, tool, carried part)."""
         sols = []
         for label, choices in self.poses(d, h):
-            qs = [q for p, R, _ in choices for q in self.ik(p, R, d, h)]
+            qs = [(q, held) for p, R, held in choices for q in self.ik(p, R, d, h)]
+            if selfcheck:
+                qs = [(q, held) for q, held in qs if not self.self_collision(q, held)]
+            qs = [q for q, _ in qs]
             if not qs:
                 return None, label
             sols.append((label, qs))
@@ -198,8 +251,8 @@ class Station:
             chain.append(min(qs, key=lambda q: np.sum((q - chain[-1]) ** 2)))
         return np.array(chain)
 
-    def evaluate(self, d, h):
-        sols, missing = self.solve(d, h)
+    def evaluate(self, d, h, selfcheck=False):
+        sols, missing = self.solve(d, h, selfcheck)
         if sols is None:
             return None, missing
         chain = self.sequence(sols)
@@ -254,9 +307,28 @@ def choose(st, ds, hs):
         e['foot'] = foot
         ok.append(e)
     ok.sort(key=lambda e: (e['area'], e['d'], e['h']))
-    if ok:
-        ok[0]['env'] = st.envelope(ok[0])     # final, at full sampling
-    return found, ok, misses
+    # Self-collision (costly): test candidates in order of preference, keep the first that passes
+    # at every task pose with some branch. (Added 26 Nov after MoveIt found the GP7 at d 0.30
+    # folding its forearm into its upper arm at every place pose.)
+    passed, tested = [], 0
+    for e in ok:
+        tested += 1
+        ev, missing = st.evaluate(e['d'], e['h'], selfcheck=True)
+        if ev is None:
+            misses[f'self-collision at {missing}'] = misses.get(f'self-collision at {missing}', 0) + 1
+            continue
+        if ev['margin'] < MARGIN:
+            continue
+        ev['env'] = st.envelope(ev)          # final, at full sampling, on the collision-free branches
+        lo, hi = ev['env']
+        ev['area'], ev['foot'] = (hi[0] - lo[0]) * (hi[1] - lo[1]), e['foot']
+        foot = max(st.last_per[n][1][1] for n in ('base_link', 'link_1_s'))
+        ev['foot'] = foot
+        passed.append(ev)
+        if len(passed) == 3:
+            break
+    st.selfcheck_tested = tested
+    return found, passed, misses
 
 
 GRIDS = {  # d (m from the conveyor centreline), h (base_link above the floor)
@@ -297,6 +369,8 @@ def main():
     ap.add_argument('--verify', metavar='URDF', help='check an expanded motobat_line URDF: no robot link '
                     'enters a fixture box (xacro motobat_line.urdf.xacro -o line.urdf)')
     ap.add_argument('--reach', default=str(L.REPO / 'data/reach/base_A/reach.json'))
+    ap.add_argument('--stops', metavar='URDF', help='also check the pallet stops of an expanded line URDF '
+                    'against these envelopes: every neighbouring pair at least the clearance apart')
     a = ap.parse_args()
     if a.verify:
         sys.exit(1 if verify(a.verify, a.reach) else 0)
@@ -307,8 +381,11 @@ def main():
         found, ok, misses = choose(st, *GRIDS[n])
         n_grid = len(GRIDS[n][0]) * len(GRIDS[n][1])
         print(f'== {n} ({st.arm.upper()}, TCP {st.tcp*1e3:.0f} mm from tool0, {len(st.tasks)} tasks): '
-              f'{len(found)} of {n_grid} placements reach every pose, {len(ok)} also keep a {MARGIN:.0%} joint margin '
-              f'and stand clear of the conveyor')
+              f'{len(found)} of {n_grid} placements reach every pose; self-collision tested on '
+              f'{st.selfcheck_tested} (smallest footprint first), best {len(ok)} shown')
+        sc = {k: v for k, v in misses.items() if k.startswith('self')}
+        if sc:
+            print('   rejected for self-collision:', sorted(sc.items(), key=lambda kv: -kv[1])[:4])
         if not ok:
             print('   most often unreachable:', sorted(misses.items(), key=lambda kv: -kv[1])[:3])
             continue
@@ -331,8 +408,35 @@ def main():
     print(f'  S4b laser enclosure walls (centre planes) at x {walls["upstream"]:.3f} and {walls["downstream"]:.3f}')
     last = list(xs.values())[-1]
     print(f'  line length, first to last envelope: {last[0] + last[3] - (list(xs.values())[0][2]):.2f} m')
+    if a.stops:
+        at = check_stops(xs, a.stops)
+        xs = {t: (at[t], what, lo, hi) for t, (_, what, lo, hi) in xs.items()}   # plot the URDF's stops
+        x, _, lo, hi = xs['S4b']
+        walls = dict(upstream=x + lo + ASSUMED['wall'] / 2, downstream=x + hi - ASSUMED['wall'] / 2)
+        print(f'  S4b laser enclosure walls at these stops: x {walls["upstream"]:.3f} and {walls["downstream"]:.3f}')
     if a.plot:
         plot(xs, walls, chosen, a.plot)
+
+
+def check_stops(xs, urdf_path):
+    """Gaps between neighbouring envelopes at the stops an existing URDF uses."""
+    import xml.etree.ElementTree as ET
+    root = ET.parse(urdf_path).getroot()
+    mount = {j.get('name')[:-len('mount')]: float(j.find('origin').get('xyz').split()[0])
+             for j in root.iter('joint') if j.get('name', '').endswith('mount')}
+    gate = [float(j.find('origin').get('xyz').split()[0]) for j in root.iter('joint')
+            if j.get('name') == 'world-gate_beam']
+    at = {'S1': mount['s1_'], 'S2': gate[0], 'S3a': mount['s3a_'], 'S4a': mount['s4a_'], 'S3b': mount['s3b_'],
+          'S4b': mount['s4b_'], 'S3c': mount['s3c_'], 'S5': mount['s5_']}
+    print(f'\nStops in {urdf_path}, gaps between neighbouring envelopes (need >= {ASSUMED["clearance"]:.2f} m):')
+    tags = list(xs)
+    bad = 0
+    for t0, t1 in zip(tags[:-1], tags[1:]):
+        gap = (at[t1] + xs[t1][2]) - (at[t0] + xs[t0][3])
+        bad += gap < ASSUMED['clearance'] - 1e-6
+        print(f'  {t0:4s} -> {t1:4s} {gap:6.3f} m  {"ok" if gap >= ASSUMED["clearance"] - 1e-6 else "TOO CLOSE"}')
+    print(f'  {"all clear" if not bad else f"{bad} too close"}')
+    return at
 
 
 def plot(xs, walls, chosen, path):
@@ -440,7 +544,7 @@ def verify(urdf_path, reach_json):
     for prefix, name in station_of.items():
         xyz, rpy = mounts[prefix]
         st = Station(name)
-        ev, missing = st.evaluate(-xyz[1], xyz[2])
+        ev, missing = st.evaluate(-xyz[1], xyz[2], selfcheck=True)
         if ev is None:
             print(f'  {prefix}: unreachable at the URDF pose ({missing})')
             continue

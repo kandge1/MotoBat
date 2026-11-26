@@ -45,7 +45,7 @@ SWEEP_HZ = 50.0       # sweep points per second
 
 def floor_track(station, d, h):
     st = LC.Station(station)
-    ev, missing = st.evaluate(d, h)
+    ev, missing = st.evaluate(d, h, selfcheck=True)       # the branches the placement was chosen on
     if ev is None:
         raise SystemExit(f'{station}: pose {missing} unreachable from d {d}, h {h}')
     chain = list(ev['chain']) + [ev['chain'][0]]          # loop back to the start

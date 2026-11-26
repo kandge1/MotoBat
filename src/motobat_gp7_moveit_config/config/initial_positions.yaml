@@ -1,0 +1,12 @@
+# Where the simulated hardware starts: "home" in the SRDF. The GP7 waits 100 mm above its cell
+# magazine's pick point, gripper down (yaw 180 deg), ready for the next cell and clear of the
+# pallet's path. Solved by OPW IK (layout_check.Station) and free of self-contact; 13.7 % of
+# every joint's range left. (A pose over the pallet stop was tried first: from the 0.45 m
+# pedestal the wrist folds to within 1 mm of itself there, and the best clean one keeps 11 %.)
+initial_positions:
+  s1_joint_1_s: 1.8925
+  s1_joint_2_l: 0.009
+  s1_joint_3_u: 0.1467
+  s1_joint_4_r: 0.0
+  s1_joint_5_b: -1.7085
+  s1_joint_6_t: -0.3218

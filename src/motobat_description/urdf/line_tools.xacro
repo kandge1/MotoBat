@@ -45,10 +45,12 @@
     </joint>
   </xacro:macro>
 
-  <!-- GP7: two-finger cell gripper, clamps the cell's 26.5 x 91 ends from above. TCP 150 mm. -->
+  <!-- GP7: two-finger cell gripper, clamps the cell's 26.5 x 91 ends from above. TCP 150 mm.
+       24 mm thick (tool x = along the line when placing): it must fit between the neighbours'
+       tops, which sit at the same height on a 28.0 mm pitch with 1.5 mm pads between. -->
   <xacro:macro name="gp7_cell_gripper" params="prefix">
     <xacro:box_tool prefix="${prefix}" body="gripper" tcp_name="tcp"
-                    size_x="0.06" size_y="0.20" size_z="0.15" tcp_z="0.15" mass="2.0"/>
+                    size_x="0.024" size_y="0.20" size_z="0.15" tcp_z="0.15" mass="2.0"/>
   </xacro:macro>
 
   <!-- GP4: vacuum gripper for the carrier, CMC and cover (largest 355 x 151 mm). TCP 100 mm. -->

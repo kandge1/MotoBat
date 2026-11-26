@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<!--
+  What MoveIt and ros2_control load: Station 1 (GP7 + cell gripper + the equipment around it)
+  from motobat_description, plus its ros2_control block.
+
+  sim:=mock (default, demo.launch.py) or sim:=gazebo.
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="motobat_placer">
+  <xacro:arg name="initial_positions_file" default="$(find motobat_gp7_moveit_config)/config/initial_positions.yaml"/>
+  <xacro:arg name="sim" default="mock"/>
+
+  <xacro:include filename="$(find motobat_description)/urdf/placer_station.urdf.xacro"/>
+  <xacro:include filename="$(find motobat_gp7_moveit_config)/config/motobat_placer.ros2_control.xacro"/>
+
+  <xacro:motobat_placer_ros2_control name="PlacerSystem" prefix="s1_"
+      initial_positions_file="$(arg initial_positions_file)" sim="$(arg sim)"/>
+</robot>

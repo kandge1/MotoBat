@@ -41,6 +41,59 @@ def read_stl(path):
     return np.unique(np.round(v, 5), axis=0)
 
 
+def read_tris(path):
+    data = Path(path).read_bytes()
+    n = struct.unpack_from('<I', data, 80)[0]
+    rec = np.frombuffer(data, dtype=np.dtype([('n', '<f4', 3), ('v', '<f4', (3, 3)), ('a', '<u2')]),
+                        count=n, offset=84)
+    return rec['v'].astype(np.float64)                       # (n, 3, 3)
+
+
+def surface_points(tris, spacing, seed=0):
+    """Points spread over a triangle mesh's surface, about `spacing` apart (area-weighted)."""
+    a, b, c = tris[:, 0], tris[:, 1], tris[:, 2]
+    area = 0.5 * np.linalg.norm(np.cross(b - a, c - a), axis=1)
+    n = max(int(area.sum() / spacing ** 2), len(tris))
+    rng = np.random.default_rng(seed)
+    idx = rng.choice(len(tris), n, p=area / area.sum())
+    u, v = rng.random(n), rng.random(n)
+    flip = u + v > 1
+    u[flip], v[flip] = 1 - u[flip], 1 - v[flip]
+    pts = a[idx] + u[:, None] * (b[idx] - a[idx]) + v[:, None] * (c[idx] - a[idx])
+    return np.vstack([pts, tris.reshape(-1, 3)])            # plus the vertices (edges, corners)
+
+
+def box_surface(size, center, spacing):
+    """Points on the surface of an axis-aligned box."""
+    sx, sy, sz = size
+    g = lambda L: np.linspace(-L / 2, L / 2, max(2, int(L / spacing) + 1))  # noqa: E731
+    pts = []
+    for ax, L in enumerate((sx, sy, sz)):
+        o = [i for i in range(3) if i != ax]
+        A, B = np.meshgrid(g((sx, sy, sz)[o[0]]), g((sx, sy, sz)[o[1]]))
+        for side in (-L / 2, L / 2):
+            p = np.zeros((A.size, 3))
+            p[:, ax], p[:, o[0]], p[:, o[1]] = side, A.ravel(), B.ravel()
+            pts.append(p)
+    return np.vstack(pts) + np.asarray(center)
+
+
+def link_surfaces(macro, spacing=0.004):
+    """link name -> surface points (link frame, m) of its collision mesh."""
+    out = {}
+    for link in ET.parse(macro).getroot().iter('link'):
+        c = link.find('collision')
+        if c is None or c.find('geometry/mesh') is None:
+            continue
+        pkg, rel = c.find('geometry/mesh').get('filename')[len('package://'):].split('/', 1)
+        v = surface_points(read_tris(VENDOR / pkg / rel), spacing)
+        o = c.find('origin')
+        if o is not None:
+            v = v @ D.rpy(*D._num(o.get('rpy', '0 0 0'))).T + np.array(D._num(o.get('xyz', '0 0 0')))
+        out[link.get('name').replace('${prefix}', '')] = v
+    return out
+
+
 def link_meshes(macro):
     """link name -> vertices (link frame, m) of its collision mesh."""
     out = {}

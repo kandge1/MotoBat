@@ -1,0 +1,25 @@
+# GP7 IK: closed-form OPW (motobat_opw_kinematics_plugin), all 8 branches.
+#
+# No OPW parameter file ships for the GP7; these are derived from the vendor URDF and
+# checked against its forward kinematics by motobat_description/scripts/derive_opw.py
+# (task 3.1). The plugin re-checks them against the robot model when it loads and refuses
+# to start if they disagree by more than 1 um / 1 urad.
+#
+# The group's tip is s1_tcp (the gripper's tool centre point, 150 mm past tool0). OPW
+# solves for tool0; the plugin measures the tool0 -> tcp offset from the robot model.
+#
+# ROS 2 parameter files have no deg(): offsets are in radians. Signs must be integers.
+placer_arm:
+  kinematics_solver: motobat_opw_kinematics_plugin/OPWKinematicsPlugin
+  kinematics_solver_search_resolution: 0.005   # unused: closed form, nothing to search
+  kinematics_solver_timeout: 0.005             # unused: answers in ~1 us or not at all
+  opw_kinematics_geometric_parameters:
+    a1: 0.040
+    a2: -0.040
+    b: 0.000
+    c1: 0.330
+    c2: 0.445
+    c3: 0.440
+    c4: 0.080
+  opw_kinematics_joint_offsets: [0.0, 0.0, -1.5707963267948966, 0.0, 0.0, 3.141592653589793]
+  opw_kinematics_joint_sign_corrections: [1, 1, -1, -1, -1, -1]

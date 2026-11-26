@@ -17,7 +17,7 @@
                           (a laser-rated roller shutter closes it while the beam is live; 3.5b),
                           two side walls, a roof. The -y side wall carries the interlocked
                           operator door (not modelled as a separate part).
-    pedestals             under each floor robot's base
+    pedestals             under each floor robot's base (all four, the GP25's 0.20 m)
     magazines             one per fed part, top = the part's pick height minus its height
 -->
 <robot xmlns:xacro="http://ros.org/wiki/xacro">
@@ -48,14 +48,29 @@
   <xacro:property name="conv_half" value="0.1405"/>
   <xacro:property name="belt_top"  value="0.830"/>
 
+  <!-- Per-station groups, so a station's own description (e.g. placer_station.urdf.xacro)
+       carries exactly the equipment it can hit, with the same link names as the line. -->
   <xacro:macro name="line_fixtures">
+    <xacro:conveyor_fixture/>
+    <xacro:gate_fixture/>
+    <xacro:s1_fixtures/>
+    <xacro:inspector_frame tag="s3a" x="${s3a_datum_x}"/>
+    <xacro:inspector_frame tag="s3b" x="${s3b_datum_x}"/>
+    <xacro:inspector_frame tag="s3c" x="${s3c_datum_x}"/>
+    <xacro:s4a_fixtures/>
+    <xacro:s4b_fixtures/>
+    <xacro:s5_fixtures/>
+  </xacro:macro>
 
-    <!-- conveyor, S1 infeed to S5 outfeed -->
+  <!-- conveyor, S1 infeed to S5 outfeed -->
+  <xacro:macro name="conveyor_fixture">
     <xacro:fixture_box name="conveyor" x0="-0.80" x1="${s5_datum_x + 0.80}"
                        y0="${line_y - conv_half}" y1="${line_y + conv_half}"
                        z0="${belt_top - 0.10}" z1="${belt_top}" material="belt_black"/>
+  </xacro:macro>
 
-    <!-- S2 line-scan gate (inspection_line.sdf): posts at y +-0.30, beam 1.60-1.66 m -->
+  <!-- S2 line-scan gate (inspection_line.sdf): posts at y +-0.30, beam 1.60-1.66 m -->
+  <xacro:macro name="gate_fixture">
     <xacro:fixture_box name="gate_post_l" x0="${gate_x-0.03}" x1="${gate_x+0.03}" y0="0.27" y1="0.33"
                        z0="0" z1="1.60" material="frame_grey"/>
     <xacro:fixture_box name="gate_post_r" x0="${gate_x-0.03}" x1="${gate_x+0.03}" y0="-0.33" y1="-0.27"
@@ -64,14 +79,29 @@
                        z0="1.60" z1="1.66" material="frame_grey"/>
     <xacro:fixture_box name="gate_ranger3" x0="${gate_x-0.03}" x1="${gate_x+0.03}" y0="-0.05" y1="0.05"
                        z0="1.51" z1="1.60" material="frame_grey"/>
+  </xacro:macro>
 
-    <!-- inspection cell frames -->
-    <xacro:inspector_frame tag="s3a" x="${s3a_datum_x}"/>
-    <xacro:inspector_frame tag="s3b" x="${s3b_datum_x}"/>
-    <xacro:inspector_frame tag="s3c" x="${s3c_datum_x}"/>
+  <!-- S1: GP7 pedestal, cell and end-plate magazines -->
+  <xacro:macro name="s1_fixtures">
+    <xacro:fixture_box name="s1_pedestal" x0="${s1_datum_x-0.13}" x1="${s1_datum_x+0.13}"
+                       y0="${line_y-s1_base_d-0.13}" y1="${line_y-s1_base_d+0.13}" z0="0" z1="${s1_base_h}" material="frame_grey"/>
+    <xacro:magazine name="s1_mag_cell"      datum_x="${s1_datum_x}" d="${s1_base_d}" p="${mag_cell}"      part="${[0.0265, 0.148, 0.091]}"/>
+    <xacro:magazine name="s1_mag_end_plate" datum_x="${s1_datum_x}" d="${s1_base_d}" p="${mag_end_plate}" part="${[0.01025, 0.148, 0.101]}"/>
+  </xacro:macro>
 
-    <!-- S4b laser enclosure: end walls with a pallet opening (|y| <= 0.17, z 0.70-1.10: belt,
-         pallet, module 108 mm, 50 mm lift, margin), side walls, roof. 0.05 m walls. -->
+  <!-- S4a: GP4 pedestal, carrier magazine -->
+  <xacro:macro name="s4a_fixtures">
+    <xacro:fixture_box name="s4a_pedestal" x0="${s4a_datum_x-0.11}" x1="${s4a_datum_x+0.11}"
+                       y0="${line_y-s4a_base_d-0.11}" y1="${line_y-s4a_base_d+0.11}" z0="0" z1="${s4a_base_h}" material="frame_grey"/>
+    <xacro:magazine name="s4a_mag_carrier" datum_x="${s4a_datum_x}" d="${s4a_base_d}" p="${mag_carrier}" part="${[0.333, 0.146, 0.007]}"/>
+  </xacro:macro>
+
+  <!-- S4b laser enclosure: end walls with a pallet opening (|y| <= 0.17, z 0.70-1.10: belt,
+       pallet, module 108 mm, 50 mm lift, margin), side walls, roof. 0.05 m walls. -->
+  <xacro:macro name="s4b_fixtures">
+    <!-- GP25 pedestal (0.5 x 0.5 m, A) -->
+    <xacro:fixture_box name="s4b_pedestal" x0="${s4b_datum_x-0.25}" x1="${s4b_datum_x+0.25}"
+                       y0="${line_y-s4b_base_d-0.25}" y1="${line_y-s4b_base_d+0.25}" z0="0" z1="${s4b_base_h}" material="frame_grey"/>
     <xacro:enclosure_end_wall name="s4b_wall_up"   x="${s4b_wall_up_x}"/>
     <xacro:enclosure_end_wall name="s4b_wall_down" x="${s4b_wall_down_x}"/>
     <xacro:fixture_box name="s4b_wall_side_lo" x0="${s4b_wall_up_x}" x1="${s4b_wall_down_x}"
@@ -81,21 +111,14 @@
     <xacro:fixture_box name="s4b_roof" x0="${s4b_wall_up_x - 0.025}" x1="${s4b_wall_down_x + 0.025}"
                        y0="${s4b_wall_y_lo - 0.025}" y1="${s4b_wall_y_hi + 0.025}"
                        z0="${s4b_roof_z}" z1="${s4b_roof_z + 0.05}" material="laser_wall"/>
+  </xacro:macro>
 
-    <!-- pedestals (footprints from the vendor base meshes + margin; GP25 stands on the floor) -->
-    <xacro:fixture_box name="s1_pedestal" x0="${s1_datum_x-0.13}" x1="${s1_datum_x+0.13}"
-                       y0="${line_y-s1_base_d-0.13}" y1="${line_y-s1_base_d+0.13}" z0="0" z1="${s1_base_h}" material="frame_grey"/>
-    <xacro:fixture_box name="s4a_pedestal" x0="${s4a_datum_x-0.11}" x1="${s4a_datum_x+0.11}"
-                       y0="${line_y-s4a_base_d-0.11}" y1="${line_y-s4a_base_d+0.11}" z0="0" z1="${s4a_base_h}" material="frame_grey"/>
+  <!-- S5: GP4 pedestal, CMC and cover magazines -->
+  <xacro:macro name="s5_fixtures">
     <xacro:fixture_box name="s5_pedestal" x0="${s5_datum_x-0.11}" x1="${s5_datum_x+0.11}"
                        y0="${line_y-s5_base_d-0.11}" y1="${line_y-s5_base_d+0.11}" z0="0" z1="${s5_base_h}" material="frame_grey"/>
-
-    <!-- magazines: (station datum, base d, pick point, part x y z as placed) -->
-    <xacro:magazine name="s1_mag_cell"      datum_x="${s1_datum_x}"  d="${s1_base_d}"  p="${mag_cell}"      part="${[0.0265, 0.148, 0.091]}"/>
-    <xacro:magazine name="s1_mag_end_plate" datum_x="${s1_datum_x}"  d="${s1_base_d}"  p="${mag_end_plate}" part="${[0.020, 0.148, 0.101]}"/>
-    <xacro:magazine name="s4a_mag_carrier"  datum_x="${s4a_datum_x}" d="${s4a_base_d}" p="${mag_carrier}"   part="${[0.333, 0.146, 0.007]}"/>
-    <xacro:magazine name="s5_mag_cmc"       datum_x="${s5_datum_x}"  d="${s5_base_d}"  p="${mag_cmc}"       part="${[0.250, 0.050, 0.0032]}"/>
-    <xacro:magazine name="s5_mag_cover"     datum_x="${s5_datum_x}"  d="${s5_base_d}"  p="${mag_cover}"     part="${[0.355, 0.151, 0.002]}"/>
+    <xacro:magazine name="s5_mag_cmc"   datum_x="${s5_datum_x}" d="${s5_base_d}" p="${mag_cmc}"   part="${[0.250, 0.050, 0.0032]}"/>
+    <xacro:magazine name="s5_mag_cover" datum_x="${s5_datum_x}" d="${s5_base_d}" p="${mag_cover}" part="${[0.355, 0.151, 0.002]}"/>
   </xacro:macro>
 
   <xacro:macro name="inspector_frame" params="tag x">

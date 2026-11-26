@@ -1,0 +1,18 @@
+# MoveIt -> ros2_control: which action server executes plans.
+moveit_controller_manager: moveit_simple_controller_manager/MoveItSimpleControllerManager
+
+moveit_simple_controller_manager:
+  controller_names:
+    - placer_arm_controller
+
+  placer_arm_controller:
+    type: FollowJointTrajectory
+    action_ns: follow_joint_trajectory
+    default: true
+    joints:
+      - s1_joint_1_s
+      - s1_joint_2_l
+      - s1_joint_3_u
+      - s1_joint_4_r
+      - s1_joint_5_b
+      - s1_joint_6_t

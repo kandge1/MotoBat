@@ -1,0 +1,44 @@
+# Joint limits for the GP7, read by MoveIt's time parameterisation.
+# Position and velocity limits come from the URDF (motoman_gp7_support), which match
+# Yaskawa's published maximum axis speeds:
+#   S 375, L 315, U 410, R 550, B 550, T 1000 deg/s.
+#
+# ACCELERATION LIMITS ARE ASSUMED (tag A), as for the HC10DT: Yaskawa does not publish
+# them, and MoveIt would otherwise use 1 rad/s^2. Each axis is assumed to reach full speed
+# in 0.5 s (a = 2 * v_max). Cycle times built on these state the assumption.
+
+# Setup Assistant defaults: plans run at 10 % until a caller asks for more.
+default_velocity_scaling_factor: 0.1
+default_acceleration_scaling_factor: 0.1
+
+joint_limits:
+  s1_joint_1_s:
+    has_velocity_limits: true
+    max_velocity: 6.5448      # 375 deg/s
+    has_acceleration_limits: true
+    max_acceleration: 13.0896 # A: 2 * v_max
+  s1_joint_2_l:
+    has_velocity_limits: true
+    max_velocity: 5.4977      # 315 deg/s
+    has_acceleration_limits: true
+    max_acceleration: 10.9954 # A
+  s1_joint_3_u:
+    has_velocity_limits: true
+    max_velocity: 7.1558      # 410 deg/s
+    has_acceleration_limits: true
+    max_acceleration: 14.3116 # A
+  s1_joint_4_r:
+    has_velocity_limits: true
+    max_velocity: 9.5993      # 550 deg/s
+    has_acceleration_limits: true
+    max_acceleration: 19.1986 # A
+  s1_joint_5_b:
+    has_velocity_limits: true
+    max_velocity: 9.5993      # 550 deg/s
+    has_acceleration_limits: true
+    max_acceleration: 19.1986 # A
+  s1_joint_6_t:
+    has_velocity_limits: true
+    max_velocity: 17.4845     # 1002 deg/s
+    has_acceleration_limits: true
+    max_acceleration: 34.9690 # A

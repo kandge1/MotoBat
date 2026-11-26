@@ -23,6 +23,14 @@
   swept envelopes of neighbouring robots are 0.10 m apart (A): robots on different pallets
   never share space, so no interference-zone handshake is needed between controllers.
   Re-run layout_check.py and copy its numbers here; do not hand-tune.
+
+  26 Nov, later: the placement search gained a self-collision test (MoveIt found the GP7 at
+  0.60 m folding its forearm into its upper arm at every place pose). Robot poses below are
+  from that run (GP7 lower, GP25 further out and on a pedestal). The pallet stops are kept from
+  the first run: the new envelopes are no larger along the line, and
+  layout_check.py with its stops option (on the expanded line URDF) confirms every pair is still
+  >= 0.10 m apart (it would otherwise have moved every stop ~15 mm upstream). S4a moved 2 mm and
+  S3b..S5 4 mm downstream for that: the GP4's envelope grew ~1 mm on its collision-free branches.
 -->
 <robot xmlns:xacro="http://ros.org/wiki/xacro">
 
@@ -33,25 +41,25 @@
   <xacro:property name="s1_datum_x"  value="0.000"/>   <!-- GP7 places cells -->
   <xacro:property name="gate_x"      value="0.659"/>   <!-- S2: fixed line-scan gate, passed through -->
   <xacro:property name="s3a_datum_x" value="1.957"/>   <!-- HC10DT, pre-carrier -->
-  <xacro:property name="s4a_datum_x" value="3.670"/>   <!-- GP4 places the busbar carrier -->
-  <xacro:property name="s3b_datum_x" value="5.104"/>   <!-- HC10DT, pre-weld -->
-  <xacro:property name="s4b_datum_x" value="6.692"/>   <!-- GP25 welds (laser enclosure) -->
-  <xacro:property name="s3c_datum_x" value="8.390"/>   <!-- HC10DT, post-weld -->
-  <xacro:property name="s5_datum_x"  value="10.115"/>   <!-- GP4 places CMC and cover -->
+  <xacro:property name="s4a_datum_x" value="3.672"/>   <!-- GP4 places the busbar carrier -->
+  <xacro:property name="s3b_datum_x" value="5.108"/>   <!-- HC10DT, pre-weld -->
+  <xacro:property name="s4b_datum_x" value="6.696"/>   <!-- GP25 welds (laser enclosure) -->
+  <xacro:property name="s3c_datum_x" value="8.394"/>   <!-- HC10DT, post-weld -->
+  <xacro:property name="s5_datum_x"  value="10.119"/>   <!-- GP4 places CMC and cover -->
 
   <!-- S4b laser enclosure: wall centre planes along the line (0.05 m walls, 0.10 m inside
        the GP25's envelope); across the line and up, from its envelope plus 0.10 m. -->
-  <xacro:property name="s4b_wall_up_x"   value="6.303"/>
-  <xacro:property name="s4b_wall_down_x" value="7.097"/>
-  <xacro:property name="s4b_wall_y_lo"   value="-0.98"/>
+  <xacro:property name="s4b_wall_up_x"   value="6.308"/>
+  <xacro:property name="s4b_wall_down_x" value="7.100"/>
+  <xacro:property name="s4b_wall_y_lo"   value="-1.06"/>
   <xacro:property name="s4b_wall_y_hi"   value="0.31"/>
-  <xacro:property name="s4b_roof_z"      value="1.87"/>
+  <xacro:property name="s4b_roof_z"      value="1.90"/>
 
   <!-- Floor robots: base_link on a pedestal on the -y side, facing the conveyor (yaw +90 deg).
        d = base distance from the centreline, h = base_link above the floor. -->
-  <xacro:property name="s1_base_d"  value="0.300"/>  <xacro:property name="s1_base_h"  value="0.600"/>
+  <xacro:property name="s1_base_d"  value="0.300"/>  <xacro:property name="s1_base_h"  value="0.450"/>
   <xacro:property name="s4a_base_d" value="0.300"/>  <xacro:property name="s4a_base_h" value="0.675"/>
-  <xacro:property name="s4b_base_d" value="0.500"/>  <xacro:property name="s4b_base_h" value="0.000"/>
+  <xacro:property name="s4b_base_d" value="0.550"/>  <xacro:property name="s4b_base_h" value="0.200"/>
   <xacro:property name="s5_base_d"  value="0.300"/>  <xacro:property name="s5_base_h"  value="0.675"/>
 
   <!-- Magazine pick points, base-relative (A, layout_check.py ASSUMED['magazine']):
