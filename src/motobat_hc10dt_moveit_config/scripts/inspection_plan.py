@@ -11,6 +11,8 @@ Minimum-time inspection plan (task 2.9). Runs in the project venv (defectgen, sc
     # 3. the exact minimum-time cover per stage, arm alone and arm + the fixed pass
     python src/motobat_hc10dt_moveit_config/scripts/inspection_plan.py select \\
         --reach data/reach/cand_A/reach.json --cache ../MotoBat/data/coverage/cache --out data/plan29
+    # 4. (for the dataset) which patches each written plan covers, for dataset.SetupCoverage
+    python src/motobat_hc10dt_moveit_config/scripts/inspection_plan.py patches data/plan29/s1/arm_fixed
 
 What 1.5 did (coverage.py): greedy set cover over 113 candidate views, by coverage gained per
 second, each capture charged an assumed 1.5 s move, no reach limit. What this changes:
@@ -279,6 +281,51 @@ def cmd_select(a):
     print(f'\nwrote {a.out}/arm, {a.out}/arm_fixed, {a.out}/report.json')
 
 
+def cmd_patches(a):
+    """<stage>.patches.npz beside each written plan, in coverage.run_stage's format, so
+    dataset.SetupCoverage can tell `not_covered` from a miss for these plans: per class and
+    patch, required / fixed / arm (this plan alone) / fixed+arm (either). Rebuilt from the plan
+    files, not re-solved, so the plans cannot change."""
+    from defectgen import coverage as C
+    from defectgen.config import load
+    from defectgen.scan import load_params
+    q, cfg = C.load_coverage_params(), load()
+    sensors, _ = load_params()
+    fine_pitch = sensors['profilometer']['profile_pitch']
+    for stage in STAGES:
+        ref, el, reqs = setup_stage(stage, q, cfg)
+        cache = a.cache_local / f'{stage}_{C._cache_key(stage, q, el)}'
+        fine = {v.id: v for v in C.candidates(cfg, q) if not v.speed}
+        fixed = C.fixed_baseline(cfg)
+        n_fixed = C.evaluate_views([fixed], el, ref.scene, q, cache, None)[fixed.id]
+        P = len(el.p_area)
+
+        def flags(cov):
+            out = np.zeros((len(reqs), P), bool)
+            for i, r in enumerate(reqs):
+                out[i, r.elements[cov[i]]] = True
+            return out
+        req = flags([np.ones(len(r.elements), bool) for r in reqs])
+        fx = flags([r.covered(n_fixed, fixed.pitch) for r in reqs])
+        for d in a.plans:
+            views = json.loads((d / f'{stage}.plan.json').read_text())['views']
+            geo = [v.get('geometry', v['id']) for v in views]
+            n = C.evaluate_views([fine[g] for g in geo], el, ref.scene, q, cache,
+                                 q['candidates']['sweep']['cast_pitch'])
+            ok = [np.zeros(len(r.elements), bool) for r in reqs]
+            for v, g in zip(views, geo):
+                pitch = v.get('pitch_mm') or (fine_pitch if v['kind'] == 'sweep' else None)
+                cnt = n[g] * (fine_pitch / pitch) if pitch else n[g]
+                for i, r in enumerate(reqs):
+                    ok[i] |= r.covered(cnt, pitch)
+            arm = flags(ok)
+            np.savez_compressed(d / f'{stage}.patches.npz', centroid=el.p_centroid, normal=el.p_normal,
+                                area=el.p_area, classes=np.array([r.name for r in reqs]), required=req,
+                                fixed=fx, arm=arm, **{'fixed+arm': fx | arm})
+            got = {r.name: f'{r.fraction((fx | arm)[i, r.elements]):.1%}' for i, r in enumerate(reqs)}
+            print(f'{stage} {d}: fixed+arm {got}')
+
+
 def main():
     logging.basicConfig(level=logging.INFO, format='%(message)s')
     for name in ('defectgen', 'trimesh'):
@@ -300,8 +347,11 @@ def main():
                         'written plan, the rest only print the time/coverage trade-off')
     s.add_argument('--vmax', type=float, nargs=6, default=None,
                    help='joint speed limits, rad/s (default: config/joint_limits.yaml)')
+    t = sub.add_parser('patches')
+    t.add_argument('plans', type=Path, nargs='+', help='folders of <stage>.plan.json written by select')
+    t.add_argument('--cache-local', type=Path, default=Path('data/plan29/cache'))
     a = ap.parse_args()
-    {'candidates': cmd_candidates, 'select': cmd_select}[a.cmd](a)
+    {'candidates': cmd_candidates, 'select': cmd_select, 'patches': cmd_patches}[a.cmd](a)
 
 
 if __name__ == '__main__':

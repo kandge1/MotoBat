@@ -66,16 +66,18 @@ def make_module(out: Path) -> None:
 
 
 def scan_base(run: Path, stage: str, base: str, out: Path, display_points: int, noise: int,
-              seam_speed: float | None = None) -> dict:
+              seam_speed: float | None = None, reach_file: Path | None = None,
+              plans: Path | None = None, with_fixed: bool = False) -> dict:
     from defectgen.config import load
     from defectgen.dataset import _spill
     from defectgen.detect import Capture, Reference, detect
     from defectgen.evaluate import evaluate, format_table, to_json
     from defectgen.scan import Scene, line_scan, snapshot, without_groups
 
-    reach = json.loads((REPO / 'data' / 'reach' / f'base_{base}' / 'reach.json').read_text())['results'][0]
+    reach_file = reach_file or REPO / 'data' / 'reach' / f'base_{base}' / 'reach.json'
+    reach = json.loads(Path(reach_file).read_text())['results'][0]
     seq = reach['sequences'][stage]
-    plan = json.loads((REPO / 'data' / 'coverage' / f'{stage}.plan.json').read_text())['views']
+    plan = json.loads((Path(plans or REPO / 'data' / 'coverage') / f'{stage}.plan.json').read_text())['views']
     index = {v['id']: i for i, v in enumerate(plan)}
     by_id = {v['id']: v for v in plan}
     cfg = load()
@@ -85,6 +87,14 @@ def scan_base(run: Path, stage: str, base: str, out: Path, display_points: int, 
     t0 = time.perf_counter()
     quiet = logging.getLogger('defectgen.scan')
     quiet.setLevel(logging.WARNING)
+    if with_fixed:
+        # the fixed line-scan pass, exactly as dataset.scan_setup's fixed branch flies it: the
+        # arm then only has to fill its gaps (task 2.9's gap-filling plans)
+        from defectgen.coverage import fixed_baseline
+        fv = fixed_baseline(cfg)
+        caps.append(_spill(Capture.from_scan(line_scan(scene, 'line_scan', fv.pose, fv.length, seed=noise),
+                                             name='fixed'), spill))
+        log.info('  %s: fixed line-scan pass added', base)
     for k, vid in enumerate(seq['order'], 1):
         v, i = by_id[vid], index[vid]
         pose = np.array(v['pose_mm'])
@@ -164,6 +174,11 @@ def main():
     ap.add_argument('--name', default=None, help='output folder name under data/arm_scans (default: module name)')
     ap.add_argument('--stage', default='post_weld', choices=STAGES + ['all'])
     ap.add_argument('--base', nargs='+', default=['A', 'B'])
+    ap.add_argument('--variant', nargs=4, action='append', default=None,
+                    metavar=('NAME', 'REACH_JSON', 'PLAN_DIR', 'FIXED'),
+                    help='instead of --base: a named plan (view_reach.py --plan output and the '
+                         '<stage>.plan.json folder it was planned from); FIXED 1 adds the fixed '
+                         'line-scan capture, as a fixed+arm setup would. Repeatable (task 2.9)')
     ap.add_argument('--display-points', type=int, default=60000,
                     help='per view, for RViz (4x this for the slow seam sweeps)')
     ap.add_argument('--noise', type=int, default=0, help='noise seed')
@@ -188,9 +203,15 @@ def main():
         name += f'_seam{a.seam_speed:g}'
     for stage in (STAGES if a.stage == 'all' else [a.stage]):
         sums = {}
-        for b in a.base:
-            out = REPO / 'data' / 'arm_scans' / name / f'base_{b}' / stage
-            sums[b] = scan_base(run.resolve(), stage, b, out, a.display_points, a.noise, a.seam_speed)
+        if a.variant:
+            for vname, reach_file, plans, fixed in a.variant:
+                out = REPO / 'data' / 'arm_scans' / name / vname / stage
+                sums[vname] = scan_base(run.resolve(), stage, vname, out, a.display_points, a.noise,
+                                        a.seam_speed, Path(reach_file), Path(plans), fixed == '1')
+        else:
+            for b in a.base:
+                out = REPO / 'data' / 'arm_scans' / name / f'base_{b}' / stage
+                sums[b] = scan_base(run.resolve(), stage, b, out, a.display_points, a.noise, a.seam_speed)
         compare(stage, sums)
 
 

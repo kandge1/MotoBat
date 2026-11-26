@@ -567,6 +567,16 @@ mb-venv && PYTHONPATH=$PWD/defectgen/src OMP_NUM_THREADS=2 systemd-run --user --
 ROS_DOMAIN_ID=45 systemd-run --user --scope -q -p MemoryMax=2G /usr/bin/python3 \
     src/motobat_hc10dt_moveit_config/scripts/view_reach.py --coverage data/plan29/s1/arm_fixed \
     --base 0 0.30 1.10 --mount ceiling --pad 0.10 --conveyor-lift 0.05 --plan --out data/reach/p29_s1_fixed
+# Step 5, venv: the coverage maps the dataset needs beside each plan (<stage>.patches.npz)
+mb-venv && PYTHONPATH=$PWD/defectgen/src python src/motobat_hc10dt_moveit_config/scripts/inspection_plan.py \
+    patches data/plan29/s0/arm_fixed data/plan29/s1/arm_fixed
+# Does it still detect? Scan the weld-defect test module through each plan and score it
+# (venv, ~5 min per plan and stage, up to 6 GB each). FIXED 1 adds the fixed pass's capture.
+mb-venv && systemd-run --user --scope -q -p MemoryMax=7G --setenv=PYTHONPATH=$PWD/defectgen/src \
+    python src/motobat_hc10dt_moveit_config/scripts/scan_view_plan.py --stage all --display-points 20000 \
+    --variant v3 data/reach/base_A/reach.json data/coverage 0 \
+    --variant s1_fixed data/reach/p29_s1_fixed/reach.json data/plan29/s1/arm_fixed 1
+# 26 Nov: s1 and s0 the same on every label (post-weld 36/45 both, v3 33/45), 0 false alarms.
 # 25 Nov: arm filling the fixed pass's gaps, one point under v3: 11 / 8 / 12 views,
 # cycles 36.6 / 32.5 / 52.1 s (v3's plan: 61.7 / 56.5 / 76.2 s). Table in status_update 2.7.
 # To watch it: with RViz open from "Arm view plan in RViz" above, in another terminal
