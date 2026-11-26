@@ -1,0 +1,66 @@
+<?xml version="1.0"?>
+<!--
+  End effectors of the floor robots, at first-pass fidelity (module_spec.md §9: grippers and
+  the weld head are boxes; they occlude and they collide). Each adds a body on tool0 and a
+  TCP frame the MoveIt configs plan with. Sizes match layout_check.py ASSUMED (all A unless
+  marked S): change both together.
+
+    ${prefix}gripper / ${prefix}tcp   GP7 cell gripper (fingers along tool y), GP4 vacuum gripper
+    ${prefix}scanner / ${prefix}focus MOTOPAC-RL2D scanner head on the GP25; focus = the
+                                      scanner's 329.5 mm work distance (S, Yaskawa catalogue)
+                                      below its exit window, which sits 0.25 m from tool0 (A:
+                                      the head's length is not published). Mass 15.8 kg head
+                                      + 2.5 kg air knife (S) on a 25 kg arm.
+  TCP z points out of the tool, like tool0's.
+-->
+<robot xmlns:xacro="http://ros.org/wiki/xacro">
+
+  <xacro:macro name="box_tool" params="prefix body tcp_name size_x size_y size_z tcp_z mass">
+    <link name="${prefix}${body}">
+      <visual>
+        <origin xyz="0 0 ${size_z/2}"/>
+        <geometry><box size="${size_x} ${size_y} ${size_z}"/></geometry>
+        <material name="tool_grey"><color rgba="0.35 0.35 0.38 1"/></material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 ${size_z/2}"/>
+        <geometry><box size="${size_x} ${size_y} ${size_z}"/></geometry>
+      </collision>
+      <inertial>
+        <origin xyz="0 0 ${size_z/2}"/>
+        <mass value="${mass}"/>
+        <inertia ixx="${mass*(size_y*size_y+size_z*size_z)/12}" iyy="${mass*(size_x*size_x+size_z*size_z)/12}"
+                 izz="${mass*(size_x*size_x+size_y*size_y)/12}" ixy="0" ixz="0" iyz="0"/>
+      </inertial>
+    </link>
+    <joint name="${prefix}tool0-${body}" type="fixed">
+      <parent link="${prefix}tool0"/>
+      <child link="${prefix}${body}"/>
+    </joint>
+    <link name="${prefix}${tcp_name}"/>
+    <joint name="${prefix}${body}-${tcp_name}" type="fixed">
+      <parent link="${prefix}${body}"/>
+      <child link="${prefix}${tcp_name}"/>
+      <origin xyz="0 0 ${tcp_z}"/>
+    </joint>
+  </xacro:macro>
+
+  <!-- GP7: two-finger cell gripper, clamps the cell's 26.5 x 91 ends from above. TCP 150 mm. -->
+  <xacro:macro name="gp7_cell_gripper" params="prefix">
+    <xacro:box_tool prefix="${prefix}" body="gripper" tcp_name="tcp"
+                    size_x="0.06" size_y="0.20" size_z="0.15" tcp_z="0.15" mass="2.0"/>
+  </xacro:macro>
+
+  <!-- GP4: vacuum gripper for the carrier, CMC and cover (largest 355 x 151 mm). TCP 100 mm. -->
+  <xacro:macro name="gp4_vacuum_gripper" params="prefix">
+    <xacro:box_tool prefix="${prefix}" body="gripper" tcp_name="tcp"
+                    size_x="0.06" size_y="0.16" size_z="0.10" tcp_z="0.10" mass="1.0"/>
+  </xacro:macro>
+
+  <!-- GP25: MOTOPAC-RL2D remote laser scanner head. -->
+  <xacro:macro name="gp25_scanner_head" params="prefix">
+    <xacro:box_tool prefix="${prefix}" body="scanner" tcp_name="focus"
+                    size_x="0.20" size_y="0.25" size_z="0.25" tcp_z="${0.25 + 0.3295}" mass="18.3"/>
+  </xacro:macro>
+
+</robot>

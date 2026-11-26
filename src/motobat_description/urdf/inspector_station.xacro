@@ -7,7 +7,7 @@
   station_mount and the s3_* pose) and declare a `world` link.
 
   Used by:
-    motobat_line.urdf.xacro         the full four-station line
+    motobat_line.urdf.xacro         the full line (three of them: s3a_, s3b_, s3c_)
     inspector_station.urdf.xacro    the station alone, loaded by
                                     motobat_hc10dt_moveit_config
 
@@ -19,9 +19,12 @@
   <xacro:include filename="$(find motobat_description)/urdf/hc10dt_macro.xacro"/>
   <xacro:include filename="$(find motobat_description)/urdf/inspector_flange.xacro"/>
 
-  <xacro:macro name="motobat_inspector_station" params="prefix">
+  <!-- datum_x: the cell's pallet stop. Default: S3a, the cell motobat_hc10dt_moveit_config plans
+       (prefix s3_). The line has three identical cells (S3a/b/c); 2.5's plans are in the base
+       frame, so the same plan flies at each. -->
+  <xacro:macro name="motobat_inspector_station" params="prefix datum_x:=${s3_datum_x}">
     <xacro:motobat_hc10dt prefix="${prefix}"/>
-    <xacro:station_mount prefix="${prefix}" x="${s3_x}" y="${s3_y}" z="${s3_z}" yaw="${s3_yaw}" roll="${s3_roll}"/>
+    <xacro:station_mount prefix="${prefix}" x="${datum_x + s3_base_bx}" y="${s3_y}" z="${s3_z}" yaw="${s3_yaw}" roll="${s3_roll}"/>
     <xacro:inspector_flange prefix="${prefix}" parent="${prefix}tool0"/>
   </xacro:macro>
 

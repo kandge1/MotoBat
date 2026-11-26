@@ -1,47 +1,83 @@
 <?xml version="1.0"?>
 <!--
-  MotoBat line layout: where every station sits in `world`.
+  MotoBat line layout: where every station sits in `world`. (task 3.0, 26 Nov 2026)
 
-  The single source of truth for station poses. Both the full line
-  (motobat_line.urdf.xacro) and the per-station descriptions that the MoveIt
-  configs load (e.g. inspector_station.urdf.xacro) read these numbers, so a
-  station planned alone sits exactly where it sits in the line, and its TF
-  frames agree with every other station's.
+  The single source of truth for station poses. The full line (motobat_line.urdf.xacro)
+  and the per-station descriptions the MoveIt configs load (inspector_station.urdf.xacro,
+  ...) read these numbers, so a station planned alone sits exactly where it sits in the
+  line and its TF frames agree with every other station's.
 
-  Layout is a straight line along +X at `pitch`, matching the process order.
+  World: z = 0 is the shop floor, the line runs along +X with the conveyor centreline at
+  y = line_y, the pallet top (the pallet datum every defectgen measurement is in) is
+  pallet_top_z above the floor. x = 0 is S1's pallet stop.
+
+  Process order (module_spec.md §8, §11; three inspection cells chosen 26 Nov 2026):
+    S1 GP7 cells -> S2 line-scan gate -> S3a HC10DT pre-carrier -> S4a GP4 carrier
+    -> S3b HC10DT pre-weld -> S4b GP25 weld (laser enclosure) -> S3c HC10DT post-weld
+    -> S5 GP4 CMC + cover
+
+  NUMBERS COME FROM scripts/layout_check.py (floor robots: closed-form IK placement search,
+  every task pose reachable with a 10 % joint margin, base clear of the conveyor, smallest
+  swept footprint) and scripts/line_envelope.py (the HC10DT, swept over every planned state
+  of 2.5's base-A plan: -1.168 .. +1.074 m along the line). Pallet stops are spaced so the
+  swept envelopes of neighbouring robots are 0.10 m apart (A): robots on different pallets
+  never share space, so no interference-zone handshake is needed between controllers.
+  Re-run layout_check.py and copy its numbers here; do not hand-tune.
 -->
 <robot xmlns:xacro="http://ros.org/wiki/xacro">
 
-  <!-- Station pitch along the line. Change here, not in each mount. -->
-  <xacro:property name="pitch"        value="1.2"/>
-  <xacro:property name="table_height" value="0.0"/>
-
-  <!-- World: z = 0 is the shop floor, the line runs along +X with the
-       conveyor centreline at y = line_y, and the pallet top (the pallet datum
-       every defectgen measurement is in) sits pallet_top_z above the floor,
-       module length along +X. view_reach.py's floor is the same 0.9 m (A). -->
   <xacro:property name="line_y"       value="0.0"/>
   <xacro:property name="pallet_top_z" value="0.9"/>
 
-  <!-- Station 3, Inspector (HC10DT): where the pallet stops for inspection,
-       i.e. the pallet datum origin (module centre) in world. -->
-  <xacro:property name="s3_datum_x" value="${pitch*1.5}"/>
+  <!-- Pallet stops along the line (module centre on the pallet top), m. -->
+  <xacro:property name="s1_datum_x"  value="0.000"/>   <!-- GP7 places cells -->
+  <xacro:property name="gate_x"      value="0.659"/>   <!-- S2: fixed line-scan gate, passed through -->
+  <xacro:property name="s3a_datum_x" value="1.957"/>   <!-- HC10DT, pre-carrier -->
+  <xacro:property name="s4a_datum_x" value="3.670"/>   <!-- GP4 places the busbar carrier -->
+  <xacro:property name="s3b_datum_x" value="5.104"/>   <!-- HC10DT, pre-weld -->
+  <xacro:property name="s4b_datum_x" value="6.692"/>   <!-- GP25 welds (laser enclosure) -->
+  <xacro:property name="s3c_datum_x" value="8.390"/>   <!-- HC10DT, post-weld -->
+  <xacro:property name="s5_datum_x"  value="10.115"/>   <!-- GP4 places CMC and cover -->
 
-  <!-- Base A from task 2.5 (view_bases.yaml, data/reach/base_A/reach.json):
-       hung upside down from an overhead frame, 0.30 m to the -Y side of the
-       module centreline, level with its centre along the line, 1.10 m above
-       the pallet top (base ~2.0 m above the floor). Arm x axis toward the
-       module. Planned in s3_base_link, so moving this changes no plan: change
-       the numbers in view_bases.yaml and re-run view_plan.py first. -->
+  <!-- S4b laser enclosure: wall centre planes along the line (0.05 m walls, 0.10 m inside
+       the GP25's envelope); across the line and up, from its envelope plus 0.10 m. -->
+  <xacro:property name="s4b_wall_up_x"   value="6.303"/>
+  <xacro:property name="s4b_wall_down_x" value="7.097"/>
+  <xacro:property name="s4b_wall_y_lo"   value="-0.98"/>
+  <xacro:property name="s4b_wall_y_hi"   value="0.31"/>
+  <xacro:property name="s4b_roof_z"      value="1.87"/>
+
+  <!-- Floor robots: base_link on a pedestal on the -y side, facing the conveyor (yaw +90 deg).
+       d = base distance from the centreline, h = base_link above the floor. -->
+  <xacro:property name="s1_base_d"  value="0.300"/>  <xacro:property name="s1_base_h"  value="0.600"/>
+  <xacro:property name="s4a_base_d" value="0.300"/>  <xacro:property name="s4a_base_h" value="0.675"/>
+  <xacro:property name="s4b_base_d" value="0.500"/>  <xacro:property name="s4b_base_h" value="0.000"/>
+  <xacro:property name="s5_base_d"  value="0.300"/>  <xacro:property name="s5_base_h"  value="0.675"/>
+
+  <!-- Magazine pick points, base-relative (A, layout_check.py ASSUMED['magazine']):
+       (along the line, outward, part top above the pallet top). -->
+  <xacro:property name="mag_cell"      value="${[-0.45, -0.15, 0.095]}"/>
+  <xacro:property name="mag_end_plate" value="${[ 0.45, -0.15, 0.105]}"/>
+  <xacro:property name="mag_carrier"   value="${[-0.36, -0.05, 0.102]}"/>
+  <xacro:property name="mag_cmc"       value="${[-0.36, -0.05, 0.101]}"/>
+  <xacro:property name="mag_cover"     value="${[ 0.36, -0.05, 0.107]}"/>
+
+  <!-- Inspector (HC10DT), base A from task 2.5 (view_bases.yaml, data/reach/base_A/reach.json):
+       hung upside down from an overhead frame, 0.30 m to the -Y side of the module centreline,
+       level with the pallet stop along the line, 1.10 m above the pallet top. Identical at
+       S3a, S3b, S3c relative to their stops: 2.5's plans are in the base frame, so one plan
+       serves all three. -->
   <xacro:property name="s3_base_bx"  value="0.0"/>
   <xacro:property name="s3_base_d"   value="0.30"/>
   <xacro:property name="s3_base_bz"  value="1.10"/>
-
-  <xacro:property name="s3_x"    value="${s3_datum_x + s3_base_bx}"/>
-  <xacro:property name="s3_y"    value="${line_y - s3_base_d}"/>
-  <xacro:property name="s3_z"    value="${pallet_top_z + s3_base_bz}"/>
-  <xacro:property name="s3_roll" value="${pi}"/>
-  <xacro:property name="s3_yaw"  value="${pi/2}"/>
+  <xacro:property name="s3_roll"     value="${pi}"/>
+  <xacro:property name="s3_yaw"      value="${pi/2}"/>
+  <!-- The single-inspector MoveIt config (motobat_hc10dt_moveit_config, prefix s3_) plans
+       the S3a cell. -->
+  <xacro:property name="s3_datum_x"  value="${s3a_datum_x}"/>
+  <xacro:property name="s3_x"        value="${s3_datum_x + s3_base_bx}"/>
+  <xacro:property name="s3_y"        value="${line_y - s3_base_d}"/>
+  <xacro:property name="s3_z"        value="${pallet_top_z + s3_base_bz}"/>
 
   <!-- Bolt an arm's base_link to world at a given pose. roll = pi hangs it
        upside down (rpy is fixed-axis: roll about world X first, then yaw). -->
@@ -51,6 +87,11 @@
       <child  link="${prefix}base_link"/>
       <origin xyz="${x} ${y} ${z}" rpy="${roll} 0 ${yaw}"/>
     </joint>
+  </xacro:macro>
+
+  <!-- A floor robot at its station: base d from the centreline on -y, h up, facing +y. -->
+  <xacro:macro name="floor_mount" params="prefix datum_x d h">
+    <xacro:station_mount prefix="${prefix}" x="${datum_x}" y="${line_y - d}" z="${h}" yaw="${pi/2}"/>
   </xacro:macro>
 
 </robot>

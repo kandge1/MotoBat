@@ -1,48 +1,62 @@
 <?xml version="1.0"?>
 <!--
-  MotoBat — four-station battery cell assembly line
+  MotoBat: battery module assembly line (task 3.0, 26 Nov 2026; module_spec.md §8, §11)
 
-  Station 1  Stacker    GP4      prefix s1_
-  Station 2  Welder     GP4      prefix s2_
-  Station 3  Inspector  HC10DT   prefix s3_
-  Station 4  Sealer     GP7      prefix s4_
+  Station  Robot             Prefix  Job
+  S1       GP7               s1_     end plates and 12 cells into the pallet nest
+  S2       (fixed gate)      -       Ranger3 line-scan as the pallet passes under
+  S3a      HC10DT (hung)     s3a_    inspection before the busbar carrier
+  S4a      GP4               s4a_    busbar carrier
+  S3b      HC10DT (hung)     s3b_    inspection before the weld
+  S4b      GP25 + RL2D head  s4b_    laser welds, inside an interlocked enclosure
+  S3c      HC10DT (hung)     s3c_    inspection after the weld
+  S5       GP4               s5_     CMC and cover
 
-  Every arm is instantiated from the Yaskawa xacro macros with a distinct
-  prefix, so all four coexist in one TF tree without link-name collisions.
-  Each is mounted to a world frame at its station position.
+  Every arm comes from the Yaskawa xacro macros with its own prefix, so all seven share one
+  TF tree. Poses, pedestals, magazines and the enclosure are in line_layout.xacro (numbers
+  from scripts/layout_check.py and line_envelope.py); the static equipment is in
+  line_fixtures.xacro, the end effectors in line_tools.xacro.
 
-  Layout is a straight line along +X at 1.2 m pitch, matching the process
-  order stack -> weld -> inspect -> seal. The Inspector hangs upside down
-  from an overhead frame above its pallet stop (task 2.5, base A); its pose,
-  the floor and the pallet height are in line_layout.xacro.
+  Was (until 26 Nov): GP4 stacker, GP4 welder, HC10DT, GP7 sealer on a 1.2 m pitch, from
+  before the scope moved to a module line.
 -->
 <robot name="motobat_line" xmlns:xacro="http://ros.org/wiki/xacro">
 
   <xacro:include filename="$(find motoman_gp4_support)/urdf/gp4_macro.xacro"/>
   <xacro:include filename="$(find motoman_gp7_support)/urdf/gp7_macro.xacro"/>
-  <xacro:include filename="$(find motobat_description)/urdf/inspector_station.xacro"/>
-
-  <!-- Station pitch, station poses and the station_mount helper.
-       Change poses there, not here: the per-station MoveIt configs read the
-       same file, so the two can never disagree. -->
+  <xacro:include filename="$(find motoman_gp25_support)/urdf/gp25_macro.xacro"/>
   <xacro:include filename="$(find motobat_description)/urdf/line_layout.xacro"/>
+  <xacro:include filename="$(find motobat_description)/urdf/inspector_station.xacro"/>
+  <xacro:include filename="$(find motobat_description)/urdf/line_tools.xacro"/>
+  <xacro:include filename="$(find motobat_description)/urdf/line_fixtures.xacro"/>
 
   <link name="world"/>
 
-  <!-- Station 1 — Stacker (GP4) -->
-  <xacro:motoman_gp4 prefix="s1_"/>
-  <xacro:station_mount prefix="s1_" x="0"           y="0" z="${table_height}" yaw="0"/>
+  <!-- S1: GP7 places end plates and cells -->
+  <xacro:motoman_gp7 prefix="s1_"/>
+  <xacro:floor_mount prefix="s1_" datum_x="${s1_datum_x}" d="${s1_base_d}" h="${s1_base_h}"/>
+  <xacro:gp7_cell_gripper prefix="s1_"/>
 
-  <!-- Station 2 — Tab Welder (GP4) -->
-  <xacro:motoman_gp4 prefix="s2_"/>
-  <xacro:station_mount prefix="s2_" x="${pitch}"    y="0" z="${table_height}" yaw="0"/>
+  <!-- S3a, S3b, S3c: the inspection cells, identical relative to their pallet stops -->
+  <xacro:motobat_inspector_station prefix="s3a_" datum_x="${s3a_datum_x}"/>
+  <xacro:motobat_inspector_station prefix="s3b_" datum_x="${s3b_datum_x}"/>
+  <xacro:motobat_inspector_station prefix="s3c_" datum_x="${s3c_datum_x}"/>
 
-  <!-- Station 3 — Inspector (HC10DT), with its pose in line_layout.xacro:
-       hung from an overhead frame above the pallet stop (task 2.5, base A). -->
-  <xacro:motobat_inspector_station prefix="s3_"/>
+  <!-- S4a: GP4 places the busbar carrier -->
+  <xacro:motoman_gp4 prefix="s4a_"/>
+  <xacro:floor_mount prefix="s4a_" datum_x="${s4a_datum_x}" d="${s4a_base_d}" h="${s4a_base_h}"/>
+  <xacro:gp4_vacuum_gripper prefix="s4a_"/>
 
-  <!-- Station 4 — Can Sealer (GP7) -->
-  <xacro:motoman_gp7 prefix="s4_"/>
-  <xacro:station_mount prefix="s4_" x="${pitch*2}"  y="0" z="${table_height}" yaw="0"/>
+  <!-- S4b: GP25 with the MOTOPAC-RL2D scanner head, in the laser enclosure -->
+  <xacro:motoman_gp25 prefix="s4b_"/>
+  <xacro:floor_mount prefix="s4b_" datum_x="${s4b_datum_x}" d="${s4b_base_d}" h="${s4b_base_h}"/>
+  <xacro:gp25_scanner_head prefix="s4b_"/>
+
+  <!-- S5: GP4 places the CMC and the cover -->
+  <xacro:motoman_gp4 prefix="s5_"/>
+  <xacro:floor_mount prefix="s5_" datum_x="${s5_datum_x}" d="${s5_base_d}" h="${s5_base_h}"/>
+  <xacro:gp4_vacuum_gripper prefix="s5_"/>
+
+  <xacro:line_fixtures/>
 
 </robot>

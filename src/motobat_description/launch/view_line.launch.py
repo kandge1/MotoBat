@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """
-MotoBat — view the full four-station line in RViz.
+MotoBat — view the full line in RViz (task 3.0: GP7, three hung HC10DTs, two GP4s, GP25).
 
     ros2 launch motobat_description view_line.launch.py
 
 Brings up:
   robot_state_publisher   turns /joint_states + URDF into the TF tree
-  joint_state_publisher_gui  sliders for all 24 joints
+  joint_state_publisher_gui  sliders for all 42 joints
+                          (or gui:=false and scripts/demo_line_motion.py: every robot replays
+                          its real motion)
   rviz2                   the display
 
 Drag the sliders and the arms move. This is pure kinematics -- no physics,

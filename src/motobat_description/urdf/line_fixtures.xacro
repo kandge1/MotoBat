@@ -1,0 +1,135 @@
+<?xml version="1.0"?>
+<!--
+  Static line equipment as boxes (module_spec.md §9: anything that can be hit or can block a
+  view exists as a shape, not as detail). Every box is a link fixed to `world`, so RViz,
+  MoveIt (collision) and Gazebo see the same geometry. Positions come from line_layout.xacro;
+  sizes are A unless marked.
+
+    conveyor              belt + frame, 0.281 m wide, top 0.830 m (2.5's placeholder: the pallet
+                          rides 50 mm skids under its 20 mm plate; lifted 50 mm at each stop)
+    S2 gate               two posts and a beam, the Ranger3 under it (inspection_line.sdf)
+    S3a/b/c frames        portal across the line: posts outside the HC10DT's swept envelope
+                          (y -1.635 .. +1.160 m), beam at 2.45-2.55 m above everything it sweeps
+                          (z max 2.32), a 0.2 m drop column to the hung base (moving links come no
+                          nearer than 0.33 m to the mount axis above the mount plane;
+                          line_envelope.py over 2.5's plan)
+    S4b laser enclosure   ISO 11553 cell round the GP25: two end walls with a pallet opening each
+                          (a laser-rated roller shutter closes it while the beam is live; 3.5b),
+                          two side walls, a roof. The -y side wall carries the interlocked
+                          operator door (not modelled as a separate part).
+    pedestals             under each floor robot's base
+    magazines             one per fed part, top = the part's pick height minus its height
+-->
+<robot xmlns:xacro="http://ros.org/wiki/xacro">
+
+  <material name="frame_grey"><color rgba="0.55 0.57 0.60 1"/></material>
+  <material name="belt_black"><color rgba="0.12 0.12 0.12 1"/></material>
+  <material name="laser_wall"><color rgba="0.85 0.35 0.15 0.35"/></material>
+  <material name="magazine_blue"><color rgba="0.25 0.40 0.65 1"/></material>
+
+  <!-- an axis-aligned box from (x0, y0, z0) to (x1, y1, z1) in world -->
+  <xacro:macro name="fixture_box" params="name x0 x1 y0 y1 z0 z1 material">
+    <link name="${name}">
+      <visual>
+        <geometry><box size="${x1-x0} ${y1-y0} ${z1-z0}"/></geometry>
+        <material name="${material}"/>
+      </visual>
+      <collision>
+        <geometry><box size="${x1-x0} ${y1-y0} ${z1-z0}"/></geometry>
+      </collision>
+    </link>
+    <joint name="world-${name}" type="fixed">
+      <parent link="world"/>
+      <child link="${name}"/>
+      <origin xyz="${(x0+x1)/2} ${(y0+y1)/2} ${(z0+z1)/2}"/>
+    </joint>
+  </xacro:macro>
+
+  <xacro:property name="conv_half" value="0.1405"/>
+  <xacro:property name="belt_top"  value="0.830"/>
+
+  <xacro:macro name="line_fixtures">
+
+    <!-- conveyor, S1 infeed to S5 outfeed -->
+    <xacro:fixture_box name="conveyor" x0="-0.80" x1="${s5_datum_x + 0.80}"
+                       y0="${line_y - conv_half}" y1="${line_y + conv_half}"
+                       z0="${belt_top - 0.10}" z1="${belt_top}" material="belt_black"/>
+
+    <!-- S2 line-scan gate (inspection_line.sdf): posts at y +-0.30, beam 1.60-1.66 m -->
+    <xacro:fixture_box name="gate_post_l" x0="${gate_x-0.03}" x1="${gate_x+0.03}" y0="0.27" y1="0.33"
+                       z0="0" z1="1.60" material="frame_grey"/>
+    <xacro:fixture_box name="gate_post_r" x0="${gate_x-0.03}" x1="${gate_x+0.03}" y0="-0.33" y1="-0.27"
+                       z0="0" z1="1.60" material="frame_grey"/>
+    <xacro:fixture_box name="gate_beam" x0="${gate_x-0.03}" x1="${gate_x+0.03}" y0="-0.33" y1="0.33"
+                       z0="1.60" z1="1.66" material="frame_grey"/>
+    <xacro:fixture_box name="gate_ranger3" x0="${gate_x-0.03}" x1="${gate_x+0.03}" y0="-0.05" y1="0.05"
+                       z0="1.51" z1="1.60" material="frame_grey"/>
+
+    <!-- inspection cell frames -->
+    <xacro:inspector_frame tag="s3a" x="${s3a_datum_x}"/>
+    <xacro:inspector_frame tag="s3b" x="${s3b_datum_x}"/>
+    <xacro:inspector_frame tag="s3c" x="${s3c_datum_x}"/>
+
+    <!-- S4b laser enclosure: end walls with a pallet opening (|y| <= 0.17, z 0.70-1.10: belt,
+         pallet, module 108 mm, 50 mm lift, margin), side walls, roof. 0.05 m walls. -->
+    <xacro:enclosure_end_wall name="s4b_wall_up"   x="${s4b_wall_up_x}"/>
+    <xacro:enclosure_end_wall name="s4b_wall_down" x="${s4b_wall_down_x}"/>
+    <xacro:fixture_box name="s4b_wall_side_lo" x0="${s4b_wall_up_x}" x1="${s4b_wall_down_x}"
+                       y0="${s4b_wall_y_lo - 0.025}" y1="${s4b_wall_y_lo + 0.025}" z0="0" z1="${s4b_roof_z}" material="laser_wall"/>
+    <xacro:fixture_box name="s4b_wall_side_hi" x0="${s4b_wall_up_x}" x1="${s4b_wall_down_x}"
+                       y0="${s4b_wall_y_hi - 0.025}" y1="${s4b_wall_y_hi + 0.025}" z0="0" z1="${s4b_roof_z}" material="laser_wall"/>
+    <xacro:fixture_box name="s4b_roof" x0="${s4b_wall_up_x - 0.025}" x1="${s4b_wall_down_x + 0.025}"
+                       y0="${s4b_wall_y_lo - 0.025}" y1="${s4b_wall_y_hi + 0.025}"
+                       z0="${s4b_roof_z}" z1="${s4b_roof_z + 0.05}" material="laser_wall"/>
+
+    <!-- pedestals (footprints from the vendor base meshes + margin; GP25 stands on the floor) -->
+    <xacro:fixture_box name="s1_pedestal" x0="${s1_datum_x-0.13}" x1="${s1_datum_x+0.13}"
+                       y0="${line_y-s1_base_d-0.13}" y1="${line_y-s1_base_d+0.13}" z0="0" z1="${s1_base_h}" material="frame_grey"/>
+    <xacro:fixture_box name="s4a_pedestal" x0="${s4a_datum_x-0.11}" x1="${s4a_datum_x+0.11}"
+                       y0="${line_y-s4a_base_d-0.11}" y1="${line_y-s4a_base_d+0.11}" z0="0" z1="${s4a_base_h}" material="frame_grey"/>
+    <xacro:fixture_box name="s5_pedestal" x0="${s5_datum_x-0.11}" x1="${s5_datum_x+0.11}"
+                       y0="${line_y-s5_base_d-0.11}" y1="${line_y-s5_base_d+0.11}" z0="0" z1="${s5_base_h}" material="frame_grey"/>
+
+    <!-- magazines: (station datum, base d, pick point, part x y z as placed) -->
+    <xacro:magazine name="s1_mag_cell"      datum_x="${s1_datum_x}"  d="${s1_base_d}"  p="${mag_cell}"      part="${[0.0265, 0.148, 0.091]}"/>
+    <xacro:magazine name="s1_mag_end_plate" datum_x="${s1_datum_x}"  d="${s1_base_d}"  p="${mag_end_plate}" part="${[0.020, 0.148, 0.101]}"/>
+    <xacro:magazine name="s4a_mag_carrier"  datum_x="${s4a_datum_x}" d="${s4a_base_d}" p="${mag_carrier}"   part="${[0.333, 0.146, 0.007]}"/>
+    <xacro:magazine name="s5_mag_cmc"       datum_x="${s5_datum_x}"  d="${s5_base_d}"  p="${mag_cmc}"       part="${[0.250, 0.050, 0.0032]}"/>
+    <xacro:magazine name="s5_mag_cover"     datum_x="${s5_datum_x}"  d="${s5_base_d}"  p="${mag_cover}"     part="${[0.355, 0.151, 0.002]}"/>
+  </xacro:macro>
+
+  <xacro:macro name="inspector_frame" params="tag x">
+    <xacro:property name="ylo" value="${line_y - 1.80}"/>
+    <xacro:property name="yhi" value="${line_y + 1.32}"/>
+    <xacro:fixture_box name="${tag}_post_lo" x0="${x-0.05}" x1="${x+0.05}" y0="${ylo-0.05}" y1="${ylo+0.05}"
+                       z0="0" z1="2.45" material="frame_grey"/>
+    <xacro:fixture_box name="${tag}_post_hi" x0="${x-0.05}" x1="${x+0.05}" y0="${yhi-0.05}" y1="${yhi+0.05}"
+                       z0="0" z1="2.45" material="frame_grey"/>
+    <xacro:fixture_box name="${tag}_beam" x0="${x-0.05}" x1="${x+0.05}" y0="${ylo-0.05}" y1="${yhi+0.05}"
+                       z0="2.45" z1="2.55" material="frame_grey"/>
+    <xacro:fixture_box name="${tag}_drop" x0="${x+s3_base_bx-0.10}" x1="${x+s3_base_bx+0.10}"
+                       y0="${line_y-s3_base_d-0.10}" y1="${line_y-s3_base_d+0.10}"
+                       z0="${pallet_top_z+s3_base_bz}" z1="2.45" material="frame_grey"/>
+  </xacro:macro>
+
+  <xacro:macro name="enclosure_end_wall" params="name x">
+    <xacro:property name="t" value="0.025"/>
+    <xacro:fixture_box name="${name}_lo" x0="${x-t}" x1="${x+t}" y0="${s4b_wall_y_lo-t}" y1="${line_y-0.17}"
+                       z0="0" z1="${s4b_roof_z}" material="laser_wall"/>
+    <xacro:fixture_box name="${name}_hi" x0="${x-t}" x1="${x+t}" y0="${line_y+0.17}" y1="${s4b_wall_y_hi+t}"
+                       z0="0" z1="${s4b_roof_z}" material="laser_wall"/>
+    <xacro:fixture_box name="${name}_top" x0="${x-t}" x1="${x+t}" y0="${line_y-0.17}" y1="${line_y+0.17}"
+                       z0="1.10" z1="${s4b_roof_z}" material="laser_wall"/>
+    <xacro:fixture_box name="${name}_bottom" x0="${x-t}" x1="${x+t}" y0="${line_y-0.17}" y1="${line_y+0.17}"
+                       z0="0" z1="0.70" material="laser_wall"/>
+  </xacro:macro>
+
+  <xacro:macro name="magazine" params="name datum_x d p part">
+    <xacro:property name="cx" value="${datum_x + p[0]}"/>
+    <xacro:property name="cy" value="${line_y - d + p[1]}"/>
+    <xacro:fixture_box name="${name}" x0="${cx - part[0]/2 - 0.02}" x1="${cx + part[0]/2 + 0.02}"
+                       y0="${cy - part[1]/2 - 0.02}" y1="${cy + part[1]/2 + 0.02}"
+                       z0="0" z1="${pallet_top_z + p[2] - part[2]}" material="magazine_blue"/>
+  </xacro:macro>
+
+</robot>

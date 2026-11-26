@@ -50,8 +50,8 @@ from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from visualization_msgs.msg import Marker, MarkerArray
 
 JOINTS = ['s3_joint_1_s', 's3_joint_2_l', 's3_joint_3_u', 's3_joint_4_r', 's3_joint_5_b', 's3_joint_6_t']
-S3_X, LINE_Y, PALLET_TOP = 1.8, 0.0, 0.9      # line_layout.xacro
-GATE_X = 0.6                                   # inspection_line.sdf
+S3_X, LINE_Y, PALLET_TOP = 1.957, 0.0, 0.9    # line_layout.xacro (s3a_datum_x; 1.8 before 3.0)
+GATE_X = 0.659                                 # line_layout.xacro gate_x, inspection_line.sdf
 LINE_SPEED = 0.10                              # m/s, defectgen's fixed pass
 MODULE_HALF = 0.18                             # m, half the module length plus a little
 SNAP_DWELL = 0.6                               # s at a snapshot pose in Gazebo (A: the 5 Hz depth

@@ -105,10 +105,10 @@ def _nodes(context):
                               '@sensor_msgs/msg/JointState[gz.msgs.Model'],
                           remappings=[(f'/world/{world}/model/motobat_pallet/joint_state',
                                        '/pallet/joint_states')]))
-        # The gate's sensor frame, as placed in inspection_line.sdf.
+        # The gate's sensor frame, as placed in inspection_line.sdf (gate_x in line_layout.xacro).
         extra.append(Node(package='tf2_ros', executable='static_transform_publisher', output='log',
                           parameters=[sim_time], arguments=[
-                              '--x', '0.6', '--y', '0', '--z', '1.501', '--roll', '0', '--pitch', '1.5707963',
+                              '--x', '0.659', '--y', '0', '--z', '1.501', '--roll', '0', '--pitch', '1.5707963',
                               '--yaw', '0', '--frame-id', 'world', '--child-frame-id', 'ranger3']))
     return [gz, rsp, spawn, clock, after_spawn, move_group, rviz] + extra
 
