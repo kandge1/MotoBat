@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>motobat_coordination</name>
+  <version>0.1.0</version>
+  <description>
+    The MotoBat line's closed loops (project_plan.md §9.9). Task 3.4: the S1 cell-placement
+    correction loop, a CorrectionCmd client (correction_node.py, I-form run-to-run control) driving
+    the S1 station (s1_station.py: GP7 through MoveIt, infeed and stack cameras, infeed point laser).
+  </description>
+  <maintainer email="rhishi.kandge@gmail.com">Rhishikesh Kandge</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>motobat_interfaces</exec_depend>
+  <exec_depend>motobat_gp7_moveit_config</exec_depend>
+  <exec_depend>moveit_msgs</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+
+  <test_depend>ament_cmake_pytest</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

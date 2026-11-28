@@ -83,3 +83,18 @@ def test_parallax_matches_the_pinhole_formula():
     r = Lo.locate(img, off, H, SC.CELL[:2], near_pose=(x0, 0.0, 0.0), gsd=cam.gsd(Z))
     predicted = (x0 - cam.t[0]) * dz / (Z - dz)
     assert abs((r['x'] - x0) - predicted) < 0.01
+
+
+def test_parallax_correction_undoes_a_raised_top():
+    rng = np.random.default_rng(6)
+    cam = SC.stack_camera()
+    Z = SC.CAMERA_Z - SC.CELL_TOP
+    H, _ = C.calibrate(cam, SC.CELL_TOP, (0.0, 0.0), rng=rng, n=(37, 17))
+    k, dz = 0, 0.3                                       # the end cell, 154 mm off axis: ~76 um of parallax
+    x0 = SC.nominal_x(k)
+    roi = SC.roi_for(cam, x0, 0.0, half=(25, 85))
+    img, off = render(cam, SC.stack_scene([(x0, 0.0, 0.0, dz)]), roi=roi, rng=rng)
+    r = Lo.locate(img, off, H, SC.CELL[:2], near_pose=(x0, 0.0, 0.0), gsd=cam.gsd(Z))
+    assert abs(r['x'] - x0) > 0.06                        # the raw reading is off by the parallax
+    c = Lo.parallax_correct(r, cam, SC.CELL_TOP, dz)
+    assert abs(c['x'] - x0) < 0.01                        # and corrected it is back within 10 um

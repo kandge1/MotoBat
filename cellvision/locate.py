@@ -271,3 +271,20 @@ def locate(img, offset, H, size, near_pose=None, near_xy=None, gsd=0.15, passes=
         raise ValueError(f'fit left the expected cell: moved {pose[:2] - start[:2]} mm, '
                          f'{np.degrees(pose[2] - start[2]):.2f} deg, sizes {sz}')
     return dict(x=pose[0], y=pose[1], yaw=pose[2], sx=sz[0], sy=sz[1], rms=rms, points=n)
+
+
+def parallax_correct(result, cam, plane_z, dz):
+    """Undo the parallax of a top dz above the calibrated plane (plane_z, world mm).
+
+    The homography maps every image point onto the calibrated plane. A point dz higher, truly at
+    horizontal distance r from the optical axis, is seen along a ray that reaches the plane at
+    r' = r Z / (Z - dz)  (similar triangles; Z = camera height above the plane). So r = r' (Z - dz) / Z:
+    each in-plane coordinate is pulled toward the axis by the factor (Z - dz) / Z. The yaw is
+    unchanged; the sizes scale by the same factor. dz comes from the infeed point laser (task 3.4)."""
+    Z = cam.t[2] - plane_z
+    f = (Z - dz) / Z
+    out = dict(result)
+    out['x'] = cam.t[0] + (result['x'] - cam.t[0]) * f
+    out['y'] = cam.t[1] + (result['y'] - cam.t[1]) * f
+    out['sx'], out['sy'] = result['sx'] * f, result['sy'] * f
+    return out
