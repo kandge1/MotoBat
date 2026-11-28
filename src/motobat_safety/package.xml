@@ -7,7 +7,8 @@
     Safety functions of the MotoBat line, sized and checked (task 3.5): speed and separation
     monitoring for the HC10DT inspection cells with SICK microScan3 protective fields (ISO/TS 15066,
     ISO 13855). Pure numpy: field sizing, coverage and shadows, and a time simulation of a person
-    approaching. A simulation of the safety logic, not a safety-rated implementation.
+    approaching (3.5); the S4b laser cell's laser-enable interlock, checked exhaustively including every
+    single stuck sensor channel (3.5b). A simulation of the safety logic, not a safety-rated implementation.
   </description>
   <maintainer email="rhishi.kandge@gmail.com">Rhishikesh Kandge</maintainer>
   <license>Apache-2.0</license>
