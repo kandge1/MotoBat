@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<!--
+  What MoveIt and ros2_control load: Station 4b (GP25 + RL2D scanner head + its laser enclosure)
+  from motobat_description, plus its ros2_control block.
+
+  sim:=mock (default, demo.launch.py) or sim:=gazebo.
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="motobat_welder">
+  <xacro:arg name="initial_positions_file" default="$(find motobat_gp25_moveit_config)/config/initial_positions.yaml"/>
+  <xacro:arg name="sim" default="mock"/>
+
+  <xacro:include filename="$(find motobat_description)/urdf/welder_station.urdf.xacro"/>
+  <xacro:include filename="$(find motobat_gp25_moveit_config)/config/motobat_welder.ros2_control.xacro"/>
+
+  <xacro:motobat_welder_ros2_control name="WelderSystem" prefix="s4b_"
+      initial_positions_file="$(arg initial_positions_file)" sim="$(arg sim)"/>
+</robot>

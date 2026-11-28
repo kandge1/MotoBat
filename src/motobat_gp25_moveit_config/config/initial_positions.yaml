@@ -1,0 +1,11 @@
+# Where the simulated hardware starts: "home" in the SRDF. The scanner's focus on the module centre
+# at weld height, its window ~330 mm above the module (clear of an arriving pallet), scanner yaw
+# with joint 6 at 0. Solved by OPW IK (layout_check.Station), free of self-contact, 18.7 % of every
+# joint's range left. The welds are made from holds near here (welder_check.py).
+initial_positions:
+  s4b_joint_1_s: 0.0
+  s4b_joint_2_l: -0.4932
+  s4b_joint_3_u: -0.3548
+  s4b_joint_4_r: 0.0
+  s4b_joint_5_b: -1.7092
+  s4b_joint_6_t: 0.0

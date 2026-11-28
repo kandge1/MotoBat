@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<!--
+  Station 4b, welding, on its own: the GP25 with the MOTOPAC-RL2D scanner head at its line pose
+  in `world`, inside its laser enclosure, with the conveyor through it. What
+  motobat_gp25_moveit_config plans for; link names and poses match motobat_line.urdf.xacro.
+
+      xacro welder_station.urdf.xacro > /tmp/welder.urdf
+-->
+<robot name="motobat_welder" xmlns:xacro="http://ros.org/wiki/xacro">
+
+  <xacro:include filename="$(find motoman_gp25_support)/urdf/gp25_macro.xacro"/>
+  <xacro:include filename="$(find motobat_description)/urdf/line_layout.xacro"/>
+  <xacro:include filename="$(find motobat_description)/urdf/line_tools.xacro"/>
+  <xacro:include filename="$(find motobat_description)/urdf/line_fixtures.xacro"/>
+
+  <link name="world"/>
+
+  <xacro:motoman_gp25 prefix="s4b_"/>
+  <xacro:floor_mount prefix="s4b_" datum_x="${s4b_datum_x}" d="${s4b_base_d}" h="${s4b_base_h}"/>
+  <xacro:gp25_scanner_head prefix="s4b_"/>
+
+  <xacro:conveyor_fixture/>
+  <xacro:s4b_fixtures/>
+
+</robot>

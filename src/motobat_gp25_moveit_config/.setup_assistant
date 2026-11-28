@@ -1,0 +1,19 @@
+moveit_setup_assistant_config:
+  urdf:
+    package: motobat_description
+    relative_path: urdf/welder_station.urdf.xacro
+  srdf:
+    relative_path: config/motobat_welder.srdf
+  package_settings:
+    author_name: Rhishikesh Kandge
+    author_email: rhishi.kandge@gmail.com
+    generated_timestamp: 1795651200
+  control_xacro:
+    command:
+      - position
+    state:
+      - position
+      - velocity
+  modified_urdf:
+    xacros:
+      - motobat_welder.ros2_control.xacro

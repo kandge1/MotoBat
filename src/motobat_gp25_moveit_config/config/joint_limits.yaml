@@ -1,0 +1,40 @@
+# Joint limits for the GP25, read by MoveIt's time parameterisation.
+# Position and velocity limits from the URDF (motoman_gp25_support); the speeds match Yaskawa's
+# GP25 data sheet (S: DS-873, Jan 2021): S 210, L 210, U 265, R 420, B 420, T 885 deg/s.
+# (The data sheet gives B +-150 deg; the URDF -155/+150. The URDF's is used.)
+# ACCELERATION LIMITS ARE ASSUMED (tag A), as for the other arms: a = 2 * v_max.
+
+default_velocity_scaling_factor: 0.1
+default_acceleration_scaling_factor: 0.1
+
+joint_limits:
+  s4b_joint_1_s:
+    has_velocity_limits: true
+    max_velocity: 3.6652      # 210 deg/s
+    has_acceleration_limits: true
+    max_acceleration: 7.3304 # A: 2 * v_max
+  s4b_joint_2_l:
+    has_velocity_limits: true
+    max_velocity: 3.6652      # 210 deg/s
+    has_acceleration_limits: true
+    max_acceleration: 7.3304 # A: 2 * v_max
+  s4b_joint_3_u:
+    has_velocity_limits: true
+    max_velocity: 4.6251      # 265 deg/s
+    has_acceleration_limits: true
+    max_acceleration: 9.2502 # A: 2 * v_max
+  s4b_joint_4_r:
+    has_velocity_limits: true
+    max_velocity: 7.3304      # 420 deg/s
+    has_acceleration_limits: true
+    max_acceleration: 14.6608 # A: 2 * v_max
+  s4b_joint_5_b:
+    has_velocity_limits: true
+    max_velocity: 7.3304      # 420 deg/s
+    has_acceleration_limits: true
+    max_acceleration: 14.6608 # A: 2 * v_max
+  s4b_joint_6_t:
+    has_velocity_limits: true
+    max_velocity: 15.4462      # 885 deg/s
+    has_acceleration_limits: true
+    max_acceleration: 30.8923 # A: 2 * v_max

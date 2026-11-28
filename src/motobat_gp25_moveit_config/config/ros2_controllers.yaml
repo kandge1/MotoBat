@@ -1,0 +1,45 @@
+# ros2_control controllers for the GP25 (Station 4b, welding).
+#
+# MoveIt commands the arm ONLY through the FollowJointTrajectory action that
+# welder_arm_controller serves, and reads state ONLY from /joint_states.
+# That is the same contract MotoROS2 exposes on a real YRC1000micro (YRC1000 for the GP25), so moving
+# from mock hardware to Gazebo (2.2) to Isaac Sim to hardware changes the
+# hardware plugin, never this file's consumers (project_plan.md §6).
+controller_manager:
+  ros__parameters:
+    update_rate: 100  # Hz
+
+    welder_arm_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+welder_arm_controller:
+  ros__parameters:
+    joints:
+      - s4b_joint_1_s
+      - s4b_joint_2_l
+      - s4b_joint_3_u
+      - s4b_joint_4_r
+      - s4b_joint_5_b
+      - s4b_joint_6_t
+    command_interfaces:
+      - position
+    state_interfaces:
+      - position
+      - velocity
+    allow_nonzero_velocity_at_trajectory_end: true
+
+# Gazebo only: gz_ros2_control's own node (task 2.2). The mock setup has no
+# node of this name, so this block is ignored there.
+# GazeboSimSystem turns each position command into a joint velocity,
+#   v = k * (q_cmd - q) * update_rate,
+# so the joint lags a moving setpoint by about v / (k * update_rate). At the
+# plugin default k = 0.1 that lag was 2.3 deg mid-move at 20 % speed: a
+# simulation artifact (a real controller tracks its own path tightly) that
+# would bend every LIN scan pass. k corrects that fraction of the error per
+# control cycle: stable for 0 < k < 2, fastest without overshoot at 1.
+gz_ros_control:
+  ros__parameters:
+    position_proportional_gain: 1.0

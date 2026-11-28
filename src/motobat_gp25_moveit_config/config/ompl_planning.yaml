@@ -1,0 +1,21 @@
+planning_plugins:
+  - ompl_interface/OMPLPlanner
+# The order of the elements in the adapter corresponds to the order they are processed by the motion planning pipeline.
+request_adapters:
+  - default_planning_request_adapters/ResolveConstraintFrames
+  - default_planning_request_adapters/ValidateWorkspaceBounds
+  - default_planning_request_adapters/CheckStartStateBounds
+  - default_planning_request_adapters/CheckStartStateCollision
+response_adapters:
+  - default_planning_response_adapters/AddTimeOptimalParameterization
+  - default_planning_response_adapters/ValidateSolution
+  - default_planning_response_adapters/DisplayMotionPath
+
+# MotoBat, Station 4b (task 3.3b). OMPL plans the moves Pilz PTP (a straight joint-space move) cannot.
+# longest_valid_segment_fraction is a fraction of the joint space's extent (the GP25's ranges sum to
+# 43.3 rad): the default 0.005 checks collisions every ~0.22 rad, and the scanner's focus can be
+# ~2.3 m from joint 1, so ~50 cm of travel between checks. 0.0001 checks every ~4 mrad, ~1 cm at the
+# focus: finer than the laser enclosure's 5 cm walls and its pallet openings.
+welder_arm:
+  default_planner_config: RRTConnectkConfigDefault
+  longest_valid_segment_fraction: 0.0001
