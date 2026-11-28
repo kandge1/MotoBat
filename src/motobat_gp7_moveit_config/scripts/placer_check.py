@@ -168,8 +168,9 @@ class Check(Node):
         req.robot_state = RobotState(joint_state=JointState(name=JOINTS, position=list(q)), is_diff=True)
         return self.call(self.valid, req).valid
 
-    def go(self, xyz, yaw, planner):
-        """Pilz PTP or LIN to a TCP pose, executed. Returns (ok, seconds, end error mm, invalid points)."""
+    def go(self, xyz, yaw, planner, pipeline='pilz_industrial_motion_planner'):
+        """Pilz PTP or LIN (or an OMPL planner) to a TCP pose, executed.
+        Returns (ok, seconds, end error mm, invalid points)."""
         target = Pose()
         target.position.x, target.position.y, target.position.z = (float(v) for v in xyz)
         target.orientation.x, target.orientation.y, target.orientation.z, target.orientation.w = quat_down(yaw)
@@ -182,7 +183,7 @@ class Check(Node):
         oc.header.frame_id = 'world'
         g = MoveGroup.Goal()
         r = g.request
-        r.group_name, r.pipeline_id, r.planner_id = GROUP, 'pilz_industrial_motion_planner', planner
+        r.group_name, r.pipeline_id, r.planner_id = GROUP, pipeline, planner
         r.num_planning_attempts, r.allowed_planning_time = 1, 5.0
         r.max_velocity_scaling_factor = r.max_acceleration_scaling_factor = 1.0
         r.goal_constraints = [Constraints(position_constraints=[pc], orientation_constraints=[oc])]

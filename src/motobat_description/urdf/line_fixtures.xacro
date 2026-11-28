@@ -81,8 +81,49 @@
                        z0="1.51" z1="1.60" material="frame_grey"/>
   </xacro:macro>
 
-  <!-- S1: GP7 pedestal, cell and end-plate magazines -->
+  <!-- S1 overhead cameras (task 3.2, cellvision/): SICK midiCam2 5 MP mono, body 42.7 x 53 x 41 mm
+       (S: SICK product overview; 53 mm along the optical axis, A) on a C-mount lens taken as a
+       30 x 30 x 35 mm block (A). Entrance pupil (the pinhole) at the lens front, 1.60 m up, above
+       the GP7's swept envelope (z <= 1.37 m). `${name}_optical`: z along the view, x image right,
+       y image down (REP 103 optical frame), the frame cellvision.camera renders from.
+         infeed  over the cell infeed pick point, 16 mm lens, image x along the cell's length
+         stack   over the pallet stop, 12 mm lens, image x along the module -->
+  <xacro:macro name="midicam" params="name x y yaw">
+    <xacro:fixture_box name="${name}_lens" x0="${x-0.015}" x1="${x+0.015}" y0="${y-0.015}" y1="${y+0.015}"
+                       z0="1.600" z1="1.635" material="belt_black"/>
+    <xacro:fixture_box name="${name}_body" x0="${x-0.0205}" x1="${x+0.0205}" y0="${y-0.02135}" y1="${y+0.02135}"
+                       z0="1.635" z1="1.688" material="frame_grey"/>
+    <link name="${name}_optical"/>
+    <joint name="world-${name}_optical" type="fixed">
+      <parent link="world"/>
+      <child link="${name}_optical"/>
+      <origin xyz="${x} ${y} 1.600" rpy="${pi} 0 ${yaw}"/>
+    </joint>
+  </xacro:macro>
+
+  <!-- S1: GP7 pedestal, cell and end-plate magazines, the two cameras and their frame -->
   <xacro:macro name="s1_fixtures">
+    <xacro:property name="cam_in_x" value="${s1_datum_x + mag_cell[0]}"/>
+    <xacro:property name="cam_in_y" value="${line_y - s1_base_d + mag_cell[1]}"/>
+    <xacro:midicam name="s1_cam_infeed" x="${cam_in_x}" y="${cam_in_y}" yaw="${pi/2}"/>
+    <xacro:midicam name="s1_cam_stack"  x="${s1_datum_x}" y="${line_y}" yaw="0"/>
+    <!-- camera frame: two beams across the line at 1.69-1.73 m. Posts on the -y side at y -1.35:
+         beyond the GP7's whole reach (base y -0.30, 0.927 m reach, 0.10 m clear), because joint 1
+         swings the arm behind the robot between the infeed and the end-plate nest (at y -0.75 they
+         sat inside that swing and Pilz PTP could not get past them, 26 Nov). +y posts at +0.35,
+         outside its swept envelope there (y <= +0.17) by >= 0.10 m (A). -->
+    <xacro:fixture_box name="s1_cam_beam_infeed" x0="${cam_in_x-0.02}" x1="${cam_in_x+0.02}" y0="${line_y-1.37}" y1="${line_y+0.37}"
+                       z0="1.688" z1="1.728" material="frame_grey"/>
+    <xacro:fixture_box name="s1_cam_beam_stack" x0="${s1_datum_x-0.02}" x1="${s1_datum_x+0.02}" y0="${line_y-1.37}" y1="${line_y+0.37}"
+                       z0="1.688" z1="1.728" material="frame_grey"/>
+    <xacro:fixture_box name="s1_cam_post_1" x0="${cam_in_x-0.02}" x1="${cam_in_x+0.02}" y0="${line_y-1.37}" y1="${line_y-1.33}"
+                       z0="0" z1="1.688" material="frame_grey"/>
+    <xacro:fixture_box name="s1_cam_post_2" x0="${cam_in_x-0.02}" x1="${cam_in_x+0.02}" y0="${line_y+0.33}" y1="${line_y+0.37}"
+                       z0="0" z1="1.688" material="frame_grey"/>
+    <xacro:fixture_box name="s1_cam_post_3" x0="${s1_datum_x-0.02}" x1="${s1_datum_x+0.02}" y0="${line_y-1.37}" y1="${line_y-1.33}"
+                       z0="0" z1="1.688" material="frame_grey"/>
+    <xacro:fixture_box name="s1_cam_post_4" x0="${s1_datum_x-0.02}" x1="${s1_datum_x+0.02}" y0="${line_y+0.33}" y1="${line_y+0.37}"
+                       z0="0" z1="1.688" material="frame_grey"/>
     <xacro:fixture_box name="s1_pedestal" x0="${s1_datum_x-0.13}" x1="${s1_datum_x+0.13}"
                        y0="${line_y-s1_base_d-0.13}" y1="${line_y-s1_base_d+0.13}" z0="0" z1="${s1_base_h}" material="frame_grey"/>
     <xacro:magazine name="s1_mag_cell"      datum_x="${s1_datum_x}" d="${s1_base_d}" p="${mag_cell}"      part="${[0.0265, 0.148, 0.091]}"/>

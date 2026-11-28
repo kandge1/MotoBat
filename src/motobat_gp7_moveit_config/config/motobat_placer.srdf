@@ -33,6 +33,16 @@
   <disable_collisions link1="conveyor" link2="gate_post_r" reason="Adjacent"/>
   <disable_collisions link1="conveyor" link2="gate_ranger3" reason="Adjacent"/>
   <disable_collisions link1="conveyor" link2="s1_base_link" reason="Adjacent"/>
+  <disable_collisions link1="conveyor" link2="s1_cam_beam_infeed" reason="Adjacent"/>
+  <disable_collisions link1="conveyor" link2="s1_cam_beam_stack" reason="Adjacent"/>
+  <disable_collisions link1="conveyor" link2="s1_cam_infeed_body" reason="Adjacent"/>
+  <disable_collisions link1="conveyor" link2="s1_cam_infeed_lens" reason="Adjacent"/>
+  <disable_collisions link1="conveyor" link2="s1_cam_post_1" reason="Adjacent"/>
+  <disable_collisions link1="conveyor" link2="s1_cam_post_2" reason="Adjacent"/>
+  <disable_collisions link1="conveyor" link2="s1_cam_post_3" reason="Adjacent"/>
+  <disable_collisions link1="conveyor" link2="s1_cam_post_4" reason="Adjacent"/>
+  <disable_collisions link1="conveyor" link2="s1_cam_stack_body" reason="Adjacent"/>
+  <disable_collisions link1="conveyor" link2="s1_cam_stack_lens" reason="Adjacent"/>
   <disable_collisions link1="conveyor" link2="s1_mag_cell" reason="Adjacent"/>
   <disable_collisions link1="conveyor" link2="s1_mag_end_plate" reason="Adjacent"/>
   <disable_collisions link1="conveyor" link2="s1_pedestal" reason="Adjacent"/>
@@ -40,29 +50,154 @@
   <disable_collisions link1="gate_beam" link2="gate_post_r" reason="Adjacent"/>
   <disable_collisions link1="gate_beam" link2="gate_ranger3" reason="Adjacent"/>
   <disable_collisions link1="gate_beam" link2="s1_base_link" reason="Adjacent"/>
+  <disable_collisions link1="gate_beam" link2="s1_cam_beam_infeed" reason="Adjacent"/>
+  <disable_collisions link1="gate_beam" link2="s1_cam_beam_stack" reason="Adjacent"/>
+  <disable_collisions link1="gate_beam" link2="s1_cam_infeed_body" reason="Adjacent"/>
+  <disable_collisions link1="gate_beam" link2="s1_cam_infeed_lens" reason="Adjacent"/>
+  <disable_collisions link1="gate_beam" link2="s1_cam_post_1" reason="Adjacent"/>
+  <disable_collisions link1="gate_beam" link2="s1_cam_post_2" reason="Adjacent"/>
+  <disable_collisions link1="gate_beam" link2="s1_cam_post_3" reason="Adjacent"/>
+  <disable_collisions link1="gate_beam" link2="s1_cam_post_4" reason="Adjacent"/>
+  <disable_collisions link1="gate_beam" link2="s1_cam_stack_body" reason="Adjacent"/>
+  <disable_collisions link1="gate_beam" link2="s1_cam_stack_lens" reason="Adjacent"/>
   <disable_collisions link1="gate_beam" link2="s1_mag_cell" reason="Adjacent"/>
   <disable_collisions link1="gate_beam" link2="s1_mag_end_plate" reason="Adjacent"/>
   <disable_collisions link1="gate_beam" link2="s1_pedestal" reason="Adjacent"/>
   <disable_collisions link1="gate_post_l" link2="gate_post_r" reason="Adjacent"/>
   <disable_collisions link1="gate_post_l" link2="gate_ranger3" reason="Adjacent"/>
   <disable_collisions link1="gate_post_l" link2="s1_base_link" reason="Adjacent"/>
+  <disable_collisions link1="gate_post_l" link2="s1_cam_beam_infeed" reason="Adjacent"/>
+  <disable_collisions link1="gate_post_l" link2="s1_cam_beam_stack" reason="Adjacent"/>
+  <disable_collisions link1="gate_post_l" link2="s1_cam_infeed_body" reason="Adjacent"/>
+  <disable_collisions link1="gate_post_l" link2="s1_cam_infeed_lens" reason="Adjacent"/>
+  <disable_collisions link1="gate_post_l" link2="s1_cam_post_1" reason="Adjacent"/>
+  <disable_collisions link1="gate_post_l" link2="s1_cam_post_2" reason="Adjacent"/>
+  <disable_collisions link1="gate_post_l" link2="s1_cam_post_3" reason="Adjacent"/>
+  <disable_collisions link1="gate_post_l" link2="s1_cam_post_4" reason="Adjacent"/>
+  <disable_collisions link1="gate_post_l" link2="s1_cam_stack_body" reason="Adjacent"/>
+  <disable_collisions link1="gate_post_l" link2="s1_cam_stack_lens" reason="Adjacent"/>
   <disable_collisions link1="gate_post_l" link2="s1_mag_cell" reason="Adjacent"/>
   <disable_collisions link1="gate_post_l" link2="s1_mag_end_plate" reason="Adjacent"/>
   <disable_collisions link1="gate_post_l" link2="s1_pedestal" reason="Adjacent"/>
   <disable_collisions link1="gate_post_r" link2="gate_ranger3" reason="Adjacent"/>
   <disable_collisions link1="gate_post_r" link2="s1_base_link" reason="Adjacent"/>
+  <disable_collisions link1="gate_post_r" link2="s1_cam_beam_infeed" reason="Adjacent"/>
+  <disable_collisions link1="gate_post_r" link2="s1_cam_beam_stack" reason="Adjacent"/>
+  <disable_collisions link1="gate_post_r" link2="s1_cam_infeed_body" reason="Adjacent"/>
+  <disable_collisions link1="gate_post_r" link2="s1_cam_infeed_lens" reason="Adjacent"/>
+  <disable_collisions link1="gate_post_r" link2="s1_cam_post_1" reason="Adjacent"/>
+  <disable_collisions link1="gate_post_r" link2="s1_cam_post_2" reason="Adjacent"/>
+  <disable_collisions link1="gate_post_r" link2="s1_cam_post_3" reason="Adjacent"/>
+  <disable_collisions link1="gate_post_r" link2="s1_cam_post_4" reason="Adjacent"/>
+  <disable_collisions link1="gate_post_r" link2="s1_cam_stack_body" reason="Adjacent"/>
+  <disable_collisions link1="gate_post_r" link2="s1_cam_stack_lens" reason="Adjacent"/>
   <disable_collisions link1="gate_post_r" link2="s1_mag_cell" reason="Adjacent"/>
   <disable_collisions link1="gate_post_r" link2="s1_mag_end_plate" reason="Adjacent"/>
   <disable_collisions link1="gate_post_r" link2="s1_pedestal" reason="Adjacent"/>
   <disable_collisions link1="gate_ranger3" link2="s1_base_link" reason="Adjacent"/>
+  <disable_collisions link1="gate_ranger3" link2="s1_cam_beam_infeed" reason="Adjacent"/>
+  <disable_collisions link1="gate_ranger3" link2="s1_cam_beam_stack" reason="Adjacent"/>
+  <disable_collisions link1="gate_ranger3" link2="s1_cam_infeed_body" reason="Adjacent"/>
+  <disable_collisions link1="gate_ranger3" link2="s1_cam_infeed_lens" reason="Adjacent"/>
+  <disable_collisions link1="gate_ranger3" link2="s1_cam_post_1" reason="Adjacent"/>
+  <disable_collisions link1="gate_ranger3" link2="s1_cam_post_2" reason="Adjacent"/>
+  <disable_collisions link1="gate_ranger3" link2="s1_cam_post_3" reason="Adjacent"/>
+  <disable_collisions link1="gate_ranger3" link2="s1_cam_post_4" reason="Adjacent"/>
+  <disable_collisions link1="gate_ranger3" link2="s1_cam_stack_body" reason="Adjacent"/>
+  <disable_collisions link1="gate_ranger3" link2="s1_cam_stack_lens" reason="Adjacent"/>
   <disable_collisions link1="gate_ranger3" link2="s1_mag_cell" reason="Adjacent"/>
   <disable_collisions link1="gate_ranger3" link2="s1_mag_end_plate" reason="Adjacent"/>
   <disable_collisions link1="gate_ranger3" link2="s1_pedestal" reason="Adjacent"/>
+  <disable_collisions link1="s1_base_link" link2="s1_cam_beam_infeed" reason="Adjacent"/>
+  <disable_collisions link1="s1_base_link" link2="s1_cam_beam_stack" reason="Adjacent"/>
+  <disable_collisions link1="s1_base_link" link2="s1_cam_infeed_body" reason="Adjacent"/>
+  <disable_collisions link1="s1_base_link" link2="s1_cam_infeed_lens" reason="Adjacent"/>
+  <disable_collisions link1="s1_base_link" link2="s1_cam_post_1" reason="Adjacent"/>
+  <disable_collisions link1="s1_base_link" link2="s1_cam_post_2" reason="Adjacent"/>
+  <disable_collisions link1="s1_base_link" link2="s1_cam_post_3" reason="Adjacent"/>
+  <disable_collisions link1="s1_base_link" link2="s1_cam_post_4" reason="Adjacent"/>
+  <disable_collisions link1="s1_base_link" link2="s1_cam_stack_body" reason="Adjacent"/>
+  <disable_collisions link1="s1_base_link" link2="s1_cam_stack_lens" reason="Adjacent"/>
   <disable_collisions link1="s1_base_link" link2="s1_link_1_s" reason="Adjacent"/>
   <disable_collisions link1="s1_base_link" link2="s1_link_3_u" reason="Never"/>
   <disable_collisions link1="s1_base_link" link2="s1_mag_cell" reason="Adjacent"/>
   <disable_collisions link1="s1_base_link" link2="s1_mag_end_plate" reason="Adjacent"/>
   <disable_collisions link1="s1_base_link" link2="s1_pedestal" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_beam_infeed" link2="s1_cam_beam_stack" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_beam_infeed" link2="s1_cam_infeed_body" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_beam_infeed" link2="s1_cam_infeed_lens" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_beam_infeed" link2="s1_cam_post_1" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_beam_infeed" link2="s1_cam_post_2" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_beam_infeed" link2="s1_cam_post_3" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_beam_infeed" link2="s1_cam_post_4" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_beam_infeed" link2="s1_cam_stack_body" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_beam_infeed" link2="s1_cam_stack_lens" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_beam_infeed" link2="s1_mag_cell" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_beam_infeed" link2="s1_mag_end_plate" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_beam_infeed" link2="s1_pedestal" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_beam_stack" link2="s1_cam_infeed_body" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_beam_stack" link2="s1_cam_infeed_lens" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_beam_stack" link2="s1_cam_post_1" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_beam_stack" link2="s1_cam_post_2" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_beam_stack" link2="s1_cam_post_3" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_beam_stack" link2="s1_cam_post_4" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_beam_stack" link2="s1_cam_stack_body" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_beam_stack" link2="s1_cam_stack_lens" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_beam_stack" link2="s1_mag_cell" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_beam_stack" link2="s1_mag_end_plate" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_beam_stack" link2="s1_pedestal" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_infeed_body" link2="s1_cam_infeed_lens" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_infeed_body" link2="s1_cam_post_1" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_infeed_body" link2="s1_cam_post_2" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_infeed_body" link2="s1_cam_post_3" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_infeed_body" link2="s1_cam_post_4" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_infeed_body" link2="s1_cam_stack_body" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_infeed_body" link2="s1_cam_stack_lens" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_infeed_body" link2="s1_mag_cell" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_infeed_body" link2="s1_mag_end_plate" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_infeed_body" link2="s1_pedestal" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_infeed_lens" link2="s1_cam_post_1" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_infeed_lens" link2="s1_cam_post_2" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_infeed_lens" link2="s1_cam_post_3" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_infeed_lens" link2="s1_cam_post_4" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_infeed_lens" link2="s1_cam_stack_body" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_infeed_lens" link2="s1_cam_stack_lens" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_infeed_lens" link2="s1_mag_cell" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_infeed_lens" link2="s1_mag_end_plate" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_infeed_lens" link2="s1_pedestal" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_post_1" link2="s1_cam_post_2" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_post_1" link2="s1_cam_post_3" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_post_1" link2="s1_cam_post_4" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_post_1" link2="s1_cam_stack_body" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_post_1" link2="s1_cam_stack_lens" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_post_1" link2="s1_mag_cell" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_post_1" link2="s1_mag_end_plate" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_post_1" link2="s1_pedestal" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_post_2" link2="s1_cam_post_3" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_post_2" link2="s1_cam_post_4" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_post_2" link2="s1_cam_stack_body" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_post_2" link2="s1_cam_stack_lens" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_post_2" link2="s1_mag_cell" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_post_2" link2="s1_mag_end_plate" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_post_2" link2="s1_pedestal" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_post_3" link2="s1_cam_post_4" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_post_3" link2="s1_cam_stack_body" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_post_3" link2="s1_cam_stack_lens" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_post_3" link2="s1_mag_cell" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_post_3" link2="s1_mag_end_plate" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_post_3" link2="s1_pedestal" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_post_4" link2="s1_cam_stack_body" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_post_4" link2="s1_cam_stack_lens" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_post_4" link2="s1_mag_cell" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_post_4" link2="s1_mag_end_plate" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_post_4" link2="s1_pedestal" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_stack_body" link2="s1_cam_stack_lens" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_stack_body" link2="s1_mag_cell" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_stack_body" link2="s1_mag_end_plate" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_stack_body" link2="s1_pedestal" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_stack_lens" link2="s1_mag_cell" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_stack_lens" link2="s1_mag_end_plate" reason="Adjacent"/>
+  <disable_collisions link1="s1_cam_stack_lens" link2="s1_pedestal" reason="Adjacent"/>
   <disable_collisions link1="s1_gripper" link2="s1_link_3_u" reason="Never"/>
   <disable_collisions link1="s1_gripper" link2="s1_link_5_b" reason="Never"/>
   <disable_collisions link1="s1_gripper" link2="s1_link_6_t" reason="Adjacent"/>
