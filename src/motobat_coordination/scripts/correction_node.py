@@ -6,6 +6,12 @@ waits for the measured error e_k, and computes the next offset with the I-form l
 (loop_controller.ILoop: u_{k+1} = u_k - K e_k, per axis). k runs across modules: a gripper's
 error does not reset with the pallet. A cell the camera could not measure (NaN) leaves u as it is.
 
+Event-driven (task 3.6): the measured error comes from the station's /s1/defect_report (stage
+s1_placement); the node updates u the moment a report arrives and publishes it on /s1/correction
+(geometry_msgs/Vector3Stamped: x, y in mm, z = yaw in deg; header.stamp = the report's CAPTURE stamp,
+so a bag shows capture -> report -> correction -> next goal). Before sending cell k+1 it waits for
+cell k's report to have been applied. The action result is logged, not used for control.
+
 Parameters: modules (3), gains [Kx, Ky, Kyaw] ([0.5, 0.5, 0.5]; [0, 0, 0] = open loop),
 u_max [mm, mm, deg] ([0.5, 0.5, 0.5]), label (run name), out (data/loop).
 Writes <out>/<label>.json: per cell the command, the measured error, the station's truth
@@ -21,10 +27,12 @@ from pathlib import Path
 
 import numpy as np
 import rclpy
+from geometry_msgs.msg import Vector3Stamped
 from rclpy.action import ActionClient
 from rclpy.node import Node
 
 from motobat_interfaces.action import CorrectionCmd
+from motobat_interfaces.msg import DefectReport
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from loop_controller import ILoop  # noqa: E402
@@ -41,6 +49,34 @@ class CorrectionNode(Node):
         self.declare_parameter('label', 'run')
         self.declare_parameter('out', 'data/loop')
         self.client = ActionClient(self, CorrectionCmd, 'correction_cmd')
+        self.loop = None
+        self.reported = {}                                    # (module, cell) -> e (mm, mm, deg)
+        self.create_subscription(DefectReport, '/s1/defect_report', self.on_report, 10)
+        self.pub = self.create_publisher(Vector3Stamped, '/s1/correction', 10)
+
+    def on_report(self, r):
+        if r.stage != DefectReport.S1_PLACEMENT or not r.measurements:
+            return
+        m = r.measurements[0]
+        key = (r.module_id, int(m.id))
+        if m.seen:
+            v = {kv.key: kv.value for kv in m.values}
+            e = np.array([v['dx'], v['dy'], v['dyaw']])
+            self.loop.update(e)
+        else:
+            e = np.full(3, np.nan)                            # not measured: u stays as it is
+        out = Vector3Stamped()
+        out.header.stamp = r.header.stamp                     # the capture this correction answers
+        out.header.frame_id = f'{r.module_id}/cell{m.id}'
+        out.vector.x, out.vector.y, out.vector.z = (float(x) for x in self.loop.u)
+        self.pub.publish(out)
+        self.reported[key] = e
+
+    def wait_report(self, key, timeout=30.0):
+        end = time.time() + timeout
+        while key not in self.reported and time.time() < end:
+            rclpy.spin_once(self, timeout_sec=0.05)
+        return self.reported.get(key)
 
     def place(self, module_id, k, u):
         goal = CorrectionCmd.Goal(module_id=module_id, cell_index=k, based_on_cell=max(k - 1, 0),
@@ -73,6 +109,7 @@ def main():
     gp = lambda name: n.get_parameter(name).value  # noqa: E731
     gains, u_max = list(gp('gains')), list(gp('u_max'))
     loop = ILoop(gains, u_max)                       # units: mm, mm, deg
+    n.loop = loop
     rows = []
     for m in range(1, int(gp('modules')) + 1):
         module_id = f'{gp("label")}-m{m}'
@@ -81,8 +118,8 @@ def main():
             res, e, dt = n.place(module_id, k, u)
             info = json.loads(res.message)
             truth = [info['truth_mm_mm_rad'][0], info['truth_mm_mm_rad'][1], math.degrees(info['truth_mm_mm_rad'][2])]
-            if np.all(np.isfinite(e)):
-                loop.update(e)
+            if n.wait_report((module_id, k)) is None:          # control runs off the report, not the result
+                n.get_logger().warn(f'{module_id} cell {k}: no DefectReport within 30 s; u unchanged')
             rows.append(dict(module=module_id, cell=k, u=u.round(4).tolist(), e=e.round(4).tolist(), truth=truth,
                              placed=res.placed, motion_s=info['motion_s'], round_trip_s=dt))
             n.get_logger().info(f'{module_id} cell {k:2d}: u {np.round(u, 3)}  e {np.round(e, 3)}  '

@@ -22,7 +22,13 @@ A new module_id starts a new module: the placed cells are cleared and end plate 
 (end plates are not executed in loop runs). The gripper's errors carry across modules, as on a
 real line (k runs across modules).
 
-Parameters (ros2 param): seed, tcp_error [mm, mm, deg], dz_spread, laser_sd, seat_sd (mm).
+Parameters (ros2 param): seed, tcp_error [mm, mm, deg], dz_spread, laser_sd, seat_sd (mm);
+image_mode 'roi' | 'full' (the stack camera's image on /s1/stack_camera/image: the measured window, or
+a whole 2448 x 2048 mono16 frame, 10 MB, the window pasted in), image_reliable (QoS).
+
+Latency (task 3.6): the stack image and its DefectReport carry the CAPTURE time in header.stamp:
+the moment the image exists (rendering is simulation cost, not a camera's), so stamp -> receipt is
+processing + transport, measured in rosbag2.
 """
 import json
 import math
@@ -36,6 +42,9 @@ from rclpy.action import ActionServer
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
+
+from rclpy.qos import QoSProfile, ReliabilityPolicy
+from sensor_msgs.msg import Image
 
 from motobat_interfaces.action import CorrectionCmd
 from motobat_interfaces.msg import DefectReport, KeyValue, Measurement
@@ -68,6 +77,8 @@ class S1Station(Node):
         self.declare_parameter('dz_spread', 0.3)                    # mm (A)
         self.declare_parameter('laser_sd', 0.005)                   # mm (A)
         self.declare_parameter('seat_sd', 0.02)                     # mm (A)
+        self.declare_parameter('image_mode', 'roi')
+        self.declare_parameter('image_reliable', True)
         g = lambda n: self.get_parameter(n).value  # noqa: E731
         self.rng = np.random.default_rng(g('seed'))
         te = g('tcp_error')
@@ -86,6 +97,9 @@ class S1Station(Node):
         self.module, self.stack, self.placed = None, [], []
         self.lock = threading.Lock()
         self.pub = self.create_publisher(DefectReport, '/s1/defect_report', 10)
+        self.image_mode = g('image_mode')
+        rel = ReliabilityPolicy.RELIABLE if g('image_reliable') else ReliabilityPolicy.BEST_EFFORT
+        self.img_pub = self.create_publisher(Image, '/s1/stack_camera/image', QoSProfile(depth=5, reliability=rel))
         self.server = ActionServer(self, CorrectionCmd, 'correction_cmd', self.execute,
                                    callback_group=ReentrantCallbackGroup())
         self.get_logger().info('S1 station ready: cameras calibrated, scene loaded')
@@ -179,6 +193,8 @@ class S1Station(Node):
         goal_handle.publish_feedback(fb)
         roi = SC.roi_for(self.cam_st, SC.nominal_x(k), 0.0, half=(25, 85))
         img, off = render(self.cam_st, SC.stack_scene(self.stack), roi=roi, rng=self.rng)
+        stamp = self.get_clock().now().to_msg()                     # capture: the image exists now
+        self.publish_image(img, off, stamp)
         try:
             m = Lo.locate(img, off, self.H_st, SC.CELL[:2], near_pose=(SC.nominal_x(k), 0.0, 0.0),
                           gsd=self.cam_st.gsd(self.Z))
@@ -189,7 +205,7 @@ class S1Station(Node):
             self.get_logger().warn(f'cell {k + 1}: stack camera could not measure it ({ex})')
             e, seen = (float('nan'),) * 3, False
         truth = (landed[0] - nominal[0], landed[1] - nominal[1], landed[2])
-        self.publish_report(k, e, seen)
+        self.publish_report(k, e, seen, stamp)
         res = CorrectionCmd.Result()
         res.placed = bool(ok)
         res.measured_error = [e[0] / 1e3, e[1] / 1e3, e[2]]
@@ -198,9 +214,19 @@ class S1Station(Node):
         goal_handle.succeed()
         return res
 
-    def publish_report(self, k, e, seen):
+    def publish_image(self, img, off, stamp):
+        if self.image_mode == 'full':
+            full = np.zeros((self.cam_st.height, self.cam_st.width), np.uint16)
+            full[off[1]:off[1] + img.shape[0], off[0]:off[0] + img.shape[1]] = img
+            img = full
+        m = Image(height=int(img.shape[0]), width=int(img.shape[1]), encoding='mono16', is_bigendian=0,
+                  step=int(img.shape[1] * 2), data=img.astype('<u2').tobytes())
+        m.header.stamp, m.header.frame_id = stamp, 's1_cam_stack_optical'
+        self.img_pub.publish(m)
+
+    def publish_report(self, k, e, seen, stamp):
         r = DefectReport()
-        r.header.stamp = self.get_clock().now().to_msg()
+        r.header.stamp = stamp                                      # capture time (task 3.6)
         r.header.frame_id = 'pallet_datum'
         r.module_id, r.stage = self.module, DefectReport.S1_PLACEMENT
         out = seen and (math.hypot(e[0], e[1]) > POS_TOL or abs(math.degrees(e[2])) > YAW_TOL)

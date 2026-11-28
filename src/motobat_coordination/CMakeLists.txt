@@ -4,6 +4,7 @@ project(motobat_coordination)
 find_package(ament_cmake REQUIRED)
 
 install(PROGRAMS scripts/s1_station.py scripts/correction_node.py scripts/loop_controller.py scripts/loop_report.py
+        scripts/latency_report.py scripts/latency_bench.py
         DESTINATION lib/${PROJECT_NAME})
 install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
 
