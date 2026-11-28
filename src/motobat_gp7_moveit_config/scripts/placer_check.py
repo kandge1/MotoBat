@@ -84,8 +84,13 @@ def placed_box(name, size, place):
 
 
 class Check(Node):
-    def __init__(self):
-        super().__init__('placer_check')
+    """MoveIt helpers for one station's arm. Defaults are the GP7's; other stations pass their
+    group, tip, joints and gripper links (motobat_gp4_moveit_config/scripts/gp4_check.py)."""
+
+    def __init__(self, group=GROUP, tip=TIP, joints=JOINTS, touch=None, name='placer_check'):
+        super().__init__(name)
+        self.group, self.tip, self.jnames = group, tip, list(joints)
+        self.touch = list(touch) if touch is not None else list(TOUCH)
         self.js = None
         self.create_subscription(JointState, '/joint_states', lambda m: setattr(self, 'js', m), 10)
         self.move = ActionClient(self, MoveGroup, '/move_action')
@@ -110,7 +115,7 @@ class Check(Node):
         while self.js is None and time.time() < end:
             rclpy.spin_once(self, timeout_sec=0.1)
         d = dict(zip(self.js.name, self.js.position))
-        return [d[j] for j in JOINTS]
+        return [d[j] for j in self.jnames]
 
     def apply(self, world=(), remove=(), attach=None, detach=None):
         """One planning-scene diff. A detach drops the body into the world where it is (MoveIt's
@@ -122,7 +127,7 @@ class Check(Node):
         if attach is not None:
             ps.robot_state.attached_collision_objects = [attach]
         if detach is not None:
-            a = AttachedCollisionObject(link_name=TIP)
+            a = AttachedCollisionObject(link_name=self.tip)
             a.object = CollisionObject(id=detach, operation=CollisionObject.REMOVE)
             ps.robot_state.attached_collision_objects = [a]
         if not self.call(self.scene, ApplyPlanningScene.Request(scene=ps)).success:
@@ -133,16 +138,16 @@ class Check(Node):
     def attached(self, name, part):
         """The part hanging under the TCP (tool z points down, into the part)."""
         sx, sy, sz = part
-        a = AttachedCollisionObject(link_name=TIP, touch_links=TOUCH)
-        a.object = box(name, (sx - 2 * SHRINK, sy - 2 * SHRINK, sz - SHORT), (0, 0, (sz - SHORT) / 2), frame=TIP)
+        a = AttachedCollisionObject(link_name=self.tip, touch_links=self.touch)
+        a.object = box(name, (sx - 2 * SHRINK, sy - 2 * SHRINK, sz - SHORT), (0, 0, (sz - SHORT) / 2), frame=self.tip)
         return a
 
     def solve(self, xyz, yaws, seed):
         for yaw in yaws:
             req = GetPositionIK.Request()
             r = req.ik_request
-            r.group_name, r.ik_link_name, r.avoid_collisions = GROUP, TIP, True
-            r.robot_state = RobotState(joint_state=JointState(name=JOINTS, position=list(seed)), is_diff=True)
+            r.group_name, r.ik_link_name, r.avoid_collisions = self.group, self.tip, True
+            r.robot_state = RobotState(joint_state=JointState(name=self.jnames, position=list(seed)), is_diff=True)
             r.pose_stamped.header.frame_id = 'world'
             p = r.pose_stamped.pose
             p.position.x, p.position.y, p.position.z = (float(v) for v in xyz)
@@ -150,12 +155,12 @@ class Check(Node):
             res = self.call(self.ik, req)
             if res.error_code.val == 1:
                 d = dict(zip(res.solution.joint_state.name, res.solution.joint_state.position))
-                return [d[j] for j in JOINTS], yaw
+                return [d[j] for j in self.jnames], yaw
         return None, None
 
     def tcp(self, q, with_quat=False):
-        req = GetPositionFK.Request(fk_link_names=[TIP], robot_state=RobotState(
-            joint_state=JointState(name=JOINTS, position=list(q))))
+        req = GetPositionFK.Request(fk_link_names=[self.tip], robot_state=RobotState(
+            joint_state=JointState(name=self.jnames, position=list(q))))
         req.header.frame_id = 'world'
         p = self.call(self.fk, req).pose_stamped[0].pose
         xyz = np.array([p.position.x, p.position.y, p.position.z])
@@ -164,8 +169,8 @@ class Check(Node):
         return xyz
 
     def state_valid(self, q):
-        req = GetStateValidity.Request(group_name=GROUP)
-        req.robot_state = RobotState(joint_state=JointState(name=JOINTS, position=list(q)), is_diff=True)
+        req = GetStateValidity.Request(group_name=self.group)
+        req.robot_state = RobotState(joint_state=JointState(name=self.jnames, position=list(q)), is_diff=True)
         return self.call(self.valid, req).valid
 
     def go(self, xyz, yaw, planner, pipeline='pilz_industrial_motion_planner'):
@@ -174,16 +179,16 @@ class Check(Node):
         target = Pose()
         target.position.x, target.position.y, target.position.z = (float(v) for v in xyz)
         target.orientation.x, target.orientation.y, target.orientation.z, target.orientation.w = quat_down(yaw)
-        pc = PositionConstraint(link_name=TIP, weight=1.0, constraint_region=BoundingVolume(
+        pc = PositionConstraint(link_name=self.tip, weight=1.0, constraint_region=BoundingVolume(
             primitives=[SolidPrimitive(type=SolidPrimitive.SPHERE, dimensions=[1e-4])], primitive_poses=[target]))
         pc.header.frame_id = 'world'
-        oc = OrientationConstraint(link_name=TIP, orientation=target.orientation, weight=1.0,
+        oc = OrientationConstraint(link_name=self.tip, orientation=target.orientation, weight=1.0,
                                    absolute_x_axis_tolerance=1e-3, absolute_y_axis_tolerance=1e-3,
                                    absolute_z_axis_tolerance=1e-3)
         oc.header.frame_id = 'world'
         g = MoveGroup.Goal()
         r = g.request
-        r.group_name, r.pipeline_id, r.planner_id = GROUP, pipeline, planner
+        r.group_name, r.pipeline_id, r.planner_id = self.group, pipeline, planner
         r.num_planning_attempts, r.allowed_planning_time = 1, 5.0
         r.max_velocity_scaling_factor = r.max_acceleration_scaling_factor = 1.0
         r.goal_constraints = [Constraints(position_constraints=[pc], orientation_constraints=[oc])]
@@ -197,7 +202,7 @@ class Check(Node):
         if res.error_code.val != 1 or not pts:
             return False, 0.0, float('nan'), 0
         names = res.planned_trajectory.joint_trajectory.joint_names
-        idx = [names.index(j) for j in JOINTS]
+        idx = [names.index(j) for j in self.jnames]
         bad = sum(not self.state_valid([p.positions[i] for i in idx]) for p in pts)
         self.travel = np.degrees(np.abs(np.array(pts[-1].positions)[idx] - np.array(pts[0].positions)[idx]))
         if '--debug' in sys.argv:
@@ -214,6 +219,26 @@ class Check(Node):
         want = np.array(quat_down(yaw))
         self.rot_err = math.degrees(2 * math.acos(min(1.0, abs(float(np.dot(quat, want))))))
         return bad == 0 and err < 1.0 and self.rot_err < 0.1, dur, err, bad
+
+    def go_joints(self, q, planner='PTP', pipeline='pilz_industrial_motion_planner'):
+        """Joint-space move to q, executed. Returns (ok, seconds, largest joint error rad)."""
+        g = MoveGroup.Goal()
+        r = g.request
+        r.group_name, r.pipeline_id, r.planner_id = self.group, pipeline, planner
+        r.num_planning_attempts, r.allowed_planning_time = 1, 5.0
+        r.max_velocity_scaling_factor = r.max_acceleration_scaling_factor = 1.0
+        r.goal_constraints = [Constraints(joint_constraints=[
+            JointConstraint(joint_name=j, position=v, tolerance_above=1e-3, tolerance_below=1e-3, weight=1.0)
+            for j, v in zip(self.jnames, q)])]
+        fut = self.move.send_goal_async(g)
+        rclpy.spin_until_future_complete(self, fut)
+        rf = fut.result().get_result_async()
+        rclpy.spin_until_future_complete(self, rf)
+        res = rf.result().result
+        pts = res.planned_trajectory.joint_trajectory.points
+        dur = pts[-1].time_from_start.sec + pts[-1].time_from_start.nanosec * 1e-9 if pts else 0.0
+        jerr = max(abs(a - b) for a, b in zip(self.joints(), q))
+        return res.error_code.val == 1 and jerr < math.radians(0.1), dur, jerr
 
 
 def station():

@@ -1,0 +1,21 @@
+planning_plugins:
+  - ompl_interface/OMPLPlanner
+# The order of the elements in the adapter corresponds to the order they are processed by the motion planning pipeline.
+request_adapters:
+  - default_planning_request_adapters/ResolveConstraintFrames
+  - default_planning_request_adapters/ValidateWorkspaceBounds
+  - default_planning_request_adapters/CheckStartStateBounds
+  - default_planning_request_adapters/CheckStartStateCollision
+response_adapters:
+  - default_planning_response_adapters/AddTimeOptimalParameterization
+  - default_planning_response_adapters/ValidateSolution
+  - default_planning_response_adapters/DisplayMotionPath
+
+# MotoBat, GP4 stations (task 3.3). OMPL plans the moves Pilz PTP (a straight joint-space move)
+# cannot. longest_valid_segment_fraction is a fraction of the joint space's extent (the GP4's ranges
+# sum to 41.9 rad, joint 6 alone 910 deg): the default 0.005 would check collisions only every
+# ~0.21 rad, ~12 cm of hand travel at the GP4's 0.55 m reach, enough to pass through thin equipment
+# unseen (it did on the GP7, 26 Nov). 0.0002 checks every ~8 mrad, ~5 mm at the hand.
+gp4_arm:
+  default_planner_config: RRTConnectkConfigDefault
+  longest_valid_segment_fraction: 0.0002

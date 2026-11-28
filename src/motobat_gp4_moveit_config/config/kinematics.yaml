@@ -1,0 +1,19 @@
+# GP4 IK: closed-form OPW (motobat_opw_kinematics_plugin), all 8 branches, with the vendor's own
+# parameters (motoman_gp4_support/config/opw_parameters_gp4.yaml; derive_opw.py gp4 reproduces
+# them exactly). The plugin re-checks them against the robot model at load (1 um / 1 urad).
+# The tip is <station>_tcp, 100 mm past tool0; the plugin measures that offset from the model.
+# Shared by both stations: the group is named the same, and nothing here names a joint.
+gp4_arm:
+  kinematics_solver: motobat_opw_kinematics_plugin/OPWKinematicsPlugin
+  kinematics_solver_search_resolution: 0.005
+  kinematics_solver_timeout: 0.005
+  opw_kinematics_geometric_parameters:
+    a1: 0.000
+    a2: -0.015
+    b: 0.000
+    c1: 0.330
+    c2: 0.260
+    c3: 0.290
+    c4: 0.072
+  opw_kinematics_joint_offsets: [0.0, 0.0, -1.5707963267948966, 0.0, 0.0, 3.141592653589793]
+  opw_kinematics_joint_sign_corrections: [1, 1, -1, -1, -1, -1]

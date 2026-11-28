@@ -1,0 +1,18 @@
+# MoveIt -> ros2_control for S5: which action server executes plans.
+moveit_controller_manager: moveit_simple_controller_manager/MoveItSimpleControllerManager
+
+moveit_simple_controller_manager:
+  controller_names:
+    - s5_arm_controller
+
+  s5_arm_controller:
+    type: FollowJointTrajectory
+    action_ns: follow_joint_trajectory
+    default: true
+    joints:
+      - s5_joint_1_s
+      - s5_joint_2_l
+      - s5_joint_3_u
+      - s5_joint_4_r
+      - s5_joint_5_b
+      - s5_joint_6_t

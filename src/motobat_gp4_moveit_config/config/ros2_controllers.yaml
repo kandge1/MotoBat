@@ -1,0 +1,49 @@
+# ros2_control controllers for both GP4 stations. moveit_configs_utils' demo launch reads this one
+# file by path, so it names both; the spawner starts only the controller the running station's
+# <station>_moveit_controllers.yaml names. Commands only through FollowJointTrajectory, state only
+# from /joint_states (project_plan.md §6).
+controller_manager:
+  ros__parameters:
+    update_rate: 100  # Hz
+    s4a_arm_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+    s5_arm_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+s4a_arm_controller:
+  ros__parameters:
+    joints:
+      - s4a_joint_1_s
+      - s4a_joint_2_l
+      - s4a_joint_3_u
+      - s4a_joint_4_r
+      - s4a_joint_5_b
+      - s4a_joint_6_t
+    command_interfaces:
+      - position
+    state_interfaces:
+      - position
+      - velocity
+    allow_nonzero_velocity_at_trajectory_end: true
+
+s5_arm_controller:
+  ros__parameters:
+    joints:
+      - s5_joint_1_s
+      - s5_joint_2_l
+      - s5_joint_3_u
+      - s5_joint_4_r
+      - s5_joint_5_b
+      - s5_joint_6_t
+    command_interfaces:
+      - position
+    state_interfaces:
+      - position
+      - velocity
+    allow_nonzero_velocity_at_trajectory_end: true
+
+gz_ros_control:
+  ros__parameters:
+    position_proportional_gain: 1.0

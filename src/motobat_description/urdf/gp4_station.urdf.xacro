@@ -1,0 +1,37 @@
+<?xml version="1.0"?>
+<!--
+  A GP4 station on its own, at its line pose in `world`, with its vacuum gripper and the
+  equipment it can reach (conveyor, its pedestal and magazines). What motobat_gp4_moveit_config
+  plans for; link names and poses match motobat_line.urdf.xacro exactly.
+
+      station:=s4a   S4a, places the busbar carrier
+      station:=s5    S5, places the CMC and the cover
+
+      xacro gp4_station.urdf.xacro station:=s4a > /tmp/s4a.urdf
+-->
+<robot name="motobat_gp4_station" xmlns:xacro="http://ros.org/wiki/xacro">
+  <xacro:arg name="station" default="s4a"/>
+  <xacro:property name="st" value="$(arg station)"/>
+
+  <xacro:include filename="$(find motoman_gp4_support)/urdf/gp4_macro.xacro"/>
+  <xacro:include filename="$(find motobat_description)/urdf/line_layout.xacro"/>
+  <xacro:include filename="$(find motobat_description)/urdf/line_tools.xacro"/>
+  <xacro:include filename="$(find motobat_description)/urdf/line_fixtures.xacro"/>
+
+  <link name="world"/>
+
+  <xacro:motoman_gp4 prefix="${st}_"/>
+  <xacro:gp4_vacuum_gripper prefix="${st}_"/>
+  <xacro:conveyor_fixture/>
+
+  <xacro:if value="${st == 's4a'}">
+    <xacro:floor_mount prefix="s4a_" datum_x="${s4a_datum_x}" d="${s4a_base_d}" h="${s4a_base_h}"/>
+    <xacro:s4a_fixtures/>
+  </xacro:if>
+  <xacro:if value="${st == 's5'}">
+    <xacro:floor_mount prefix="s5_" datum_x="${s5_datum_x}" d="${s5_base_d}" h="${s5_base_h}"/>
+    <xacro:s5_fixtures/>
+  </xacro:if>
+  <!-- any other station value leaves the arm unmounted: check_urdf then fails on two roots -->
+
+</robot>

@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<!--
+  What MoveIt and ros2_control load for one GP4 station: gp4_station.urdf.xacro (robot, gripper,
+  the station's equipment) plus its ros2_control block. station:=s4a|s5; sim:=mock|gazebo.
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="motobat_gp4_station">
+  <xacro:arg name="station" default="s4a"/>
+  <xacro:arg name="initial_positions_file" default="$(find motobat_gp4_moveit_config)/config/$(arg station)_initial_positions.yaml"/>
+  <xacro:arg name="sim" default="mock"/>
+
+  <xacro:include filename="$(find motobat_description)/urdf/gp4_station.urdf.xacro"/>
+  <xacro:include filename="$(find motobat_gp4_moveit_config)/config/gp4.ros2_control.xacro"/>
+
+  <xacro:gp4_ros2_control name="GP4System" prefix="$(arg station)_"
+      initial_positions_file="$(arg initial_positions_file)" sim="$(arg sim)"/>
+</robot>

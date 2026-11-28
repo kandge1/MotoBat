@@ -65,7 +65,9 @@ ASSUMED = dict(
     # x y z (z along tool). GP7 24 mm thick: it places a cell between neighbours of the same
     # height on a 28 mm pitch (26 Nov: was 60 mm, which would hit them; the layout was spaced
     # with 60 mm, so its envelopes are conservative by up to 18 mm a side).
-    gripper_box={'gp7': (0.024, 0.20, 0.15), 'gp4': (0.06, 0.16, 0.10)},
+    # GP4 120 mm across, body ending 10 mm short of the TCP (suction cups, A): it places the carrier
+    # between side plates 148 mm apart and the CMC beside the busbars (27 Nov: was 160, flush).
+    gripper_box={'gp7': (0.024, 0.20, 0.15), 'gp4': (0.06, 0.12, 0.09)},
     # MOTOPAC-RL2D: 329.5 mm work distance is S (catalogue); flange to the exit window is not
     # published: 0.25 m assumed, so tool0 -> focus = 0.5795 m. Head box 0.20 x 0.25 x 0.25.
     scanner_len=0.25 + 0.3295,

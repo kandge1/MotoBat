@@ -53,10 +53,14 @@
                     size_x="0.024" size_y="0.20" size_z="0.15" tcp_z="0.15" mass="2.0"/>
   </xacro:macro>
 
-  <!-- GP4: vacuum gripper for the carrier, CMC and cover (largest 355 x 151 mm). TCP 100 mm. -->
+  <!-- GP4: vacuum gripper for the carrier, CMC and cover (largest 355 x 151 mm). TCP 100 mm, the
+       suction cups' faces; the cups stand 10 mm proud of the body (A), so the body box ends 90 mm
+       from tool0. Placing the CMC (top 101.2 mm) the body then clears the busbars (top 103.6 mm), and
+       placing the carrier (3 mm below the side-plate tops) it clears the walls. 120 mm across.
+       (27 Nov: a body flush with the cups and 160 mm across hit both.) -->
   <xacro:macro name="gp4_vacuum_gripper" params="prefix">
     <xacro:box_tool prefix="${prefix}" body="gripper" tcp_name="tcp"
-                    size_x="0.06" size_y="0.16" size_z="0.10" tcp_z="0.10" mass="1.0"/>
+                    size_x="0.06" size_y="0.12" size_z="0.09" tcp_z="0.10" mass="1.0"/>
   </xacro:macro>
 
   <!-- GP25: MOTOPAC-RL2D remote laser scanner head. -->

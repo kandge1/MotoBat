@@ -1,0 +1,10 @@
+# Where the simulated hardware starts: "home" in s4a.srdf. The GP4 waits 100 mm above its
+# carrier magazine's pick point, gripper down (yaw 180 deg), clear of the pallet's path.
+# Solved by OPW IK (layout_check.Station), free of self-contact, 13 % of every joint's range left.
+initial_positions:
+  s4a_joint_1_s: 1.7088
+  s4a_joint_2_l: 0.2875
+  s4a_joint_3_u: 0.3037
+  s4a_joint_4_r: 0.0
+  s4a_joint_5_b: -1.5869
+  s4a_joint_6_t: -0.138

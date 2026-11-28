@@ -1,0 +1,39 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>motobat_gp4_moveit_config</name>
+  <version>0.1.0</version>
+  <description>
+    MoveIt configuration for the two MotoBat GP4 stations (station:=s4a places the busbar carrier,
+    station:=s5 the CMC and cover). Closed-form OPW inverse kinematics (motobat_opw_kinematics_plugin)
+    with the vendor's GP4 parameters. Laid out like the Setup Assistant's output.
+  </description>
+  <maintainer email="rhishi.kandge@gmail.com">Rhishikesh Kandge</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <exec_depend>motobat_description</exec_depend>
+  <exec_depend>motobat_opw_kinematics_plugin</exec_depend>
+  <exec_depend>motoman_gp4_support</exec_depend>
+  <exec_depend>moveit_ros_move_group</exec_depend>
+  <exec_depend>moveit_kinematics</exec_depend>
+  <exec_depend>moveit_planners</exec_depend>
+  <exec_depend>moveit_simple_controller_manager</exec_depend>
+  <exec_depend>moveit_ros_visualization</exec_depend>
+  <exec_depend>moveit_configs_utils</exec_depend>
+  <exec_depend>moveit_msgs</exec_depend>
+  <exec_depend>controller_manager</exec_depend>
+  <exec_depend>joint_state_broadcaster</exec_depend>
+  <exec_depend>joint_trajectory_controller</exec_depend>
+  <exec_depend>robot_state_publisher</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+  <exec_depend>rviz2</exec_depend>
+  <exec_depend>xacro</exec_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>control_msgs</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
